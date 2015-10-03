@@ -12,7 +12,6 @@
 #include "proc.h"
 
 struct cpu cpus[NCPU];
-static struct cpu *bcpu;
 int ismp;
 int ncpu;
 uchar ioapicid;
@@ -99,7 +98,6 @@ mpinit(void)
   struct mpproc *proc;
   struct mpioapic *ioapic;
 
-  bcpu = &cpus[0];
   if((conf = mpconfig(&mp)) == 0)
     return;
   ismp = 1;
@@ -109,8 +107,6 @@ mpinit(void)
     case MPPROC:
       proc = (struct mpproc*)p;
       cprintf("mpinit ncpu=%d apicid=%d\n", ncpu, proc->apicid);
-      if(proc->flags & MPBOOT)
-        bcpu = &cpus[ncpu];
       cpus[ncpu].id = ncpu;
       cpus[ncpu].apicid = proc->apicid;
       ncpu++;

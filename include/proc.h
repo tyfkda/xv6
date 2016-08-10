@@ -1,6 +1,3 @@
-// Segments in proc->gdt.
-#define NSEGS     7
-
 // Per-CPU state
 struct cpu {
   uchar id;                    // index into cpus[] below

@@ -22,12 +22,12 @@ main(void)
   kvmalloc();      // kernel page table
   if (acpiinit()) // try to use acpi for machine info
     mpinit();      // otherwise use bios MP tables
-  lapicinit();
-  seginit();       // set up segments
+  lapicinit();     // interrupt controller
+  seginit();       // segment descriptors
   cprintf("\ncpu%d: starting xv6\n\n", cpu->id);
-  picinit();       // interrupt controller
+  picinit();       // another interrupt controller
   ioapicinit();    // another interrupt controller
-  consoleinit();   // I/O devices & their interrupts
+  consoleinit();   // console hardware
   uartinit();      // serial port
   pinit();         // process table
   tvinit();        // trap vectors
@@ -39,8 +39,7 @@ main(void)
   startothers();   // start other processors
   kinit2(P2V(4*1024*1024), P2V(PHYSTOP)); // must come after startothers()
   userinit();      // first user process
-  // Finish setting up this processor in mpmain.
-  mpmain();
+  mpmain();        // finish this processor's setup
 }
 
 // Other CPUs jump here from entryother.S.

@@ -40,7 +40,7 @@ extern uchar ioapicid;
 
 static struct acpi_rdsp *scan_rdsp(uint base, uint len) {
   uchar *p;
-  for (p = p2v(base); len >= sizeof(struct acpi_rdsp); len -= 4, p += 4) {
+  for (p = P2V(base); len >= sizeof(struct acpi_rdsp); len -= 4, p += 4) {
     if (memcmp(p, SIG_RDSP, 8) == 0) {
       uint sum, n;
       for (sum = 0, n = 0; n < 20; n++)
@@ -49,7 +49,7 @@ static struct acpi_rdsp *scan_rdsp(uint base, uint len) {
         return (struct acpi_rdsp *) p;
     }
   }
-  return (struct acpi_rdsp *) 0;  
+  return (struct acpi_rdsp *) 0;
 }
 
 static struct acpi_rdsp *find_rdsp(void) {
@@ -138,10 +138,10 @@ int acpiinit(void) {
   rdsp = find_rdsp();
   if (rdsp->rsdt_addr_phys > PHYSLIMIT)
     goto notmapped;
-  rsdt = p2v(rdsp->rsdt_addr_phys);
+  rsdt = P2V(rdsp->rsdt_addr_phys);
   count = (rsdt->header.length - sizeof(*rsdt)) / 4;
   for (n = 0; n < count; n++) {
-    struct acpi_desc_header *hdr = p2v(rsdt->entry[n]);
+    struct acpi_desc_header *hdr = P2V(rsdt->entry[n]);
     if (rsdt->entry[n] > PHYSLIMIT)
       goto notmapped;
 #if DEBUG

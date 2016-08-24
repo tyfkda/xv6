@@ -14,12 +14,6 @@
 #endif
 #define KERNLINK (KERNBASE+EXTMEM)  // Address where kernel is linked
 
-#ifndef __ASSEMBLER__
-
-static inline uintp v2p(void *a) { return ((uintp) (a)) - ((uintp)KERNBASE); }
-static inline void *p2v(uintp a) { return (void *) ((a) + ((uintp)KERNBASE)); }
-
-#endif
 
 #define V2P(a) (((uintp) (a)) - KERNBASE)
 #define P2V(a) (((void *) (a)) + KERNBASE)

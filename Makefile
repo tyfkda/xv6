@@ -74,7 +74,7 @@ TOOLPREFIX := $(shell if i386-jos-elf-objdump -i 2>&1 | grep '^elf32-i386$$' >/d
 endif
 
 # If the makefile can't find QEMU, specify its path here
-#QEMU = 
+#QEMU =
 
 # Try to infer the correct QEMU
 ifndef QEMU
@@ -230,7 +230,7 @@ fs.img: out/mkfs README $(UPROGS)
 
 -include */*.d
 
-clean: 
+clean:
 	rm -rf out fs uobj kobj
 	rm -f kernel/vectors.S xv6.img xv6memfs.img fs.img .gdbinit
 
@@ -270,4 +270,3 @@ qemu-gdb: fs.img xv6.img .gdbinit
 qemu-nox-gdb: fs.img xv6.img .gdbinit
 	@echo "*** Now run 'gdb'." 1>&2
 	$(QEMU) -nographic $(QEMUOPTS) -S $(QEMUGDB)
-

@@ -77,7 +77,7 @@ getcallerpcs(void *v, uintp pcs[])
 {
   uintp *ebp;
 #if X64
-  asm volatile("mov %%rbp, %0" : "=r" (ebp));  
+  asm volatile("mov %%rbp, %0" : "=r" (ebp));
 #else
   ebp = (uintp*)v - 2;
 #endif
@@ -88,7 +88,7 @@ void
 getstackpcs(uintp *ebp, uintp pcs[])
 {
   int i;
-  
+
   for(i = 0; i < 10; i++){
     if(ebp == 0 || ebp < (uintp*)KERNBASE || ebp == (uintp*)0xffffffff)
       break;
@@ -115,7 +115,7 @@ void
 pushcli(void)
 {
   int eflags;
-  
+
   eflags = readeflags();
   cli();
   if(cpu->ncli++ == 0)
@@ -132,4 +132,3 @@ popcli(void)
   if(cpu->ncli == 0 && cpu->intena)
     sti();
 }
-

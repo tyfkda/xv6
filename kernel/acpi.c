@@ -91,7 +91,6 @@ static int acpi_config_smp(struct acpi_madt *madt) {
       if (!(lapic->flags & APIC_LAPIC_ENABLED))
         break;
       cprintf("acpi: cpu#%d apicid %d\n", ncpu, lapic->apic_id);
-      cpus[ncpu].id = ncpu;
       cpus[ncpu].apicid = lapic->apic_id;
       ncpu++;
       break;

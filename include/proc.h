@@ -12,16 +12,16 @@ struct cpu {
 #if X64
   void *local;
 #else
-  struct cpu *cpu;
-  struct proc *proc;           // The currently-running process.
+  // Per-CPU variables, holding pointers to the current cpu and to the current
+  // process (see cpu() and proc() in proc.c)
+  struct cpu *cpu;             // On cpu 0, cpu = &cpus[0]; on cpu 1, cpu=&cpus[1], etc.
+  struct proc *proc;           // The currently-running process on this cpu
 #endif
 };
 
 extern struct cpu cpus[NCPU];
 extern int ncpu;
 
-// Per-CPU variables, holding pointers to the
-// current cpu and to the current process.
 // The asm suffix tells gcc to use "%gs:0" to refer to cpu
 // and "%gs:4" to refer to proc.  seginit sets up the
 // %gs segment register so that %gs refers to the memory
@@ -29,11 +29,31 @@ extern int ncpu;
 // This is similar to how thread-local variables are implemented
 // in thread libraries such as Linux pthreads.
 #if X64
-extern __thread struct cpu *cpu;
-extern __thread struct proc *proc;
+static inline struct cpu*
+mycpu(void) {
+  extern __thread struct cpu *cpu;
+  return cpu;
+}
+
+static inline struct proc*
+myproc(void) {
+  extern __thread struct proc *proc;
+  return proc;
+}
 #else
-extern struct cpu *cpu asm("%gs:0");       // &cpus[cpunum()]
-extern struct proc *proc asm("%gs:4");     // cpus[cpunum()].proc
+static inline struct cpu*
+mycpu(void) {
+  struct cpu *cpu;
+  asm("movl %%gs:0, %0" : "=r"(cpu));
+  return cpu;
+}
+
+static inline struct proc*
+myproc(void) {
+  struct proc *proc;
+  asm("movl %%gs:4, %0" : "=r"(proc));
+  return proc;
+}
 #endif
 
 //PAGEBREAK: 17

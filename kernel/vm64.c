@@ -99,7 +99,7 @@ seginit(void)
   // point FS smack in the middle of our local storage page
   wrmsr(0xC0000100, ((uint64) local) + (PGSIZE / 2));
 
-  c = &cpus[cpunum()];
+  c = &cpus[lapiccpunum()];
   c->local = local;
 
   cpu = c;
@@ -190,7 +190,7 @@ switchuvm(struct proc *p)
   pushcli();
   if(p->pgdir == 0)
     panic("switchuvm: no pgdir");
-  tss = (uint*) (((char*) cpu->local) + 1024);
+  tss = (uint*) (((char*) mycpu()->local) + 1024);
   tss_set_rsp(tss, 0, (uintp)p->kstack + KSTACKSIZE);
   pml4 = (void*) PTE_ADDR(p->pgdir[511]);
   lcr3(V2P(pml4));

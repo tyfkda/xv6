@@ -17,7 +17,7 @@
 int
 fetchint(uintp addr, int *ip)
 {
-  if(addr >= proc->sz || addr+sizeof(int) > proc->sz)
+  if(addr >= myproc()->sz || addr+sizeof(int) > myproc()->sz)
     return -1;
   *ip = *(int*)(addr);
   return 0;
@@ -26,7 +26,7 @@ fetchint(uintp addr, int *ip)
 int
 fetchuintp(uintp addr, uintp *ip)
 {
-  if(addr >= proc->sz || addr+sizeof(uintp) > proc->sz)
+  if(addr >= myproc()->sz || addr+sizeof(uintp) > myproc()->sz)
     return -1;
   *ip = *(uintp*)(addr);
   return 0;
@@ -40,13 +40,14 @@ fetchstr(uintp addr, char **pp)
 {
   char *s, *ep;
 
-  if(addr >= proc->sz)
+  if(addr >= myproc()->sz)
     return -1;
   *pp = (char*)addr;
-  ep = (char*)proc->sz;
-  for(s = *pp; s < ep; s++)
+  ep = (char*)myproc()->sz;
+  for(s = *pp; s < ep; s++){
     if(*s == 0)
       return s - *pp;
+  }
   return -1;
 }
 
@@ -56,12 +57,12 @@ static uintp
 fetcharg(int n)
 {
   switch (n) {
-  case 0: return proc->tf->rdi;
-  case 1: return proc->tf->rsi;
-  case 2: return proc->tf->rdx;
-  case 3: return proc->tf->rcx;
-  case 4: return proc->tf->r8;
-  case 5: return proc->tf->r9;
+  case 0: return myproc()->tf->rdi;
+  case 1: return myproc()->tf->rsi;
+  case 2: return myproc()->tf->rdx;
+  case 3: return myproc()->tf->rcx;
+  case 4: return myproc()->tf->r8;
+  case 5: return myproc()->tf->r9;
   }
 }
 
@@ -83,13 +84,13 @@ arguintp(int n, uintp *ip)
 int
 argint(int n, int *ip)
 {
-  return fetchint(proc->tf->esp + 4 + 4*n, ip);
+  return fetchint((myproc()->tf->esp) + 4 + 4*n, ip);
 }
 
 int
 arguintp(int n, uintp *ip)
 {
-  return fetchuintp(proc->tf->esp + sizeof(uintp) + sizeof(uintp)*n, ip);
+  return fetchuintp(myproc()->tf->esp + sizeof(uintp) + sizeof(uintp)*n, ip);
 }
 #endif
 
@@ -103,7 +104,7 @@ argptr(int n, char **pp, int size)
 
   if(arguintp(n, &i) < 0)
     return -1;
-  if(size < 0 || i >= proc->sz || i+size > proc->sz)
+  if(size < 0 || i >= myproc()->sz || i+size > myproc()->sz)
     return -1;
   *pp = (char*)i;
   return 0;
@@ -173,12 +174,12 @@ syscall(void)
 {
   int num;
 
-  num = proc->tf->eax;
+  num = myproc()->tf->eax;
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
-    proc->tf->eax = syscalls[num]();
+    myproc()->tf->eax = syscalls[num]();
   } else {
     cprintf("%d %s: unknown sys call %d\n",
-            proc->pid, proc->name, num);
-    proc->tf->eax = -1;
+            myproc()->pid, myproc()->name, num);
+    myproc()->tf->eax = -1;
   }
 }

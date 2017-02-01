@@ -15,8 +15,8 @@ struct cpu {
   // Per-CPU variables, holding pointers to the current cpu and to the current
   // process (see cpu() and proc() in proc.c)
   struct cpu *cpu;             // On cpu 0, cpu = &cpus[0]; on cpu 1, cpu=&cpus[1], etc.
-  struct proc *proc;           // The currently-running process on this cpu
 #endif
+  struct proc *proc;           // The currently-running process on this cpu
 };
 
 extern struct cpu cpus[NCPU];
@@ -35,11 +35,13 @@ mycpu(void) {
   return cpu;
 }
 
+#if 0
 static inline struct proc*
 myproc(void) {
   extern __thread struct proc *proc;
   return proc;
 }
+#endif
 #else
 static inline struct cpu*
 mycpu(void) {
@@ -48,12 +50,14 @@ mycpu(void) {
   return cpu;
 }
 
+#if 0
 static inline struct proc*
 myproc(void) {
   struct proc *proc;
   asm("movl %%gs:4, %0" : "=r"(proc));
   return proc;
 }
+#endif
 #endif
 
 //PAGEBREAK: 17
@@ -105,6 +109,7 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  struct cpu *cpu;             // If running, which cpu.
 };
 
 // Process memory is laid out contiguously, low addresses first:

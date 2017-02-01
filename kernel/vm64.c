@@ -33,7 +33,7 @@
 #include "elf.h"
 
 __thread struct cpu *cpu;
-__thread struct proc *proc;
+//__thread struct proc *proc;
 
 static pde_t *kpml4;
 static pde_t *kpdpt;
@@ -103,7 +103,7 @@ seginit(void)
   c->local = local;
 
   cpu = c;
-  proc = 0;
+  //proc = 0;
 
   addr = (uint64) tss;
   gdt[0] =         0x0000000000000000;

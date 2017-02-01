@@ -32,9 +32,6 @@
 #include "proc.h"
 #include "elf.h"
 
-__thread struct cpu *cpu;
-//__thread struct proc *proc;
-
 static pde_t *kpml4;
 static pde_t *kpdpt;
 static pde_t *iopgdir;
@@ -99,18 +96,14 @@ seginit(void)
   // point FS smack in the middle of our local storage page
   wrmsr(0xC0000100, ((uint64) local) + (PGSIZE / 2));
 
-  c = &cpus[lapiccpunum()];
+  c = &cpus[cpuid()];
   c->local = local;
-
-  cpu = c;
-  //proc = 0;
 
   addr = (uint64) tss;
   gdt[0] =         0x0000000000000000;
   gdt[SEG_KCODE] = 0x0020980000000000;  // Code, DPL=0, R/X
   gdt[SEG_UCODE] = 0x0020F80000000000;  // Code, DPL=3, R/X
   gdt[SEG_KDATA] = 0x0000920000000000;  // Data, DPL=0, W
-  gdt[SEG_KCPU]  = 0x0000000000000000;  // unused
   gdt[SEG_UDATA] = 0x0000F20000000000;  // Data, DPL=3, W
   gdt[SEG_TSS+0] = (0x0067) | ((addr & 0xFFFFFF) << 16) |
                    (0x00E9LL << 40) | (((addr >> 24) & 0xFF) << 56);

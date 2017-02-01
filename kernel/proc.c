@@ -26,10 +26,27 @@ pinit(void)
   initlock(&ptable.lock, "ptable");
 }
 
-// XXX get rid off?
+// Must be called with interrupts disabled
 int
 cpuid() {
   return mycpu()-cpus;
+}
+
+// Must be called with interrupts disabled
+struct cpu*
+mycpu(void)
+{
+  // Would prefer to panic but even printing is chancy here: almost everything,
+  // including cprintf and panic, calls mycpu(), often indirectly through
+  // acquire and release.
+  if(readeflags()&FL_IF){
+    static int n;
+    if(n++ == 0)
+      cprintf("mycpu called from %x with interrupts enabled\n",
+        __builtin_return_address(0));
+  }
+
+  return &cpus[lapiccpunum()];
 }
 
 // Disable interrupts so that we are not rescheduled
@@ -306,6 +323,7 @@ scheduler(void)
 {
   struct proc *p = 0;
   struct cpu *c = mycpu();
+  c->proc = 0;
 
   for(;;){
     // Enable interrupts on this processor.
@@ -328,15 +346,13 @@ scheduler(void)
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
-      p->cpu = c;
-      // cprintf("%d: switch to %d\n", c-cpus, p->pid);
-      swtch(&(p->cpu->scheduler), p->context);
+
+      swtch(&(c->scheduler), p->context);
       switchkvm();
 
       // Process is done running for now.
       // It should have changed its p->state before coming back.
       c->proc = 0;
-      p->cpu = 0;
     }
     release(&ptable.lock);
 
@@ -365,9 +381,7 @@ sched(void)
   if(readeflags()&FL_IF)
     panic("sched interruptible");
   intena = mycpu()->intena;
-  // cprintf("%d: before swtch %d %x\n", p->cpu-cpus, p->pid, * (int *) 0x1d);
-  swtch(&p->context, p->cpu->scheduler);
-  // cprintf("%d/%d: after swtch %d %x\n", cpuid(), p->cpu-cpus, p->pid, * (int *) 0x1d);
+  swtch(&p->context, mycpu()->scheduler);
   mycpu()->intena = intena;
 }
 
@@ -428,8 +442,6 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
-
-  // cprintf("sleep %d\n", p->pid);
 
   sched();
 

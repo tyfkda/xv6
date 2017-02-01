@@ -11,54 +11,12 @@ struct cpu {
   // Cpu-local storage variables; see below
 #if X64
   void *local;
-#else
-  // Per-CPU variables, holding pointers to the current cpu and to the current
-  // process (see cpu() and proc() in proc.c)
-  struct cpu *cpu;             // On cpu 0, cpu = &cpus[0]; on cpu 1, cpu=&cpus[1], etc.
 #endif
-  struct proc *proc;           // The currently-running process on this cpu
+  struct proc *proc;           // The process running on this cpu or null
 };
 
 extern struct cpu cpus[NCPU];
 extern int ncpu;
-
-// The asm suffix tells gcc to use "%gs:0" to refer to cpu
-// and "%gs:4" to refer to proc.  seginit sets up the
-// %gs segment register so that %gs refers to the memory
-// holding those two variables in the local cpu's struct cpu.
-// This is similar to how thread-local variables are implemented
-// in thread libraries such as Linux pthreads.
-#if X64
-static inline struct cpu*
-mycpu(void) {
-  extern __thread struct cpu *cpu;
-  return cpu;
-}
-
-#if 0
-static inline struct proc*
-myproc(void) {
-  extern __thread struct proc *proc;
-  return proc;
-}
-#endif
-#else
-static inline struct cpu*
-mycpu(void) {
-  struct cpu *cpu;
-  asm("movl %%gs:0, %0" : "=r"(cpu));
-  return cpu;
-}
-
-#if 0
-static inline struct proc*
-myproc(void) {
-  struct proc *proc;
-  asm("movl %%gs:4, %0" : "=r"(proc));
-  return proc;
-}
-#endif
-#endif
 
 //PAGEBREAK: 17
 // Saved registers for kernel context switches.
@@ -109,7 +67,6 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
-  struct cpu *cpu;             // If running, which cpu.
 };
 
 // Process memory is laid out contiguously, low addresses first:

@@ -39,7 +39,6 @@ OBJS := \
 	kobj/syscall.o\
 	kobj/sysfile.o\
 	kobj/sysproc.o\
-	kobj/timer.o\
 	kobj/trapasm$(BITS).o\
 	kobj/trap.o\
 	kobj/uart.o\

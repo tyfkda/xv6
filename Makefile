@@ -33,6 +33,7 @@ OBJS := \
 	obj/knl/mp.o\
 	obj/knl/acpi.o\
 	obj/knl/picirq.o\
+	obj/knl/pci.o\
 	obj/knl/pipe.o\
 	obj/knl/proc.o\
 	obj/knl/sleeplock.o\
@@ -306,7 +307,7 @@ QEMUGDB = $(shell if $(QEMU) -help | grep -q '^-gdb'; \
 ifndef CPUS
 CPUS := 2
 endif
-QEMUOPTS = -net none -drive file=fs.img,index=1,media=disk,format=raw -drive file=xv6.img,index=0,media=disk,format=raw -smp $(CPUS) -m 512 $(QEMUEXTRA)
+QEMUOPTS = -net none -drive file=fs.img,index=1,media=disk,format=raw -drive file=xv6.img,index=0,media=disk,format=raw -smp $(CPUS) -m 512 -device e1000 -netdev tap,id=mynet0 $(QEMUEXTRA)
 
 qemu: fs.img xv6.img
 	$(QEMU) -serial mon:stdio $(QEMUOPTS)

@@ -26,3 +26,4 @@
 #define SYS_ftruncate 25
 #define SYS_readdir 26
 #define SYS_lseek 27
+#define SYS_arp 28

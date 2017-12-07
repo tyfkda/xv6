@@ -16,6 +16,7 @@ endif
 OPT ?= -O2
 
 OBJS := \
+	obj/knl/arp.o\
 	obj/knl/bio.o\
 	obj/knl/console.o\
 	obj/knl/exec.o\
@@ -40,6 +41,7 @@ OBJS := \
 	obj/knl/spinlock.o\
 	obj/knl/string.o\
 	obj/knl/swtch$(BITS).o\
+	obj/knl/sysarp.o\
 	obj/knl/syscall.o\
 	obj/knl/sysfile.o\
 	obj/knl/sysproc.o\
@@ -256,6 +258,7 @@ out/fsutil: tools/fsutil.c tools/hostfsaux.c tools/hostfsaux.h
 .PRECIOUS: obj/ulib/%.o, obj/user/%.o
 
 UPROGS=\
+	fs/bin/arptest\
 	fs/bin/cat\
 	fs/bin/cp\
 	fs/bin/cpptest\

@@ -189,6 +189,7 @@ extern int sys_isatty(void);
 extern int sys_ftruncate(void);
 extern int sys_readdir(void);
 extern int sys_lseek(void);
+extern int sys_arp(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -218,6 +219,7 @@ static int (*syscalls[])(void) = {
 [SYS_ftruncate]  sys_ftruncate,
 [SYS_readdir]  sys_readdir,
 [SYS_lseek]   sys_lseek,
+[SYS_arp]     sys_arp,
 };
 
 void

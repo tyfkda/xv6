@@ -38,6 +38,8 @@ int uptime(void);
 int date(struct rtcdate *);
 int isatty(int fd);
 
+int arp(char*, char*, int);
+
 // ulib.c
 int stat(const char*, struct stat*);
 char *getcwd(char *buffer, size_t size);

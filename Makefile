@@ -17,8 +17,10 @@ OPT ?= -O2
 
 OBJS := \
 	obj/knl/arp.o\
+	obj/knl/arp_frame.o\
 	obj/knl/bio.o\
 	obj/knl/console.o\
+	obj/knl/e1000.o\
 	obj/knl/exec.o\
 	obj/knl/file.o\
 	obj/knl/fs.o\
@@ -32,6 +34,7 @@ OBJS := \
 	obj/knl/log.o\
 	obj/knl/main.o\
 	obj/knl/mp.o\
+	obj/knl/nic.o\
 	obj/knl/acpi.o\
 	obj/knl/picirq.o\
 	obj/knl/pci.o\

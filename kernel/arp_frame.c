@@ -7,7 +7,6 @@
  */
 
 #include "types.h"
-#include "util.h"
 #include "defs.h"
 #include "arp_frame.h"
 
@@ -39,7 +38,7 @@ void pack_mac(uchar* dest, char* src) {
   }
 }
 
-uint get_ip (char* ip, uint len) {
+uint get_ip (const char* ip, uint len) {
   uint ipv4  = 0;
   char arr[4];
   int n1 = 0;
@@ -64,7 +63,7 @@ uint get_ip (char* ip, uint len) {
 }
 
 
-int create_eth_arp_frame(char* ipAddr, struct ethr_hdr *eth) {
+int create_eth_arp_frame(const char* ipAddr, struct ethr_hdr *eth) {
   cprintf("Create ARP frame\n");
   char* dmac = BROADCAST_MAC;
 

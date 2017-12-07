@@ -7,7 +7,7 @@
 #include "types.h"
 #include "defs.h"
 
-int send_arpRequest(const char* ipAddr, char* arpResp) {
+int send_arpRequest(const char* interface, const char* ipAddr, char* arpResp) {
   cprintf("Received arp request for ip: %s", ipAddr);
   return 0;
 }

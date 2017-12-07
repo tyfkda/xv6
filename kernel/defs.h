@@ -209,7 +209,7 @@ int             copyout(pde_t*, uint, const void*, uint);
 void            setpteflags(pde_t*, uintp, uintp, uintp);
 
 //arp.c
-int send_arpRequest(const char* ipAddr, char* arpResp);
+int send_arpRequest(const char* interface, const char* ipAddr, char* arpResp);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

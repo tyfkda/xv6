@@ -20,7 +20,7 @@ struct ethr_hdr {
   uint32_t dip;
 };
 
-int create_eth_arp_frame(const char* ipAddr, struct ethr_hdr *eth);
+int create_eth_arp_frame(const uint8_t* smac, const char* ipAddr, struct ethr_hdr *eth);
 void unpack_mac(uchar* mac, char* mac_str);
 char int_to_hex (uint n);
 

@@ -30,10 +30,7 @@ int send_arpRequest(const char* interface, const char* ipAddr, char* arpResp) {
     return -1;
   }
 
-  if(nd->send_packet(eth) < 0) {
-    cprintf("ERROR:send_arpRequest:Failed to send ARP request over the NIC\n");
-    return -2;
-  }
+  nd->send_packet(nd->driver, (uint8_t*)&eth, sizeof(eth));
 
   struct ethr_hdr arpResponse;
   if(block_until_arp_reply(&arpResponse) < 0) {

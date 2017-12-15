@@ -98,7 +98,7 @@ int create_eth_arp_frame(const uint8_t* smac, const char* ipAddr, struct ethr_hd
   eth->sip = get_ip("192.168.1.1", strlen("192.168.1.1"));
 
   eth->dip = get_ip(ipAddr, strlen(ipAddr));
-cprintf("15+ bytes of ethr_hdr:%d and sizeof(ethrtype)=%d\n", ((uintp)&eth->protype-(uintp)&eth->hwtype),sizeof(eth->hwtype));
+
   return 0;
 }
 

@@ -8,8 +8,10 @@ typedef unsigned int  uint32;
 typedef unsigned long uint64;
 
 #if X64
+typedef unsigned long uint64_t;
 typedef unsigned long uintp;
 #else
+typedef unsigned long long uint64_t;
 typedef unsigned int  uintp;
 #endif
 

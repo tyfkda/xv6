@@ -54,12 +54,18 @@ uint32_t get_ip (const char* ip, uint len) {
       arr[n1++] = '\0';
       n1 = 0;
       ip_vals[n2++] = atoi(arr);
+      //cprintf("Check ipval:%d , arr:%s",ip_vals[n2],arr);
+    } else {
+      arr[n1++] = ch;
     }
-
-    arr[n1++] = ch;
   }
 
-  //ipv4 = (ip_vals[0]<<24) + (ip_vals[1]<<16) + (ip_vals[2]<<8) + ip_vals[3];
+  arr[n1++] = '\0';
+  n1 = 0;
+  ip_vals[n2++] = atoi(arr);
+  //cprintf("Final Check ipval:%d , arr:%s",ip_vals[n2],arr);
+
+//ipv4 = (ip_vals[0]<<24) + (ip_vals[1]<<16) + (ip_vals[2]<<8) + ip_vals[3];
   ipv4 = (ip_vals[3]<<24) + (ip_vals[2]<<16) + (ip_vals[1]<<8) + ip_vals[0];
   return ipv4;
 }

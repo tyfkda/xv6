@@ -3,6 +3,7 @@ _*
 .*.swp
 *.o
 *.d
+*.a
 *.asm
 *.sym
 *.img

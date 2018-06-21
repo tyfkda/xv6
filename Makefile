@@ -183,9 +183,11 @@ MKVECTORS = tools/vectors$(BITS).pl
 kernel/vectors.S: $(MKVECTORS)
 	perl $(MKVECTORS) > $@
 
-ULIB = uobj/ulib.o uobj/usys.o uobj/printf.o uobj/umalloc.o
+ULIBOBJS = uobj/ulib.o uobj/usys.o uobj/printf.o uobj/umalloc.o
+uobj/ulib.a:	$(ULIBOBJS)
+	ar rcs $@ $^
 
-fs/%: uobj/%.o $(ULIB)
+fs/%: uobj/%.o uobj/ulib.a
 	@mkdir -p fs out
 	$(LD) $(LDFLAGS) -N -e main -Ttext 0 -o $@ $^
 	$(OBJDUMP) -S $@ > out/$*.asm

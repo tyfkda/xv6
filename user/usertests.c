@@ -1754,7 +1754,7 @@ main(int argc, char *argv[])
 
   if(open("usertests.ran", 0) >= 0){
     printf(1, "already ran user tests -- rebuild fs.img\n");
-    exit();
+    return 1;
   }
   close(open("usertests.ran", O_CREATE));
 
@@ -1801,5 +1801,5 @@ main(int argc, char *argv[])
 
   exectest();
 
-  exit();
+  return 0;
 }

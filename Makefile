@@ -183,13 +183,13 @@ MKVECTORS = tools/vectors$(BITS).pl
 kernel/vectors.S: $(MKVECTORS)
 	perl $(MKVECTORS) > $@
 
-ULIBOBJS = uobj/ulib.o uobj/usys.o uobj/printf.o uobj/umalloc.o
+ULIBOBJS = uobj/crt0.o uobj/ulib.o uobj/usys.o uobj/printf.o uobj/umalloc.o
 uobj/ulib.a:	$(ULIBOBJS)
 	ar rcs $@ $^
 
 fs/%: uobj/%.o uobj/ulib.a
 	@mkdir -p fs out
-	$(LD) $(LDFLAGS) -N -e main -Ttext 0 -o $@ $^
+	$(LD) $(LDFLAGS) -N -e _start -Ttext 0 -o $@ $^
 	$(OBJDUMP) -S $@ > out/$*.asm
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/$*.sym
 

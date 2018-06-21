@@ -28,16 +28,16 @@ main(int argc, char *argv[])
 
   if(argc <= 1){
     cat(0);
-    exit();
+    return 1;
   }
 
   for(i = 1; i < argc; i++){
     if((fd = open(argv[i], 0)) < 0){
       printf(1, "cat: cannot open %s\n", argv[i]);
-      exit();
+      return 1;
     }
     cat(fd);
     close(fd);
   }
-  exit();
+  return 0;
 }

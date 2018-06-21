@@ -22,7 +22,7 @@ fmtname(char *path)
   return buf;
 }
 
-void
+int
 ls(char *path)
 {
   char buf[512], *p;
@@ -32,13 +32,13 @@ ls(char *path)
 
   if((fd = open(path, 0)) < 0){
     printf(2, "ls: cannot open %s\n", path);
-    return;
+    return 1;
   }
 
   if(fstat(fd, &st) < 0){
     printf(2, "ls: cannot stat %s\n", path);
     close(fd);
-    return;
+    return 1;
   }
 
   switch(st.type){
@@ -68,18 +68,24 @@ ls(char *path)
     break;
   }
   close(fd);
+  return 0;
 }
 
 int
 main(int argc, char *argv[])
 {
   int i;
+  int ret;
 
   if(argc < 2){
-    ls(".");
-    exit();
+    return ls(".");
   }
-  for(i=1; i<argc; i++)
-    ls(argv[i]);
-  exit();
+
+  ret = 0;
+  for(i=1; i<argc; i++) {
+    ret = ls(argv[i]);
+    if (ret != 0)
+      break;
+  }
+  return ret;
 }

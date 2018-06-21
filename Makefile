@@ -105,14 +105,14 @@ CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 &
 ASFLAGS = -gdwarf-2 -Wa,-divide -Iinclude $(XFLAGS)
 
 xv6.img: out/bootblock out/kernel.elf fs.img
-	dd if=/dev/zero of=xv6.img count=10000
-	dd if=out/bootblock of=xv6.img conv=notrunc
-	dd if=out/kernel.elf of=xv6.img seek=1 conv=notrunc
+	dd if=/dev/zero of=$@ count=10000
+	dd if=out/bootblock of=$@ conv=notrunc
+	dd if=out/kernel.elf of=$@ seek=1 conv=notrunc
 
 xv6memfs.img: out/bootblock out/kernelmemfs.elf
-	dd if=/dev/zero of=xv6memfs.img count=10000
-	dd if=out/bootblock of=xv6memfs.img conv=notrunc
-	dd if=out/kernelmemfs.elf of=xv6memfs.img seek=1 conv=notrunc
+	dd if=/dev/zero of=$@ count=10000
+	dd if=out/bootblock of=$@ conv=notrunc
+	dd if=out/kernelmemfs.elf of=$@ seek=1 conv=notrunc
 
 # kernel object files
 kobj/%.o: kernel/%.c
@@ -142,14 +142,14 @@ out/bootblock: kernel/bootasm.S kernel/bootmain.c
 	$(CC) -fno-builtin -fno-pic -m32 -nostdinc -Iinclude -o out/bootasm.o -c kernel/bootasm.S
 	$(LD) -m elf_i386 -nodefaultlibs -N -e start -Ttext 0x7C00 -o out/bootblock.o out/bootasm.o out/bootmain.o
 	$(OBJDUMP) -S out/bootblock.o > out/bootblock.asm
-	$(OBJCOPY) -S -O binary -j .text out/bootblock.o out/bootblock
-	tools/sign.pl out/bootblock
+	$(OBJCOPY) -S -O binary -j .text out/bootblock.o $@
+	tools/sign.pl $@
 
 out/entryother: kernel/entryother.S
 	@mkdir -p out
 	$(CC) $(CFLAGS) -fno-pic -nostdinc -I. -o out/entryother.o -c kernel/entryother.S
 	$(LD) $(LDFLAGS) -N -e start -Ttext 0x7000 -o out/bootblockother.o out/entryother.o
-	$(OBJCOPY) -S -O binary -j .text out/bootblockother.o out/entryother
+	$(OBJCOPY) -S -O binary -j .text out/bootblockother.o $@
 	$(OBJDUMP) -S out/bootblockother.o > out/entryother.asm
 
 INITCODESRC = kernel/initcode$(BITS).S
@@ -157,15 +157,15 @@ out/initcode: $(INITCODESRC)
 	@mkdir -p out
 	$(CC) $(CFLAGS) -nostdinc -I. -o out/initcode.o -c $(INITCODESRC)
 	$(LD) $(LDFLAGS) -N -e start -Ttext 0 -o out/initcode.out out/initcode.o
-	$(OBJCOPY) -S -O binary out/initcode.out out/initcode
+	$(OBJCOPY) -S -O binary out/initcode.out $@
 	$(OBJDUMP) -S out/initcode.o > out/initcode.asm
 
 ENTRYCODE = kobj/entry$(BITS).o
 LINKSCRIPT = kernel/kernel$(BITS).ld
 out/kernel.elf: $(OBJS) $(ENTRYCODE) out/entryother out/initcode $(LINKSCRIPT) $(FSIMAGE)
-	$(LD) $(LDFLAGS) -T $(LINKSCRIPT) -o out/kernel.elf $(ENTRYCODE) $(OBJS) -b binary out/initcode out/entryother $(FSIMAGE)
-	$(OBJDUMP) -S out/kernel.elf > out/kernel.asm
-	$(OBJDUMP) -t out/kernel.elf | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/kernel.sym
+	$(LD) $(LDFLAGS) -T $(LINKSCRIPT) -o $@ $(ENTRYCODE) $(OBJS) -b binary out/initcode out/entryother $(FSIMAGE)
+	$(OBJDUMP) -S $@ > out/kernel.asm
+	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/kernel.sym
 
 # kernelmemfs is a copy of kernel that maintains the
 # disk image in memory instead of writing to a disk.
@@ -181,7 +181,7 @@ out/kernelmemfs.elf: $(MEMFSOBJS) $(ENTRYCODE) out/entryother out/initcode $(LIN
 
 MKVECTORS = tools/vectors$(BITS).pl
 kernel/vectors.S: $(MKVECTORS)
-	perl $(MKVECTORS) > kernel/vectors.S
+	perl $(MKVECTORS) > $@
 
 ULIB = uobj/ulib.o uobj/usys.o uobj/printf.o uobj/umalloc.o
 
@@ -193,7 +193,7 @@ fs/%: uobj/%.o $(ULIB)
 
 out/mkfs: tools/mkfs.c include/fs.h
 	@mkdir -p out
-	gcc -Werror -Wall -o out/mkfs tools/mkfs.c
+	gcc -Werror -Wall -o $@ tools/mkfs.c
 
 # Prevent deletion of intermediate files, e.g. cat.o, after first build, so
 # that disk image changes after first build are persistent until clean.  More
@@ -224,7 +224,7 @@ fs/README: README
 
 fs.img: out/mkfs README $(UPROGS)
 	rm -f fs.img
-	out/mkfs fs.img README $(UPROGS)
+	out/mkfs $@ README $(UPROGS)
 
 -include */*.d
 

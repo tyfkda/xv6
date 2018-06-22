@@ -236,8 +236,36 @@ ULIBOBJS = \
 	obj/ulib/time.o\
 	obj/ulib/ulib.o\
 	obj/ulib/umalloc.o\
-	obj/ulib/usys.o\
 	obj/ulib/wait.o\
+
+ULIBOBJS += \
+	obj/ulib/chdir.o \
+	obj/ulib/close.o \
+	obj/ulib/dup.o \
+	obj/ulib/execve.o \
+	obj/ulib/fork.o \
+	obj/ulib/fstat.o \
+	obj/ulib/ftruncate.o\
+	obj/ulib/getpid.o \
+	obj/ulib/ioctl.o\
+	obj/ulib/isatty.o\
+	obj/ulib/lseek.o \
+	obj/ulib/mkdir.o \
+	obj/ulib/mknod.o \
+	obj/ulib/kill.o \
+	obj/ulib/link.o \
+	obj/ulib/open.o \
+	obj/ulib/pipe.o \
+	obj/ulib/read.o \
+	obj/ulib/sbrk.o \
+	obj/ulib/sleep.o \
+	obj/ulib/sysexit.o \
+	obj/ulib/sysreaddir.o \
+	obj/ulib/systime.o \
+	obj/ulib/unlink.o \
+	obj/ulib/uptime.o \
+	obj/ulib/waitpid.o \
+	obj/ulib/write.o \
 
 obj/ulib/ulib.a:	$(ULIBOBJS)
 	ar rcs $@ $^

@@ -1,6 +1,3 @@
-#include "../kernel/syscall.h"
-#include "../kernel/traps.h"
-
 #define SYSCALL2(name, syslabel) \
   .globl name; \
   name: \
@@ -36,31 +33,3 @@
     int $T_SYSCALL; \
     SETERRNO(); \
     ret
-
-SYSCALL(fork)
-SYSCALL2(_sysexit, SYS_exit)
-SYSCALL_WITH_ERROR(waitpid)
-SYSCALL(pipe)
-SYSCALL(read)
-SYSCALL(write)
-SYSCALL(close)
-SYSCALL(kill)
-SYSCALL(execve)
-SYSCALL_WITH_ERROR(open)
-SYSCALL_WITH_ERROR(mknod)
-SYSCALL(unlink)
-SYSCALL(fstat)
-SYSCALL(link)
-SYSCALL_WITH_ERROR(mkdir)
-SYSCALL(chdir)
-SYSCALL(dup)
-SYSCALL(getpid)
-SYSCALL(sbrk)
-SYSCALL(sleep)
-SYSCALL(uptime)
-SYSCALL2(_systime, SYS_time)
-SYSCALL(ioctl)
-SYSCALL(isatty)
-SYSCALL(ftruncate)
-SYSCALL2(_sysreaddir, SYS_readdir)
-SYSCALL(lseek)

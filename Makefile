@@ -200,6 +200,7 @@ fs/forktest: uobj/forktest.o $(ULIB)
 	$(OBJDUMP) -S fs/forktest > out/forktest.asm
 
 out/mkfs: tools/mkfs.c include/fs.h
+	@mkdir -p out
 	gcc -Werror -Wall -o out/mkfs tools/mkfs.c
 
 # Prevent deletion of intermediate files, e.g. cat.o, after first build, so

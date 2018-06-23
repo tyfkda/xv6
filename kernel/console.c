@@ -9,6 +9,7 @@
 #include "param.h"
 #include "traps.h"
 #include "spinlock.h"
+#include "sleeplock.h"
 #include "fs.h"
 #include "file.h"
 #include "memlayout.h"
@@ -120,10 +121,10 @@ panic(char *s)
 {
   int i;
   uintp pcs[10];
-  
+
   cli();
   cons.locking = 0;
-  cprintf("cpu%d: panic: ", cpu->id);
+  cprintf("cpu with apicid %d: panic: ", cpu->apicid);
   cprintf(s);
   cprintf("\n");
   getcallerpcs(&s, pcs);
@@ -143,7 +144,7 @@ static void
 cgaputc(int c)
 {
   int pos;
-  
+
   // Cursor position: col + 80*row.
   outb(CRTPORT, 14);
   pos = inb(CRTPORT+1) << 8;
@@ -156,13 +157,16 @@ cgaputc(int c)
     if(pos > 0) --pos;
   } else
     crt[pos++] = (c&0xff) | 0x0700;  // black on white
-  
+
+  if(pos < 0 || pos > 25*80)
+    panic("pos under/overflow");
+
   if((pos/80) >= 24){  // Scroll up.
     memmove(crt, crt+80, sizeof(crt[0])*23*80);
     pos -= 80;
     memset(crt+pos, 0, sizeof(crt[0])*(24*80 - pos));
   }
-  
+
   outb(CRTPORT, 14);
   outb(CRTPORT+1, pos>>8);
   outb(CRTPORT, 15);
@@ -188,7 +192,6 @@ consputc(int c)
 
 #define INPUT_BUF 128
 struct {
-  struct spinlock lock;
   char buf[INPUT_BUF];
   uint r;  // Read index
   uint w;  // Write index
@@ -200,16 +203,17 @@ struct {
 void
 consoleintr(int (*getc)(void))
 {
-  int c;
+  int c, doprocdump = 0;
 
-  acquire(&input.lock);
+  acquire(&cons.lock);
   while((c = getc()) >= 0){
     switch(c){
     case C('Z'): // reboot
       lidt(0,0);
       break;
     case C('P'):  // Process listing.
-      procdump();
+      // procdump() locks cons.lock indirectly; invoke later
+      doprocdump = 1;
       break;
     case C('U'):  // Kill line.
       while(input.e != input.w &&
@@ -237,7 +241,10 @@ consoleintr(int (*getc)(void))
       break;
     }
   }
-  release(&input.lock);
+  release(&cons.lock);
+  if(doprocdump) {
+    procdump();  // now call procdump() wo. cons.lock held
+  }
 }
 
 int
@@ -248,15 +255,15 @@ consoleread(struct inode *ip, char *dst, int n)
 
   iunlock(ip);
   target = n;
-  acquire(&input.lock);
+  acquire(&cons.lock);
   while(n > 0){
     while(input.r == input.w){
       if(proc->killed){
-        release(&input.lock);
+        release(&cons.lock);
         ilock(ip);
         return -1;
       }
-      sleep(&input.r, &input.lock);
+      sleep(&input.r, &cons.lock);
     }
     c = input.buf[input.r++ % INPUT_BUF];
     if(c == C('D')){  // EOF
@@ -272,7 +279,7 @@ consoleread(struct inode *ip, char *dst, int n)
     if(c == '\n')
       break;
   }
-  release(&input.lock);
+  release(&cons.lock);
   ilock(ip);
 
   return target - n;
@@ -297,7 +304,6 @@ void
 consoleinit(void)
 {
   initlock(&cons.lock, "console");
-  initlock(&input.lock, "input");
 
   devsw[CONSOLE].write = consolewrite;
   devsw[CONSOLE].read = consoleread;
@@ -306,4 +312,3 @@ consoleinit(void)
   picenable(IRQ_KBD);
   ioapicenable(IRQ_KBD, 0);
 }
-

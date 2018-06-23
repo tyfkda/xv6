@@ -1,14 +1,16 @@
 // The local APIC manages internal (non-I/O) interrupts.
 // See Chapter 8 & Appendix C of Intel processor manual volume 3.
 
+#include "param.h"
 #include "types.h"
 #include "defs.h"
+#include "date.h"
 #include "memlayout.h"
 #include "traps.h"
 #include "mmu.h"
 #include "x86.h"
 #include "param.h"
-#include "proc.h"
+#include "proc.h"  // ncpu
 
 // Local APIC registers, divided by 4 for use as uint[] indices.
 #define ID      (0x0020/4)   // ID
@@ -54,19 +56,19 @@ lapicw(int index, int value)
 void
 lapicinit(void)
 {
-  if(!lapic) 
+  if(!lapic)
     return;
 
   // Enable local APIC; set spurious interrupt vector.
   lapicw(SVR, ENABLE | (T_IRQ0 + IRQ_SPURIOUS));
 
   // The timer repeatedly counts down at bus frequency
-  // from lapic[TICR] and then issues an interrupt.  
+  // from lapic[TICR] and then issues an interrupt.
   // If xv6 cared more about precise timekeeping,
   // TICR would be calibrated using an external time source.
   lapicw(TDCR, X1);
   lapicw(TIMER, PERIODIC | (T_IRQ0 + IRQ_TIMER));
-  lapicw(TICR, 10000000); 
+  lapicw(TICR, 10000000);
 
   // Disable logical interrupt lines.
   lapicw(LINT0, MASKED);
@@ -103,7 +105,8 @@ lapicinit(void)
 int
 cpunum(void)
 {
-  int n, id;
+  int apicid, i;
+
   // Cannot call cpu when interrupts are enabled:
   // result not guaranteed to last long enough to be used!
   // Would prefer to panic but even printing is chancy here:
@@ -116,15 +119,15 @@ cpunum(void)
         __builtin_return_address(0));
   }
 
-  if(!lapic)
+  if (!lapic)
     return 0;
 
-  id = lapic[ID]>>24;
-  for (n = 0; n < ncpu; n++)
-    if (id == cpus[n].apicid)
-      return n;
-
-  return 0;
+  apicid = lapic[ID] >> 24;
+  for (i = 0; i < ncpu; ++i) {
+    if (cpus[i].apicid == apicid)
+      return i;
+  }
+  panic("unknown apicid\n");
 }
 
 // Acknowledge interrupt.
@@ -142,7 +145,8 @@ microdelay(int us)
 {
 }
 
-#define IO_RTC  0x70
+#define CMOS_PORT    0x70
+#define CMOS_RETURN  0x71
 
 // Start additional processor running entry code at addr.
 // See Appendix B of MultiProcessor Specification.
@@ -151,12 +155,12 @@ lapicstartap(uchar apicid, uint addr)
 {
   int i;
   ushort *wrv;
-  
+
   // "The BSP must initialize CMOS shutdown code to 0AH
   // and the warm reset vector (DWORD based at 40:67) to point at
   // the AP startup code prior to the [universal startup algorithm]."
-  outb(IO_RTC, 0xF);  // offset 0xF is shutdown code
-  outb(IO_RTC+1, 0x0A);
+  outb(CMOS_PORT, 0xF);  // offset 0xF is shutdown code
+  outb(CMOS_PORT+1, 0x0A);
   wrv = (ushort*)P2V((0x40<<4 | 0x67));  // Warm reset vector
   wrv[0] = 0;
   wrv[1] = addr >> 4;
@@ -168,7 +172,7 @@ lapicstartap(uchar apicid, uint addr)
   microdelay(200);
   lapicw(ICRLO, INIT | LEVEL);
   microdelay(100);    // should be 10ms, but too slow in Bochs!
-  
+
   // Send startup IPI (twice!) to enter code.
   // Regular hardware is supposed to only accept a STARTUP
   // when it is in the halted state due to an INIT.  So the second
@@ -181,4 +185,67 @@ lapicstartap(uchar apicid, uint addr)
   }
 }
 
+#define CMOS_STATA   0x0a
+#define CMOS_STATB   0x0b
+#define CMOS_UIP    (1 << 7)        // RTC update in progress
 
+#define SECS    0x00
+#define MINS    0x02
+#define HOURS   0x04
+#define DAY     0x07
+#define MONTH   0x08
+#define YEAR    0x09
+
+static uint cmos_read(uint reg)
+{
+  outb(CMOS_PORT,  reg);
+  microdelay(200);
+
+  return inb(CMOS_RETURN);
+}
+
+static void fill_rtcdate(struct rtcdate *r)
+{
+  r->second = cmos_read(SECS);
+  r->minute = cmos_read(MINS);
+  r->hour   = cmos_read(HOURS);
+  r->day    = cmos_read(DAY);
+  r->month  = cmos_read(MONTH);
+  r->year   = cmos_read(YEAR);
+}
+
+// qemu seems to use 24-hour GWT and the values are BCD encoded
+void cmostime(struct rtcdate *r)
+{
+  struct rtcdate t1, t2;
+  int sb, bcd;
+
+  sb = cmos_read(CMOS_STATB);
+
+  bcd = (sb & (1 << 2)) == 0;
+
+  // make sure CMOS doesn't modify time while we read it
+  for(;;) {
+    fill_rtcdate(&t1);
+    if(cmos_read(CMOS_STATA) & CMOS_UIP)
+        continue;
+    fill_rtcdate(&t2);
+    if(memcmp(&t1, &t2, sizeof(t1)) == 0)
+      break;
+  }
+
+  // convert
+  if(bcd) {
+#define    CONV(x)     (t1.x = ((t1.x >> 4) * 10) + (t1.x & 0xf))
+    CONV(second);
+    CONV(minute);
+    CONV(hour  );
+    CONV(day   );
+    CONV(month );
+    CONV(year  );
+#undef     CONV
+  }
+
+  *r = t1;
+  r->year += 2000;
+}

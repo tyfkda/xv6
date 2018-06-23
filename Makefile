@@ -5,9 +5,11 @@ BITS = 64
 XOBJS = kobj/vm64.o
 XFLAGS = -m64 -DX64 -mcmodel=kernel -mtls-direct-seg-refs -mno-red-zone
 LDFLAGS = -m elf_x86_64 -nodefaultlibs
+QEMUTARGET = qemu-system-x86_64
 else
 XFLAGS = -m32
 LDFLAGS = -m elf_i386 -nodefaultlibs
+QEMUTARGET = qemu-system-i386
 endif
 
 OPT ?= -O0
@@ -30,6 +32,7 @@ OBJS := \
 	kobj/picirq.o\
 	kobj/pipe.o\
 	kobj/proc.o\
+	kobj/sleeplock.o\
 	kobj/spinlock.o\
 	kobj/string.o\
 	kobj/swtch$(BITS).o\
@@ -74,12 +77,14 @@ TOOLPREFIX := $(shell if i386-jos-elf-objdump -i 2>&1 | grep '^elf32-i386$$' >/d
 endif
 
 # If the makefile can't find QEMU, specify its path here
-#QEMU = 
+#QEMU =
 
 # Try to infer the correct QEMU
 ifndef QEMU
 QEMU = $(shell if which qemu > /dev/null; \
 	then echo qemu; exit; \
+	elif which $(QEMUTARGET) > /dev/null; \
+	then echo $(QEMUTARGET); exit; \
 	else \
 	qemu=/Applications/Q.app/Contents/MacOS/i386-softmmu.app/Contents/MacOS/i386-softmmu; \
 	if test -x $$qemu; then echo $$qemu; exit; fi; fi; \
@@ -95,7 +100,7 @@ AS = $(TOOLPREFIX)gas
 LD = $(TOOLPREFIX)ld
 OBJCOPY = $(TOOLPREFIX)objcopy
 OBJDUMP = $(TOOLPREFIX)objdump
-CFLAGS = -fno-pic -static -fno-builtin -fno-strict-aliasing -Wall -MD -ggdb -fno-omit-frame-pointer
+CFLAGS = -fno-pic -static -fno-builtin -fno-strict-aliasing -O2 -Wall -MD -ggdb -fno-omit-frame-pointer
 CFLAGS += -ffreestanding -fno-common -nostdlib -Iinclude -gdwarf-2 $(XFLAGS) $(OPT)
 CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
 ASFLAGS = -gdwarf-2 -Wa,-divide -Iinclude $(XFLAGS)
@@ -195,6 +200,7 @@ fs/forktest: uobj/forktest.o $(ULIB)
 	$(OBJDUMP) -S fs/forktest > out/forktest.asm
 
 out/mkfs: tools/mkfs.c include/fs.h
+	@mkdir -p out
 	gcc -Werror -Wall -o out/mkfs tools/mkfs.c
 
 # Prevent deletion of intermediate files, e.g. cat.o, after first build, so
@@ -230,7 +236,7 @@ fs.img: out/mkfs README $(UPROGS)
 
 -include */*.d
 
-clean: 
+clean:
 	rm -rf out fs uobj kobj
 	rm -f kernel/vectors.S xv6.img xv6memfs.img fs.img .gdbinit
 
@@ -255,7 +261,7 @@ qemu: fs.img xv6.img
 	$(QEMU) -serial mon:stdio $(QEMUOPTS)
 
 qemu-memfs: xv6memfs.img
-	$(QEMU) xv6memfs.img -smp $(CPUS)
+	$(QEMU) xv6memfs.img -smp $(CPUS) -m 256
 
 qemu-nox: fs.img xv6.img
 	$(QEMU) -nographic $(QEMUOPTS)
@@ -270,4 +276,3 @@ qemu-gdb: fs.img xv6.img .gdbinit
 qemu-nox-gdb: fs.img xv6.img .gdbinit
 	@echo "*** Now run 'gdb'." 1>&2
 	$(QEMU) -nographic $(QEMUOPTS) -S $(QEMUGDB)
-

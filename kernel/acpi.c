@@ -1,7 +1,7 @@
-/* vm64.c 
+/* vm64.c
  *
  * Copyright (c) 2013 Brian Swetland
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
  * "Software"), to deal in the Software without restriction, including
@@ -12,7 +12,7 @@
  *
  * The above copyright notice and this permission notice shall be
  * included in all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
  * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -40,7 +40,7 @@ extern uchar ioapicid;
 
 static struct acpi_rdsp *scan_rdsp(uint base, uint len) {
   uchar *p;
-  for (p = p2v(base); len >= sizeof(struct acpi_rdsp); len -= 4, p += 4) {
+  for (p = P2V(base); len >= sizeof(struct acpi_rdsp); len -= 4, p += 4) {
     if (memcmp(p, SIG_RDSP, 8) == 0) {
       uint sum, n;
       for (sum = 0, n = 0; n < 20; n++)
@@ -49,7 +49,7 @@ static struct acpi_rdsp *scan_rdsp(uint base, uint len) {
         return (struct acpi_rdsp *) p;
     }
   }
-  return (struct acpi_rdsp *) 0;  
+  return (struct acpi_rdsp *) 0;
 }
 
 static struct acpi_rdsp *find_rdsp(void) {
@@ -59,7 +59,7 @@ static struct acpi_rdsp *find_rdsp(void) {
   if (pa && (rdsp = scan_rdsp(pa, 1024)))
     return rdsp;
   return scan_rdsp(0xE0000, 0x20000);
-} 
+}
 
 static int acpi_config_smp(struct acpi_madt *madt) {
   uint32 lapic_addr;
@@ -91,7 +91,6 @@ static int acpi_config_smp(struct acpi_madt *madt) {
       if (!(lapic->flags & APIC_LAPIC_ENABLED))
         break;
       cprintf("acpi: cpu#%d apicid %d\n", ncpu, lapic->apic_id);
-      cpus[ncpu].id = ncpu;
       cpus[ncpu].apicid = lapic->apic_id;
       ncpu++;
       break;
@@ -138,10 +137,10 @@ int acpiinit(void) {
   rdsp = find_rdsp();
   if (rdsp->rsdt_addr_phys > PHYSLIMIT)
     goto notmapped;
-  rsdt = p2v(rdsp->rsdt_addr_phys);
+  rsdt = P2V(rdsp->rsdt_addr_phys);
   count = (rsdt->header.length - sizeof(*rsdt)) / 4;
   for (n = 0; n < count; n++) {
-    struct acpi_desc_header *hdr = p2v(rsdt->entry[n]);
+    struct acpi_desc_header *hdr = P2V(rsdt->entry[n]);
     if (rsdt->entry[n] > PHYSLIMIT)
       goto notmapped;
 #if DEBUG

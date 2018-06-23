@@ -1,9 +1,5 @@
-// Segments in proc->gdt.
-#define NSEGS     7
-
 // Per-CPU state
 struct cpu {
-  uchar id;                    // index into cpus[] below
   uchar apicid;                // Local APIC ID
   struct context *scheduler;   // swtch() here to enter scheduler
   struct taskstate ts;         // Used by x86 to find stack for interrupt
@@ -80,7 +76,7 @@ struct proc {
   pde_t* pgdir;                // Page table
   char *kstack;                // Bottom of kernel stack for this process
   enum procstate state;        // Process state
-  volatile int pid;            // Process ID
+  int pid;                     // Process ID
   struct proc *parent;         // Parent process
   struct trapframe *tf;        // Trap frame for current syscall
   struct context *context;     // swtch() here to run process

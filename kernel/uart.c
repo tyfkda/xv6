@@ -5,6 +5,7 @@
 #include "param.h"
 #include "traps.h"
 #include "spinlock.h"
+#include "sleeplock.h"
 #include "fs.h"
 #include "file.h"
 #include "mmu.h"
@@ -22,7 +23,7 @@ uartearlyinit(void)
 
   // Turn off the FIFO
   outb(COM1+2, 0);
-  
+
   // 9600 baud, 8 data bits, 1 stop bit, parity off.
   outb(COM1+3, 0x80);    // Unlock divisor
   outb(COM1+0, 115200/9600);

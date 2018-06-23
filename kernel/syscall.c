@@ -94,7 +94,7 @@ arguintp(int n, uintp *ip)
 #endif
 
 // Fetch the nth word-sized system call argument as a pointer
-// to a block of memory of size n bytes.  Check that the pointer
+// to a block of memory of size bytes.  Check that the pointer
 // lies within the process address space.
 int
 argptr(int n, char **pp, int size)
@@ -103,7 +103,7 @@ argptr(int n, char **pp, int size)
 
   if(arguintp(n, &i) < 0)
     return -1;
-  if(i >= proc->sz || i+size > proc->sz)
+  if(size < 0 || i >= proc->sz || i+size > proc->sz)
     return -1;
   *pp = (char*)i;
   return 0;

@@ -1,7 +1,7 @@
-/* vm64.c 
+/* vm64.c
  *
  * Copyright (c) 2013 Brian Swetland
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
  * "Software"), to deal in the Software without restriction, including
@@ -12,7 +12,7 @@
  *
  * The above copyright notice and this permission notice shall be
  * included in all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
  * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -88,7 +88,7 @@ seginit(void)
 
   lidt((void*) idt, PGSIZE);
 
-  // create a page for cpu local storage 
+  // create a page for cpu local storage
   local = kalloc();
   memset(local, 0, PGSIZE);
 
@@ -136,9 +136,9 @@ setupkvm(void)
   memset(pml4, 0, PGSIZE);
   memset(pdpt, 0, PGSIZE);
   memset(pgdir, 0, PGSIZE);
-  pml4[511] = v2p(kpdpt) | PTE_P | PTE_W | PTE_U;
-  pml4[0] = v2p(pdpt) | PTE_P | PTE_W | PTE_U;
-  pdpt[0] = v2p(pgdir) | PTE_P | PTE_W | PTE_U; 
+  pml4[511] = V2P(kpdpt) | PTE_P | PTE_W | PTE_U;
+  pml4[0] = V2P(pdpt) | PTE_P | PTE_W | PTE_U;
+  pdpt[0] = V2P(pgdir) | PTE_P | PTE_W | PTE_U;
 
   // virtual backpointers
   pgdir[511] = ((uintp) pml4) | PTE_P;
@@ -163,10 +163,10 @@ kvmalloc(void)
   memset(kpml4, 0, PGSIZE);
   memset(kpdpt, 0, PGSIZE);
   memset(iopgdir, 0, PGSIZE);
-  kpml4[511] = v2p(kpdpt) | PTE_P | PTE_W;
-  kpdpt[511] = v2p(kpgdir1) | PTE_P | PTE_W;
-  kpdpt[510] = v2p(kpgdir0) | PTE_P | PTE_W;
-  kpdpt[509] = v2p(iopgdir) | PTE_P | PTE_W;
+  kpml4[511] = V2P(kpdpt) | PTE_P | PTE_W;
+  kpdpt[511] = V2P(kpgdir1) | PTE_P | PTE_W;
+  kpdpt[510] = V2P(kpgdir0) | PTE_P | PTE_W;
+  kpdpt[509] = V2P(iopgdir) | PTE_P | PTE_W;
   for (n = 0; n < NPDENTRIES; n++) {
     kpgdir0[n] = (n << PDXSHIFT) | PTE_PS | PTE_P | PTE_W;
     kpgdir1[n] = ((n + 512) << PDXSHIFT) | PTE_PS | PTE_P | PTE_W;
@@ -179,7 +179,7 @@ kvmalloc(void)
 void
 switchkvm(void)
 {
-  lcr3(v2p(kpml4));
+  lcr3(V2P(kpml4));
 }
 
 void
@@ -191,9 +191,8 @@ switchuvm(struct proc *p)
   if(p->pgdir == 0)
     panic("switchuvm: no pgdir");
   tss = (uint*) (((char*) cpu->local) + 1024);
-  tss_set_rsp(tss, 0, (uintp)proc->kstack + KSTACKSIZE);
+  tss_set_rsp(tss, 0, (uintp)p->kstack + KSTACKSIZE);
   pml4 = (void*) PTE_ADDR(p->pgdir[511]);
-  lcr3(v2p(pml4));
+  lcr3(V2P(pml4));
   popcli();
 }
-

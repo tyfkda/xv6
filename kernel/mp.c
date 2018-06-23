@@ -12,22 +12,15 @@
 #include "proc.h"
 
 struct cpu cpus[NCPU];
-static struct cpu *bcpu;
 int ismp;
 int ncpu;
 uchar ioapicid;
-
-int
-mpbcpu(void)
-{
-  return bcpu-cpus;
-}
 
 static uchar
 sum(uchar *addr, int len)
 {
   int i, sum;
-  
+
   sum = 0;
   for(i=0; i<len; i++)
     sum += addr[i];
@@ -40,7 +33,7 @@ mpsearch1(uint a, int len)
 {
   uchar *e, *p, *addr;
 
-  addr = p2v(a);
+  addr = P2V(a);
   e = addr+len;
   for(p = addr; p < e; p += sizeof(struct mp))
     if(memcmp(p, "_MP_", 4) == 0 && sum(p, sizeof(struct mp)) == 0)
@@ -85,7 +78,7 @@ mpconfig(struct mp **pmp)
 
   if((mp = mpsearch()) == 0 || mp->physaddr == 0)
     return 0;
-  conf = (struct mpconf*) p2v((uintp) mp->physaddr);
+  conf = (struct mpconf*) P2V((uintp) mp->physaddr);
   if(memcmp(conf, "PCMP", 4) != 0)
     return 0;
   if(conf->version != 1 && conf->version != 4)
@@ -105,7 +98,6 @@ mpinit(void)
   struct mpproc *proc;
   struct mpioapic *ioapic;
 
-  bcpu = &cpus[0];
   if((conf = mpconfig(&mp)) == 0)
     return;
   ismp = 1;
@@ -114,12 +106,10 @@ mpinit(void)
     switch(*p){
     case MPPROC:
       proc = (struct mpproc*)p;
-      cprintf("mpinit ncpu=%d apicid=%d\n", ncpu, proc->apicid);
-      if(proc->flags & MPBOOT)
-        bcpu = &cpus[ncpu];
-      cpus[ncpu].id = ncpu;
-      cpus[ncpu].apicid = proc->apicid;
-      ncpu++;
+      if(ncpu < NCPU) {
+        cpus[ncpu].apicid = proc->apicid;  // apicid may differ from ncpu
+        ncpu++;
+      }
       p += sizeof(struct mpproc);
       continue;
     case MPIOAPIC:
@@ -133,8 +123,8 @@ mpinit(void)
       p += 8;
       continue;
     default:
-      cprintf("mpinit: unknown config type %x\n", *p);
       ismp = 0;
+      break;
     }
   }
   if(!ismp){

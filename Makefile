@@ -47,7 +47,7 @@ OBJS := \
 ifneq ("$(MEMFS)","")
 # build filesystem image in to kernel and use memory-ide-device
 # instead of mounting the filesystem on ide1
-OBJS := $(filter-out kobj/ide.o,$(OBJS)) kobj/memide.o
+#OBJS := $(filter-out kobj/ide.o,$(OBJS)) kobj/memide.o
 FSIMAGE := fs.img
 endif
 
@@ -163,6 +163,18 @@ out/kernel.elf: $(OBJS) $(ENTRYCODE) out/entryother out/initcode $(LINKSCRIPT) $
 	$(OBJDUMP) -S out/kernel.elf > out/kernel.asm
 	$(OBJDUMP) -t out/kernel.elf | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/kernel.sym
 
+# kernelmemfs is a copy of kernel that maintains the
+# disk image in memory instead of writing to a disk.
+# This is not so useful for testing persistent storage or
+# exploring disk buffering implementations, but it is
+# great for testing the kernel on real hardware without
+# needing a scratch disk.
+MEMFSOBJS = $(filter-out kobj/ide.o,$(OBJS)) kobj/memide.o
+out/kernelmemfs.elf: $(MEMFSOBJS) $(ENTRYCODE) out/entryother out/initcode $(LINKSCRIPT) fs.img
+	$(LD) $(LDFLAGS) -T $(LINKSCRIPT) -o $@ $(ENTRYCODE)  $(MEMFSOBJS) -b binary out/initcode out/entryother fs.img
+	$(OBJDUMP) -S $@ > out/kernelmemfs.asm
+	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/kernelmemfs.sym
+
 MKVECTORS = tools/vectors$(BITS).pl
 kernel/vectors.S: $(MKVECTORS)
 	perl $(MKVECTORS) > kernel/vectors.S
@@ -213,6 +225,7 @@ fs/README: README
 	cp README fs/README
 
 fs.img: out/mkfs README $(UPROGS)
+	rm -f fs.img
 	out/mkfs fs.img README $(UPROGS)
 
 -include */*.d

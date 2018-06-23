@@ -5,9 +5,11 @@ BITS = 64
 XOBJS = kobj/vm64.o
 XFLAGS = -m64 -DX64 -mcmodel=kernel -mtls-direct-seg-refs -mno-red-zone
 LDFLAGS = -m elf_x86_64 -nodefaultlibs
+QEMUTARGET = qemu-system-x86_64
 else
 XFLAGS = -m32
 LDFLAGS = -m elf_i386 -nodefaultlibs
+QEMUTARGET = qemu-system-i386
 endif
 
 OPT ?= -O0
@@ -81,10 +83,8 @@ endif
 ifndef QEMU
 QEMU = $(shell if which qemu > /dev/null; \
 	then echo qemu; exit; \
-	elif which qemu-system-i386 > /dev/null; \
-	then echo qemu-system-i386; exit; \
-	elif which qemu-system-x86_64 > /dev/null; \
-	then echo qemu-system-x86_64; exit; \
+	elif which $(QEMUTARGET) > /dev/null; \
+	then echo $(QEMUTARGET); exit; \
 	else \
 	qemu=/Applications/Q.app/Contents/MacOS/i386-softmmu.app/Contents/MacOS/i386-softmmu; \
 	if test -x $$qemu; then echo $$qemu; exit; fi; fi; \

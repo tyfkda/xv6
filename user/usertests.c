@@ -1,12 +1,12 @@
-#include "param.h"
 #include "types.h"
 #include "stat.h"
 #include "user.h"
 #include "fs.h"
 #include "fcntl.h"
 #include "syscall.h"
-#include "traps.h"
-#include "memlayout.h"
+#include "../kernel/memlayout.h"
+#include "../kernel/param.h"
+#include "../kernel/traps.h"
 
 char buf[8192];
 char name[3];

@@ -8,9 +8,9 @@
 #include "elf.h"
 
 int
-exec(char *path, char **argv)
+exec(const char *path, char* const *argv)
 {
-  char *s, *last;
+  const char *s, *last;
   int i, off;
   uintp argc, sz, sp, ustack[3+MAXARG+1];
   struct elfhdr elf;

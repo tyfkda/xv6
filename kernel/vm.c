@@ -365,12 +365,13 @@ uva2ka(pde_t *pgdir, char *uva)
 // Most useful when pgdir is not the current page table.
 // uva2ka ensures this only works for PTE_U pages.
 int
-copyout(pde_t *pgdir, uint va, void *p, uint len)
+copyout(pde_t *pgdir, uint va, const void *p, uint len)
 {
-  char *buf, *pa0;
+  const char *buf;
+  char *pa0;
   uintp n, va0;
 
-  buf = (char*)p;
+  buf = (const char*)p;
   while(len > 0){
     va0 = (uint)PGROUNDDOWN(va);
     pa0 = uva2ka(pgdir, (char*)va0);

@@ -23,7 +23,7 @@ void            consoleintr(int(*)(void));
 void            panic(char*) __attribute__((noreturn));
 
 // exec.c
-int             exec(char*, char**);
+int             exec(const char*, char* const*);
 
 // file.c
 struct file*    filealloc(void);
@@ -189,7 +189,7 @@ int             loaduvm(pde_t*, char*, struct inode*, uint, uint);
 pde_t*          copyuvm(pde_t*, uint);
 void            switchuvm(struct proc*);
 void            switchkvm(void);
-int             copyout(pde_t*, uint, void*, uint);
+int             copyout(pde_t*, uint, const void*, uint);
 void            clearpteu(pde_t *pgdir, char *uva);
 
 // number of elements in fixed-size array

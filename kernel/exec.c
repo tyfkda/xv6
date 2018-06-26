@@ -7,6 +7,33 @@
 #include "x86.h"
 #include "elf.h"
 
+// Is absolute path?
+static int is_abs_path(const char *path) {
+  return path[0] == '/';
+}
+
+// Is relative path?
+static int is_rel_path(const char *path) {
+  return path[0] == '.' && path[1] == '/';
+}
+
+// Find exe path
+static struct inode *find_path(const char *path) {
+  struct inode *ip = namei(path);
+  if (ip == 0 &&
+      !is_abs_path(path) && !is_rel_path(path)) {
+    // Also find at root path. TODO: Search from $PATH
+    const char PATH[] = "/";
+    const int LEN = sizeof(PATH) - 1;
+    const int BUFSIZ = 128;
+    char exepath[BUFSIZ];
+    memmove(exepath, PATH, LEN);
+    safestrcpy(exepath + LEN, path, BUFSIZ - LEN);
+    ip = namei(exepath);
+  }
+  return ip;
+}
+
 int
 exec(const char *path, char* const *argv)
 {
@@ -21,7 +48,8 @@ exec(const char *path, char* const *argv)
 
   begin_op();
 
-  if((ip = namei(path)) == 0){
+  ip = find_path(path);
+  if(ip == 0){
     end_op();
     cprintf("exec: fail\n");
     return -1;

@@ -9,8 +9,6 @@
 #include "traps.h"
 #include "mmu.h"
 #include "x86.h"
-#include "param.h"
-#include "proc.h"  // ncpu
 
 // Local APIC registers, divided by 4 for use as uint[] indices.
 #define ID      (0x0020/4)   // ID
@@ -45,13 +43,13 @@
 
 volatile uint *lapic;  // Initialized in mp.c
 
+//PAGEBREAK!
 static void
 lapicw(int index, int value)
 {
   lapic[index] = value;
   lapic[ID];  // wait for write to finish, by reading
 }
-//PAGEBREAK!
 
 void
 lapicinit(void)
@@ -99,35 +97,12 @@ lapicinit(void)
   lapicw(TPR, 0);
 }
 
-// This is only used during secondary processor startup.
-// cpu->id is the fast way to get the cpu number, once the
-// processor is fully started.
 int
-cpunum(void)
+lapicid(void)
 {
-  int apicid, i;
-
-  // Cannot call cpu when interrupts are enabled:
-  // result not guaranteed to last long enough to be used!
-  // Would prefer to panic but even printing is chancy here:
-  // almost everything, including cprintf and panic, calls cpu,
-  // often indirectly through acquire and release.
-  if(readeflags()&FL_IF){
-    static int n;
-    if(n++ == 0)
-      cprintf("cpu called from %x with interrupts enabled\n",
-        __builtin_return_address(0));
-  }
-
   if (!lapic)
     return 0;
-
-  apicid = lapic[ID] >> 24;
-  for (i = 0; i < ncpu; ++i) {
-    if (cpus[i].apicid == apicid)
-      return i;
-  }
-  panic("unknown apicid\n");
+  return lapic[ID] >> 24;
 }
 
 // Acknowledge interrupt.

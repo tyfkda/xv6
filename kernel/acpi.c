@@ -34,7 +34,6 @@
 #include "acpi.h"
 
 extern struct cpu cpus[NCPU];
-extern int ismp;
 extern int ncpu;
 extern uchar ioapicid;
 
@@ -114,7 +113,6 @@ static int acpi_config_smp(struct acpi_madt *madt) {
   }
 
   if (ncpu) {
-    ismp = 1;
     lapic = IO2V(((uintp)lapic_addr));
     return 0;
   }

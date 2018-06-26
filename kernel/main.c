@@ -24,8 +24,7 @@ main(void)
     mpinit();      // otherwise use bios MP tables
   lapicinit();     // interrupt controller
   seginit();       // segment descriptors
-  cprintf("\ncpu%d: starting xv6\n\n", cpunum());
-  picinit();       // another interrupt controller
+  picinit();       // disable pic
   ioapicinit();    // another interrupt controller
   consoleinit();   // console hardware
   uartinit();      // serial port
@@ -33,9 +32,7 @@ main(void)
   tvinit();        // trap vectors
   binit();         // buffer cache
   fileinit();      // file table
-  ideinit();       // disk
-  if(!ismp)
-    timerinit();   // uniprocessor timer
+  ideinit();       // disk 
   startothers();   // start other processors
   kinit2(P2V(4*1024*1024), P2V(PHYSTOP)); // must come after startothers()
   userinit();      // first user process
@@ -56,9 +53,9 @@ mpenter(void)
 static void
 mpmain(void)
 {
-  cprintf("cpu%d: starting\n", cpunum());
+  cprintf("cpu%d: starting %d\n", cpuid(), cpuid());
   idtinit();       // load idt register
-  xchg(&cpu->started, 1); // tell startothers() we're up
+  xchg(&(mycpu()->started), 1); // tell startothers() we're up
   scheduler();     // start running processes
 }
 
@@ -81,7 +78,7 @@ startothers(void)
   memmove(code, _binary_out_entryother_start, (uintp)_binary_out_entryother_size);
 
   for(c = cpus; c < cpus+ncpu; c++){
-    if(c == cpus+cpunum())  // We've started already.
+    if(c == mycpu())  // We've started already.
       continue;
 
     // Tell entryother.S what stack to use, where to enter, and what
@@ -124,3 +121,7 @@ pde_t entrypgdir[NPDENTRIES] = {
 //PAGEBREAK!
 // Blank page.
 //PAGEBREAK!
+// Blank page.
+//PAGEBREAK!
+// Blank page.
+

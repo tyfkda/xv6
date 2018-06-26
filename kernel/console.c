@@ -124,7 +124,8 @@ panic(char *s)
 
   cli();
   cons.locking = 0;
-  cprintf("cpu with apicid %d: panic: ", cpu->apicid);
+  // use lapiccpunum so that we can call panic from mycpu()
+  cprintf("lapicid %d: panic: ", lapicid());
   cprintf(s);
   cprintf("\n");
   getcallerpcs(&s, pcs);
@@ -258,7 +259,7 @@ consoleread(struct inode *ip, char *dst, int n)
   acquire(&cons.lock);
   while(n > 0){
     while(input.r == input.w){
-      if(proc->killed){
+      if(myproc()->killed){
         release(&cons.lock);
         ilock(ip);
         return -1;
@@ -309,6 +310,5 @@ consoleinit(void)
   devsw[CONSOLE].read = consoleread;
   cons.locking = 1;
 
-  picenable(IRQ_KBD);
   ioapicenable(IRQ_KBD, 0);
 }

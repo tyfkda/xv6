@@ -17,11 +17,13 @@ exec(char *path, char **argv)
   struct inode *ip;
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
+  struct proc *curproc = myproc();
 
   begin_op();
 
   if((ip = namei(path)) == 0){
     end_op();
+    cprintf("exec: fail\n");
     return -1;
   }
   ilock(ip);
@@ -82,8 +84,8 @@ exec(char *path, char **argv)
   ustack[2] = sp - (argc+1)*sizeof(uintp);  // argv pointer
 
 #if X64
-  proc->tf->rdi = argc;
-  proc->tf->rsi = sp - (argc+1)*sizeof(uintp);
+  myproc()->tf->rdi = argc;
+  myproc()->tf->rsi = sp - (argc+1)*sizeof(uintp);
 #endif
 
   sp -= (3+argc+1) * sizeof(uintp);
@@ -94,15 +96,15 @@ exec(char *path, char **argv)
   for(last=s=path; *s; s++)
     if(*s == '/')
       last = s+1;
-  safestrcpy(proc->name, last, sizeof(proc->name));
+  safestrcpy(curproc->name, last, sizeof(curproc->name));
 
   // Commit to the user image.
-  oldpgdir = proc->pgdir;
-  proc->pgdir = pgdir;
-  proc->sz = sz;
-  proc->tf->eip = elf.entry;  // main
-  proc->tf->esp = sp;
-  switchuvm(proc);
+  oldpgdir = curproc->pgdir;
+  curproc->pgdir = pgdir;
+  curproc->sz = sz;
+  curproc->tf->eip = elf.entry;  // main
+  curproc->tf->esp = sp;
+  switchuvm(curproc);
   freevm(oldpgdir);
   return 0;
 

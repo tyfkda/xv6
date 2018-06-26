@@ -66,6 +66,7 @@ fetcharg(int n)
   case 3: return myproc()->tf->rcx;
   case 4: return myproc()->tf->r8;
   case 5: return myproc()->tf->r9;
+  default:  return 0xdeadbeef;
   }
 }
 

@@ -32,7 +32,7 @@ main(void)
   tvinit();        // trap vectors
   binit();         // buffer cache
   fileinit();      // file table
-  ideinit();       // disk 
+  ideinit();       // disk
   startothers();   // start other processors
   kinit2(P2V(4*1024*1024), P2V(PHYSTOP)); // must come after startothers()
   userinit();      // first user process
@@ -59,7 +59,7 @@ mpmain(void)
   scheduler();     // start running processes
 }
 
-pde_t entrypgdir[];  // For entry.S
+extern pde_t entrypgdir[];  // For entry.S
 void entry32mp(void);
 
 // Start the non-boot (AP) processors.
@@ -124,4 +124,3 @@ pde_t entrypgdir[NPDENTRIES] = {
 // Blank page.
 //PAGEBREAK!
 // Blank page.
-

@@ -37,7 +37,7 @@ extern struct cpu cpus[NCPU];
 extern int ncpu;
 extern uchar ioapicid;
 
-static struct acpi_rdsp *scan_rdsp(uint base, uint len) {
+static struct acpi_rdsp *scan_rdsp(uintp base, uint len) {
   uchar *p;
   for (p = P2V(base); len >= sizeof(struct acpi_rdsp); len -= 4, p += 4) {
     if (memcmp(p, SIG_RDSP, 8) == 0) {
@@ -135,10 +135,10 @@ int acpiinit(void) {
   rdsp = find_rdsp();
   if (rdsp->rsdt_addr_phys > PHYSLIMIT)
     goto notmapped;
-  rsdt = P2V(rdsp->rsdt_addr_phys);
+  rsdt = P2V((uintp)rdsp->rsdt_addr_phys);
   count = (rsdt->header.length - sizeof(*rsdt)) / 4;
   for (n = 0; n < count; n++) {
-    struct acpi_desc_header *hdr = P2V(rsdt->entry[n]);
+    struct acpi_desc_header *hdr = P2V((uintp)rsdt->entry[n]);
     if (rsdt->entry[n] > PHYSLIMIT)
       goto notmapped;
 #if DEBUG

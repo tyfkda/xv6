@@ -201,7 +201,8 @@ inituvm(pde_t *pgdir, char *init, uint sz)
 int
 loaduvm(pde_t *pgdir, char *addr, struct inode *ip, uint offset, uint sz)
 {
-  uint i, pa, n;
+  uint i, n;
+  uintp pa;
   pte_t *pte;
 
   if((uintp) addr % PGSIZE != 0)

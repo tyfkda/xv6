@@ -1,7 +1,6 @@
 #include <stdarg.h>
 
 #include "types.h"
-#include "stat.h"
 #include "user.h"
 
 static void

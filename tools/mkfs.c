@@ -20,15 +20,12 @@
 // Disk layout:
 // [ boot block | sb block | log | inode blocks | free bit map | data blocks ]
 
-int nbitmap = FSSIZE/(BSIZE*8) + 1;
-int ninodeblocks = NINODES / IPB + 1;
-int nlog = LOGSIZE;
-int nmeta;    // Number of meta blocks (boot, sb, nlog, inode, bitmap)
-int nblocks;  // Number of data blocks
+const int nbitmap = FSSIZE / (BSIZE * 8) + 1;
+const int ninodeblocks = NINODES / IPB + 1;
+const int nlog = LOGSIZE;
 
 int fsfd;
 struct superblock sb;
-char zeroes[BSIZE];
 uint freeinode = 1;
 uint freeblock;
 
@@ -64,6 +61,37 @@ xint(uint x)
   return y;
 }
 
+static void setup_superblock() {
+  int nmeta;    // Number of meta blocks (boot, sb, nlog, inode, bitmap)
+  int nblocks;  // Number of data blocks
+
+  // 1 fs block = 1 disk sector
+  nmeta = 2 + nlog + ninodeblocks + nbitmap;
+  nblocks = FSSIZE - nmeta;
+
+  sb.size = xint(FSSIZE);
+  sb.nblocks = xint(nblocks);
+  sb.ninodes = xint(NINODES);
+  sb.nlog = xint(nlog);
+  sb.logstart = xint(2);
+  sb.inodestart = xint(2 + nlog);
+  sb.bmapstart = xint(2 + nlog + ninodeblocks);
+
+  printf("nmeta %d (boot, super, log blocks %u inode blocks %u, bitmap blocks %u) blocks %d total %d\n",
+         nmeta, nlog, ninodeblocks, nbitmap, nblocks, FSSIZE);
+
+  freeblock = nmeta;     // the first free block that we can allocate
+}
+
+static void clear_all_sectors() {
+  char zeroes[BSIZE];
+  int i;
+
+  memset(zeroes, 0, sizeof(zeroes));
+  for(i = 0; i < FSSIZE; i++)
+    wsect(i, zeroes);
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -90,25 +118,8 @@ main(int argc, char *argv[])
     exit(1);
   }
 
-  // 1 fs block = 1 disk sector
-  nmeta = 2 + nlog + ninodeblocks + nbitmap;
-  nblocks = FSSIZE - nmeta;
-
-  sb.size = xint(FSSIZE);
-  sb.nblocks = xint(nblocks);
-  sb.ninodes = xint(NINODES);
-  sb.nlog = xint(nlog);
-  sb.logstart = xint(2);
-  sb.inodestart = xint(2+nlog);
-  sb.bmapstart = xint(2+nlog+ninodeblocks);
-
-  printf("nmeta %d (boot, super, log blocks %u inode blocks %u, bitmap blocks %u) blocks %d total %d\n",
-         nmeta, nlog, ninodeblocks, nbitmap, nblocks, FSSIZE);
-
-  freeblock = nmeta;     // the first free block that we can allocate
-
-  for(i = 0; i < FSSIZE; i++)
-    wsect(i, zeroes);
+  setup_superblock();
+  clear_all_sectors();
 
   memset(buf, 0, sizeof(buf));
   memmove(buf, &sb, sizeof(sb));
@@ -128,14 +139,15 @@ main(int argc, char *argv[])
   iappend(rootino, &de, sizeof(de));
 
   for(i = 2; i < argc; i++){
-    char *name = argv[i];
+    const char *name = argv[i];
 
-    if (!strncmp(name, "fs/", 3))
+    if (strncmp(name, "fs/", 3) == 0)
       name += 3;
 
     assert(index(name, '/') == 0);
 
-    if((fd = open(argv[i], 0)) < 0){
+    fd = open(argv[i], 0);
+    if(fd < 0){
       perror(argv[i]);
       exit(1);
     }
@@ -156,13 +168,13 @@ main(int argc, char *argv[])
   // fix size of root inode dir
   rinode(rootino, &din);
   off = xint(din.size);
-  off = ((off/BSIZE) + 1) * BSIZE;
+  off = ((off / BSIZE) + 1) * BSIZE;
   din.size = xint(off);
   winode(rootino, &din);
 
   balloc(freeblock);
 
-  exit(0);
+  return 0;
 }
 
 void

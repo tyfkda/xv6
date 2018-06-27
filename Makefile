@@ -213,6 +213,7 @@ UPROGS=\
 	fs/bin/ln\
 	fs/bin/ls\
 	fs/bin/mkdir\
+	fs/bin/pwd\
 	fs/bin/rm\
 	fs/bin/sh\
 	fs/bin/stressfs\

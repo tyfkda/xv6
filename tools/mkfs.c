@@ -22,6 +22,15 @@
 
 #define NINODES 200
 
+#define DS  ('/')  // Directory separator
+
+#ifndef FALSE
+#define FALSE  (0)
+#endif
+#ifndef TRUE
+#define TRUE  (1)
+#endif
+
 // Disk layout:
 // [ boot block | sb block | log | inode blocks | free bit map | data blocks ]
 
@@ -42,6 +51,7 @@ void rinode(uint inum, struct dinode *ip);
 void rsect(uint sec, void *buf);
 uint ialloc(ushort type);
 void iappend(uint inum, void *p, int n);
+static void put1(uint inum, const char *path, int create_dir);
 
 // convert to intel byte order
 ushort
@@ -99,23 +109,29 @@ static void clear_all_sectors() {
 
 static void putdirent(uint parent, uint inum, const char *name) {
   struct xv6_dirent de;
+  assert(strchr(name, DS) == NULL);
   bzero(&de, sizeof(de));
   de.inum = xshort(inum);
   strncpy(de.name, name, DIRSIZ);
   iappend(parent, &de, sizeof(de));
 }
 
+static const char* getbasename(const char *path) {
+  const char *p = strrchr(path, DS);
+  if (p != NULL) {
+    if (p[1] == '\0')  // Path ends with directory separator.
+      return NULL;
+    return p + 1;
+  }
+  // No separator.
+  return path;
+}
+
 // Put a file into the root directory.
-static void putfile(uint rootino, const char *path) {
+static void putfile(uint parent, const char *path) {
   int cc, fd;
   uint inum;
   char buf[BSIZE];
-  const char *name;
-
-  name = path;
-  if (strncmp(name, "fs/", 3) == 0)
-    name += 3;
-  assert(strchr(name, '/') == 0);
 
   fd = open(path, 0);
   if(fd < 0){
@@ -124,7 +140,7 @@ static void putfile(uint rootino, const char *path) {
   }
 
   inum = ialloc(T_FILE);
-  putdirent(rootino, inum, name);
+  putdirent(parent, inum, getbasename(path));
 
   while((cc = read(fd, buf, sizeof(buf))) > 0)
     iappend(inum, buf, cc);
@@ -147,15 +163,15 @@ static uint iallocdir(uint parent, const char *name) {
   uint inum = ialloc(T_DIR);
   putdirent(inum, inum, ".");
   putdirent(inum, parent, "..");
-  if (name != NULL)
+  if (name != NULL) {
+    assert(strchr(name, DS) == NULL);
     putdirent(parent, inum, name);
+  }
   return inum;
 }
 
 // Put files in a given directory recursively.
-static void putdir(uint pino, const char *path) {
-  /*uint inum =*/ iallocdir(pino, path);
-
+static void putdirentries(uint inum, const char *path) {
   // List up directory entries.
   DIR* dir = opendir(path);
   if (dir == NULL) {
@@ -168,14 +184,28 @@ static void putdir(uint pino, const char *path) {
     if (iscurdir(dent->d_name) || isparentdir(dent->d_name))
       continue;
 
-    //const char* postfix = "";
-    //if ((dent->d_type & DT_DIR) != 0) {
-    //  postfix = "/";
-    //}
-    //printf("%s%s\n", dent->d_name, postfix);
+    char child_path[128];
+    // TODO: Avoid buffer overrun.
+    snprintf(child_path, sizeof(child_path), "%s%c%s", path, DS, dent->d_name);
+    put1(inum, child_path, TRUE);
   }
 
   closedir(dir);
+}
+
+static void put1(uint inum, const char *path, int create_dir) {
+  struct stat st;
+  if (stat(path, &st) != 0) {
+    perror(path);
+    exit(1);
+  }
+
+  if ((st.st_mode & S_IFMT) == S_IFDIR) {
+    uint target = create_dir ? iallocdir(inum, getbasename(path)) : inum;
+    putdirentries(target, path);
+  } else {
+    putfile(inum, path);
+  }
 }
 
 int
@@ -214,19 +244,7 @@ main(int argc, char *argv[])
   assert(rootino == ROOTINO);
 
   for(i = 2; i < argc; i++){
-    struct stat st;
-    const char *path = argv[i];
-
-    if (stat(path, &st) != 0) {
-      perror(path);
-      exit(1);
-    }
-
-    if ((st.st_mode & S_IFMT) == S_IFDIR) {
-      putdir(rootino, path);
-    } else {
-      putfile(rootino, path);
-    }
+    put1(rootino, argv[i], FALSE);
   }
 
   // fix size of root inode dir

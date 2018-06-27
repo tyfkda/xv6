@@ -31,7 +31,7 @@ const int nlog = LOGSIZE;
 
 int fsfd;
 struct superblock sb;
-uint freeinode = 1;
+uint freeinode = ROOTINO;
 uint freeblock;
 
 
@@ -97,11 +97,18 @@ static void clear_all_sectors() {
     wsect(i, zeroes);
 }
 
+static void putdirent(uint parent, uint inum, const char *name) {
+  struct xv6_dirent de;
+  bzero(&de, sizeof(de));
+  de.inum = xshort(inum);
+  strncpy(de.name, name, DIRSIZ);
+  iappend(parent, &de, sizeof(de));
+}
+
 // Put a file into the root directory.
 static void putfile(uint rootino, const char *path) {
   int cc, fd;
   uint inum;
-  struct xv6_dirent de;
   char buf[BSIZE];
   const char *name;
 
@@ -117,11 +124,7 @@ static void putfile(uint rootino, const char *path) {
   }
 
   inum = ialloc(T_FILE);
-
-  bzero(&de, sizeof(de));
-  de.inum = xshort(inum);
-  strncpy(de.name, name, DIRSIZ);
-  iappend(rootino, &de, sizeof(de));
+  putdirent(rootino, inum, name);
 
   while((cc = read(fd, buf, sizeof(buf))) > 0)
     iappend(inum, buf, cc);
@@ -139,10 +142,19 @@ static int isparentdir(const char* name) {
   return strcmp(name, "..") == 0;
 }
 
+// Allocate inode for directory, and put defaults ("." and "..")
+static uint iallocdir(uint parent, const char *name) {
+  uint inum = ialloc(T_DIR);
+  putdirent(inum, inum, ".");
+  putdirent(inum, parent, "..");
+  if (name != NULL)
+    putdirent(parent, inum, name);
+  return inum;
+}
+
 // Put files in a given directory recursively.
-static void putdir(uint ino, const char *path) {
-  // TODO: Implement.
-  fprintf(stderr, "`%s' is a directory (not implemented)\n", path);
+static void putdir(uint pino, const char *path) {
+  /*uint inum =*/ iallocdir(pino, path);
 
   // List up directory entries.
   DIR* dir = opendir(path);
@@ -164,8 +176,6 @@ static void putdir(uint ino, const char *path) {
   }
 
   closedir(dir);
-
-  exit(1);
 }
 
 int
@@ -173,7 +183,6 @@ main(int argc, char *argv[])
 {
   int i;
   uint rootino, off;
-  struct xv6_dirent de;
   char buf[BSIZE];
   struct dinode din;
 
@@ -201,18 +210,8 @@ main(int argc, char *argv[])
   memmove(buf, &sb, sizeof(sb));
   wsect(1, buf);
 
-  rootino = ialloc(T_DIR);
+  rootino = iallocdir(ROOTINO, NULL);
   assert(rootino == ROOTINO);
-
-  bzero(&de, sizeof(de));
-  de.inum = xshort(rootino);
-  strcpy(de.name, ".");
-  iappend(rootino, &de, sizeof(de));
-
-  bzero(&de, sizeof(de));
-  de.inum = xshort(rootino);
-  strcpy(de.name, "..");
-  iappend(rootino, &de, sizeof(de));
 
   for(i = 2; i < argc; i++){
     struct stat st;

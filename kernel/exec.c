@@ -23,7 +23,7 @@ static struct inode *find_path(const char *path) {
   if (ip == 0 &&
       !is_abs_path(path) && !is_rel_path(path)) {
     // Also find at root path. TODO: Search from $PATH
-    const char PATH[] = "/";
+    const char PATH[] = "/bin/";
     const int LEN = sizeof(PATH) - 1;
     const int BUFSIZ = 128;
     char exepath[BUFSIZ];

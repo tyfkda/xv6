@@ -1,15 +1,20 @@
+#include <assert.h>
+#include <dirent.h>
+#include <fcntl.h>
 #include <stdio.h>
-#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
-#include <assert.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #define stat xv6_stat  // avoid clash with host struct stat
+#define dirent xv6_dirent  // avoid clash with host struct dirent
 #include "../include/types.h"
 #include "../include/fs.h"
 #include "../include/stat.h"
 #include "../kernel/param.h"
+#undef stat
+#undef dirent
 
 #ifndef static_assert
 # define static_assert(a, b) do { switch (0) case 0: case (a): ; } while (0)
@@ -17,19 +22,25 @@
 
 #define NINODES 200
 
+#define DS  ('/')  // Directory separator
+
+#ifndef FALSE
+#define FALSE  (0)
+#endif
+#ifndef TRUE
+#define TRUE  (1)
+#endif
+
 // Disk layout:
 // [ boot block | sb block | log | inode blocks | free bit map | data blocks ]
 
-int nbitmap = FSSIZE/(BSIZE*8) + 1;
-int ninodeblocks = NINODES / IPB + 1;
-int nlog = LOGSIZE;
-int nmeta;    // Number of meta blocks (boot, sb, nlog, inode, bitmap)
-int nblocks;  // Number of data blocks
+const int nbitmap = FSSIZE / (BSIZE * 8) + 1;
+const int ninodeblocks = NINODES / IPB + 1;
+const int nlog = LOGSIZE;
 
 int fsfd;
 struct superblock sb;
-char zeroes[BSIZE];
-uint freeinode = 1;
+uint freeinode = ROOTINO;
 uint freeblock;
 
 
@@ -40,6 +51,7 @@ void rinode(uint inum, struct dinode *ip);
 void rsect(uint sec, void *buf);
 uint ialloc(ushort type);
 void iappend(uint inum, void *p, int n);
+static void put1(uint inum, const char *path, int create_dir);
 
 // convert to intel byte order
 ushort
@@ -64,12 +76,143 @@ xint(uint x)
   return y;
 }
 
+static void setup_superblock() {
+  int nmeta;    // Number of meta blocks (boot, sb, nlog, inode, bitmap)
+  int nblocks;  // Number of data blocks
+
+  // 1 fs block = 1 disk sector
+  nmeta = 2 + nlog + ninodeblocks + nbitmap;
+  nblocks = FSSIZE - nmeta;
+
+  sb.size = xint(FSSIZE);
+  sb.nblocks = xint(nblocks);
+  sb.ninodes = xint(NINODES);
+  sb.nlog = xint(nlog);
+  sb.logstart = xint(2);
+  sb.inodestart = xint(2 + nlog);
+  sb.bmapstart = xint(2 + nlog + ninodeblocks);
+
+  printf("nmeta %d (boot, super, log blocks %u inode blocks %u, bitmap blocks %u) blocks %d total %d\n",
+         nmeta, nlog, ninodeblocks, nbitmap, nblocks, FSSIZE);
+
+  freeblock = nmeta;     // the first free block that we can allocate
+}
+
+static void clear_all_sectors() {
+  char zeroes[BSIZE];
+  int i;
+
+  memset(zeroes, 0, sizeof(zeroes));
+  for(i = 0; i < FSSIZE; i++)
+    wsect(i, zeroes);
+}
+
+static void putdirent(uint parent, uint inum, const char *name) {
+  struct xv6_dirent de;
+  assert(strchr(name, DS) == NULL);
+  bzero(&de, sizeof(de));
+  de.inum = xshort(inum);
+  strncpy(de.name, name, DIRSIZ);
+  iappend(parent, &de, sizeof(de));
+}
+
+static const char* getbasename(const char *path) {
+  const char *p = strrchr(path, DS);
+  if (p != NULL) {
+    if (p[1] == '\0')  // Path ends with directory separator.
+      return NULL;
+    return p + 1;
+  }
+  // No separator.
+  return path;
+}
+
+// Put a file into the root directory.
+static void putfile(uint parent, const char *path) {
+  int cc, fd;
+  uint inum;
+  char buf[BSIZE];
+
+  fd = open(path, 0);
+  if(fd < 0){
+    perror(path);
+    exit(1);
+  }
+
+  inum = ialloc(T_FILE);
+  putdirent(parent, inum, getbasename(path));
+
+  while((cc = read(fd, buf, sizeof(buf))) > 0)
+    iappend(inum, buf, cc);
+
+  close(fd);
+}
+
+// Is current directory?
+static int iscurdir(const char* name) {
+  return strcmp(name, ".") == 0;
+}
+
+// Is parent directory?
+static int isparentdir(const char* name) {
+  return strcmp(name, "..") == 0;
+}
+
+// Allocate inode for directory, and put defaults ("." and "..")
+static uint iallocdir(uint parent, const char *name) {
+  uint inum = ialloc(T_DIR);
+  putdirent(inum, inum, ".");
+  putdirent(inum, parent, "..");
+  if (name != NULL) {
+    assert(strchr(name, DS) == NULL);
+    putdirent(parent, inum, name);
+  }
+  return inum;
+}
+
+// Put files in a given directory recursively.
+static void putdirentries(uint inum, const char *path) {
+  // List up directory entries.
+  DIR* dir = opendir(path);
+  if (dir == NULL) {
+    perror(path);
+    exit(1);
+  }
+
+  struct dirent* dent;
+  while ((dent = readdir(dir)) != NULL) {
+    if (iscurdir(dent->d_name) || isparentdir(dent->d_name))
+      continue;
+
+    char child_path[128];
+    // TODO: Avoid buffer overrun.
+    snprintf(child_path, sizeof(child_path), "%s%c%s", path, DS, dent->d_name);
+    put1(inum, child_path, TRUE);
+  }
+
+  closedir(dir);
+}
+
+static void put1(uint inum, const char *path, int create_dir) {
+  struct stat st;
+  if (stat(path, &st) != 0) {
+    perror(path);
+    exit(1);
+  }
+
+  if ((st.st_mode & S_IFMT) == S_IFDIR) {
+    uint target = create_dir ? iallocdir(inum, getbasename(path)) : inum;
+    putdirentries(target, path);
+  } else {
+    putfile(inum, path);
+  }
+}
+
 int
 main(int argc, char *argv[])
 {
-  int i, cc, fd;
-  uint rootino, inum, off;
-  struct dirent de;
+  int i;
+  uint rootino, off;
   char buf[BSIZE];
   struct dinode din;
 
@@ -82,7 +225,7 @@ main(int argc, char *argv[])
   }
 
   assert((BSIZE % sizeof(struct dinode)) == 0);
-  assert((BSIZE % sizeof(struct dirent)) == 0);
+  assert((BSIZE % sizeof(struct xv6_dirent)) == 0);
 
   fsfd = open(argv[1], O_RDWR|O_CREAT|O_TRUNC, 0666);
   if(fsfd < 0){
@@ -90,79 +233,30 @@ main(int argc, char *argv[])
     exit(1);
   }
 
-  // 1 fs block = 1 disk sector
-  nmeta = 2 + nlog + ninodeblocks + nbitmap;
-  nblocks = FSSIZE - nmeta;
-
-  sb.size = xint(FSSIZE);
-  sb.nblocks = xint(nblocks);
-  sb.ninodes = xint(NINODES);
-  sb.nlog = xint(nlog);
-  sb.logstart = xint(2);
-  sb.inodestart = xint(2+nlog);
-  sb.bmapstart = xint(2+nlog+ninodeblocks);
-
-  printf("nmeta %d (boot, super, log blocks %u inode blocks %u, bitmap blocks %u) blocks %d total %d\n",
-         nmeta, nlog, ninodeblocks, nbitmap, nblocks, FSSIZE);
-
-  freeblock = nmeta;     // the first free block that we can allocate
-
-  for(i = 0; i < FSSIZE; i++)
-    wsect(i, zeroes);
+  setup_superblock();
+  clear_all_sectors();
 
   memset(buf, 0, sizeof(buf));
   memmove(buf, &sb, sizeof(sb));
   wsect(1, buf);
 
-  rootino = ialloc(T_DIR);
+  rootino = iallocdir(ROOTINO, NULL);
   assert(rootino == ROOTINO);
 
-  bzero(&de, sizeof(de));
-  de.inum = xshort(rootino);
-  strcpy(de.name, ".");
-  iappend(rootino, &de, sizeof(de));
-
-  bzero(&de, sizeof(de));
-  de.inum = xshort(rootino);
-  strcpy(de.name, "..");
-  iappend(rootino, &de, sizeof(de));
-
   for(i = 2; i < argc; i++){
-    char *name = argv[i];
-
-    if (!strncmp(name, "fs/", 3))
-      name += 3;
-
-    assert(index(name, '/') == 0);
-
-    if((fd = open(argv[i], 0)) < 0){
-      perror(argv[i]);
-      exit(1);
-    }
-
-    inum = ialloc(T_FILE);
-
-    bzero(&de, sizeof(de));
-    de.inum = xshort(inum);
-    strncpy(de.name, name, DIRSIZ);
-    iappend(rootino, &de, sizeof(de));
-
-    while((cc = read(fd, buf, sizeof(buf))) > 0)
-      iappend(inum, buf, cc);
-
-    close(fd);
+    put1(rootino, argv[i], FALSE);
   }
 
   // fix size of root inode dir
   rinode(rootino, &din);
   off = xint(din.size);
-  off = ((off/BSIZE) + 1) * BSIZE;
+  off = ((off / BSIZE) + 1) * BSIZE;
   din.size = xint(off);
   winode(rootino, &din);
 
   balloc(freeblock);
 
-  exit(0);
+  return 0;
 }
 
 void

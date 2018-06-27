@@ -187,8 +187,8 @@ ULIBOBJS = uobj/crt0.o uobj/ulib.o uobj/usys.o uobj/printf.o uobj/umalloc.o
 uobj/ulib.a:	$(ULIBOBJS)
 	ar rcs $@ $^
 
-fs/%: uobj/%.o uobj/ulib.a
-	@mkdir -p fs out
+fs/bin/%: uobj/%.o uobj/ulib.a
+	@mkdir -p fs out fs/bin
 	$(LD) $(LDFLAGS) -N -e _start -Ttext 0 -o $@ $^
 	$(OBJDUMP) -S $@ > out/$*.asm
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/$*.sym
@@ -204,29 +204,29 @@ out/mkfs: tools/mkfs.c include/fs.h
 .PRECIOUS: uobj/%.o
 
 UPROGS=\
-	fs/cat\
-	fs/echo\
-	fs/forktest\
-	fs/grep\
-	fs/init\
-	fs/kill\
-	fs/ln\
-	fs/ls\
-	fs/mkdir\
-	fs/rm\
-	fs/sh\
-	fs/stressfs\
-	fs/usertests\
-	fs/wc\
-	fs/zombie\
+	fs/bin/cat\
+	fs/bin/echo\
+	fs/bin/forktest\
+	fs/bin/grep\
+	fs/bin/init\
+	fs/bin/kill\
+	fs/bin/ln\
+	fs/bin/ls\
+	fs/bin/mkdir\
+	fs/bin/rm\
+	fs/bin/sh\
+	fs/bin/stressfs\
+	fs/bin/usertests\
+	fs/bin/wc\
+	fs/bin/zombie\
 
 fs/README: README
 	@mkdir -p fs
-	cp README fs/README
+	cp $< $@
 
-fs.img: out/mkfs README $(UPROGS)
+fs.img: out/mkfs fs/README $(UPROGS)
 	rm -f fs.img
-	out/mkfs $@ README $(UPROGS)
+	out/mkfs $@ fs
 
 -include */*.d
 

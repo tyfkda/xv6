@@ -144,7 +144,7 @@ main(int argc, char *argv[])
     if (strncmp(name, "fs/", 3) == 0)
       name += 3;
 
-    assert(index(name, '/') == 0);
+    assert(strchr(name, '/') == 0);
 
     fd = open(argv[i], 0);
     if(fd < 0){

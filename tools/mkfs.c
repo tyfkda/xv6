@@ -1,15 +1,20 @@
+#include <assert.h>
+#include <dirent.h>
+#include <fcntl.h>
 #include <stdio.h>
-#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
-#include <assert.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #define stat xv6_stat  // avoid clash with host struct stat
+#define dirent xv6_dirent  // avoid clash with host struct dirent
 #include "../include/types.h"
 #include "../include/fs.h"
 #include "../include/stat.h"
 #include "../kernel/param.h"
+#undef stat
+#undef dirent
 
 #ifndef static_assert
 # define static_assert(a, b) do { switch (0) case 0: case (a): ; } while (0)
@@ -92,12 +97,83 @@ static void clear_all_sectors() {
     wsect(i, zeroes);
 }
 
+// Put a file into the root directory.
+static void putfile(uint rootino, const char *path) {
+  int cc, fd;
+  uint inum;
+  struct xv6_dirent de;
+  char buf[BSIZE];
+  const char *name;
+
+  name = path;
+  if (strncmp(name, "fs/", 3) == 0)
+    name += 3;
+  assert(strchr(name, '/') == 0);
+
+  fd = open(path, 0);
+  if(fd < 0){
+    perror(path);
+    exit(1);
+  }
+
+  inum = ialloc(T_FILE);
+
+  bzero(&de, sizeof(de));
+  de.inum = xshort(inum);
+  strncpy(de.name, name, DIRSIZ);
+  iappend(rootino, &de, sizeof(de));
+
+  while((cc = read(fd, buf, sizeof(buf))) > 0)
+    iappend(inum, buf, cc);
+
+  close(fd);
+}
+
+// Is current directory?
+static int iscurdir(const char* name) {
+  return strcmp(name, ".") == 0;
+}
+
+// Is parent directory?
+static int isparentdir(const char* name) {
+  return strcmp(name, "..") == 0;
+}
+
+// Put files in a given directory recursively.
+static void putdir(uint ino, const char *path) {
+  // TODO: Implement.
+  fprintf(stderr, "`%s' is a directory (not implemented)\n", path);
+
+  // List up directory entries.
+  DIR* dir = opendir(path);
+  if (dir == NULL) {
+    perror(path);
+    exit(1);
+  }
+
+  struct dirent* dent;
+  while ((dent = readdir(dir)) != NULL) {
+    if (iscurdir(dent->d_name) || isparentdir(dent->d_name))
+      continue;
+
+    //const char* postfix = "";
+    //if ((dent->d_type & DT_DIR) != 0) {
+    //  postfix = "/";
+    //}
+    //printf("%s%s\n", dent->d_name, postfix);
+  }
+
+  closedir(dir);
+
+  exit(1);
+}
+
 int
 main(int argc, char *argv[])
 {
-  int i, cc, fd;
-  uint rootino, inum, off;
-  struct dirent de;
+  int i;
+  uint rootino, off;
+  struct xv6_dirent de;
   char buf[BSIZE];
   struct dinode din;
 
@@ -110,7 +186,7 @@ main(int argc, char *argv[])
   }
 
   assert((BSIZE % sizeof(struct dinode)) == 0);
-  assert((BSIZE % sizeof(struct dirent)) == 0);
+  assert((BSIZE % sizeof(struct xv6_dirent)) == 0);
 
   fsfd = open(argv[1], O_RDWR|O_CREAT|O_TRUNC, 0666);
   if(fsfd < 0){
@@ -139,30 +215,19 @@ main(int argc, char *argv[])
   iappend(rootino, &de, sizeof(de));
 
   for(i = 2; i < argc; i++){
-    const char *name = argv[i];
+    struct stat st;
+    const char *path = argv[i];
 
-    if (strncmp(name, "fs/", 3) == 0)
-      name += 3;
-
-    assert(strchr(name, '/') == 0);
-
-    fd = open(argv[i], 0);
-    if(fd < 0){
-      perror(argv[i]);
+    if (stat(path, &st) != 0) {
+      perror(path);
       exit(1);
     }
 
-    inum = ialloc(T_FILE);
-
-    bzero(&de, sizeof(de));
-    de.inum = xshort(inum);
-    strncpy(de.name, name, DIRSIZ);
-    iappend(rootino, &de, sizeof(de));
-
-    while((cc = read(fd, buf, sizeof(buf))) > 0)
-      iappend(inum, buf, cc);
-
-    close(fd);
+    if ((st.st_mode & S_IFMT) == S_IFDIR) {
+      putdir(rootino, path);
+    } else {
+      putfile(rootino, path);
+    }
   }
 
   // fix size of root inode dir

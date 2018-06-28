@@ -1,6 +1,6 @@
 -include local.mk
 
-ifneq ("$(X64)","")
+ifeq ("$(X32)","")
 BITS = 64
 XOBJS = kobj/vm64.o
 XFLAGS = -m64 -DX64 -mcmodel=kernel -mtls-direct-seg-refs -mno-red-zone

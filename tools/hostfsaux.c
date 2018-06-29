@@ -7,6 +7,10 @@ int host_readopen(const char *path) {
   return open(path, O_RDONLY);
 }
 
+int host_writeopen(const char *path) {
+  return open(path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+}
+
 int host_readwriteopen(const char *path) {
   return open(path, O_RDWR);
 }

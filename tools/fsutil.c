@@ -27,13 +27,17 @@
 #define TRUE   (1)
 #endif
 
+#define DS  ('/')  // Directory separator
+
 typedef enum {
   UNKNOWN = -1,
   LS,
+  PULL,
 } SUBCMD;
 
 static const char* kSubCommands[] = {
   "ls",
+  "pull",
   NULL,
 };
 
@@ -56,6 +60,32 @@ static void showHelp(void) {
           "Subcommands:\n"
           "\tls [path] ...    list files\n"
     );
+}
+
+static const char* getBasename(const char* path) {
+  const char* p = strrchr(path, DS);
+  return p != NULL ? p + 1 : path;
+}
+
+// Is given path absolute?
+static int isAbsPath(const char* path) {
+  return path[0] == DS;
+}
+
+// Combine two paths and put it to the output buffer.
+static void combinePath(const char* dirPath, const char* mainPath,
+                        char* out, size_t outBufSize) {
+  if (isAbsPath(mainPath)) {
+    strncpy(out, mainPath, outBufSize);
+    return;
+  }
+
+  int l = strlen(dirPath);
+  strncpy(out, dirPath, outBufSize);
+  out += l;
+  if (l > 0 && out[-1] != DS && l < outBufSize)
+    *out++ = DS;
+  strncpy(out, mainPath, outBufSize - l);
 }
 
 static void panic(const char* msg) {
@@ -324,6 +354,76 @@ void doLs(const char* path) {
   }
 }
 
+static void* readFileFromImg(const char* path, size_t* pSize) {
+  int inum = namei(path);
+  if (inum == -1)
+    return NULL;
+
+  struct dinode ip;
+  rinode(inum, &ip);
+  if (ip.type != T_FILE) {
+    fprintf(stderr, "%s is not a file.\n", path);
+    return NULL;
+  }
+
+  char* contents = malloc(ip.size);
+  if (contents == NULL) {
+    fprintf(stderr, "alloc failed (size=%d)\n", ip.size);
+    return NULL;
+  }
+
+  for (uint off = 0; off < ip.size; off += BSIZE) {
+    uint bn = off / BSIZE;
+    if (bn < NDIRECT) {
+      char buf[BSIZE];
+      rsect(ip.addrs[bn], buf);
+      memcpy(contents + off, buf, min(BSIZE, ip.size - off));
+    } else {
+      fprintf(stderr, "pull: not implemented, block >= NDIRECT (%d), size=%d\n", bn, ip.size);
+      return NULL;
+    }
+  }
+
+  if (pSize != NULL)
+    *pSize = ip.size;
+
+  return contents;
+}
+
+void doPull(const char* srcPath, const char* dstPath) {
+  size_t size;
+  unsigned char* contents = readFileFromImg(srcPath, &size);
+  if (contents == NULL) {
+    fprintf(stderr, "Cannot load from img file: path=[%s]\n", srcPath);
+    exit(1);
+  }
+
+  if (dstPath == NULL) {
+    // Out to stdout
+    write(STDOUT_FILENO, contents, size);
+    return;
+  }
+
+  char dstFnBuf[512];
+  if (host_isdir(dstPath)) {  // Given destination path is a directory.
+    combinePath(dstPath, getBasename(srcPath), dstFnBuf, sizeof(dstFnBuf));
+    dstPath = dstFnBuf;
+  }
+  int dstFd = host_writeopen(dstPath);
+  if (dstFd < 0) {
+    perror(dstPath);
+    exit(1);
+  }
+
+  if (write(dstFd, contents, size) != size) {
+    perror("Write failed");
+    exit(1);
+  }
+  host_close(dstFd);
+
+  free(contents);
+}
+
 int main(int argc, char *argv[]) {
   static_assert(sizeof(int) == 4, "Integers must be 4 bytes!");
 
@@ -343,6 +443,20 @@ int main(int argc, char *argv[]) {
     } else {
       for (int i = 3; i < argc; ++i)
         doLs(argv[i]);
+    }
+    break;
+  case PULL:
+    {
+      if (argc < 4 || argc > 5) {
+        fprintf(stderr, "pull: <src path (in image)> [dst path (in local)]\n");
+        exit(1);
+      }
+
+      const char* src = argv[3];
+      const char* dst = argc > 4 ? argv[4] : NULL;
+
+      setupImgFs(imgFn, FALSE);
+      doPull(src, dst);
     }
     break;
   case UNKNOWN:

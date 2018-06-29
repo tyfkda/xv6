@@ -33,11 +33,13 @@ typedef enum {
   UNKNOWN = -1,
   LS,
   PULL,
+  MKDIR,
 } SUBCMD;
 
 static const char* kSubCommands[] = {
   "ls",
   "pull",
+  "mkdir",
   NULL,
 };
 
@@ -93,6 +95,36 @@ static void panic(const char* msg) {
   exit(1);
 }
 
+// convert to intel byte order
+static ushort xshort(ushort x) {
+  ushort y;
+  uchar *a = (uchar*)&y;
+  a[0] = x;
+  a[1] = x >> 8;
+  return y;
+}
+
+static uint xint(uint x) {
+  uint y;
+  uchar *a = (uchar*)&y;
+  a[0] = x;
+  a[1] = x >> 8;
+  a[2] = x >> 16;
+  a[3] = x >> 24;
+  return y;
+}
+
+static void wsect(uint sec, void *buf) {
+  if(lseek(fsfd, sec * BSIZE, 0) != sec * BSIZE){
+    perror("lseek");
+    exit(1);
+  }
+  if(write(fsfd, buf, BSIZE) != BSIZE){
+    perror("write");
+    exit(1);
+  }
+}
+
 static void rsect(int sec, void *buf) {
   if (lseek(fsfd, sec * BSIZE, 0) != sec * BSIZE) {
     perror("lseek");
@@ -104,6 +136,18 @@ static void rsect(int sec, void *buf) {
   }
 }
 
+static void winode(uint inum, struct dinode *ip) {
+  char buf[BSIZE];
+  uint bn;
+  struct dinode *dip;
+
+  bn = IBLOCK(inum, sb);
+  rsect(bn, buf);
+  dip = ((struct dinode*)buf) + (inum % IPB);
+  *dip = *ip;
+  wsect(bn, buf);
+}
+
 static void rinode(uint inum, struct dinode *ip) {
   uint bn = IBLOCK(inum, sb);
   char buf[BSIZE];
@@ -112,7 +156,17 @@ static void rinode(uint inum, struct dinode *ip) {
   *ip = *dip;
 }
 
-
+static void wbmap(uint inum, int value) {
+  char bmap[BSIZE];
+  rsect(sb.bmapstart, bmap);
+  int mask = 1 << (inum % 8);
+  char b = bmap[inum / 8];
+  char nb = (b & ~mask) | (value ? mask : 0);
+  if (b != nb) {
+    bmap[inum / 8] = nb;
+    wsect(sb.bmapstart, bmap);
+  }
+}
 
 // Inode content
 //
@@ -170,6 +224,54 @@ bmap(struct dinode *ip, uint bn)
   return -1;
 }
 
+static int findFreeBlock(void) {
+  int imax = (sb.size + BPB - 1) / BPB;
+  for (int i = 0; i < imax; ++i) {
+    uchar bmap[BSIZE];
+    rsect(sb.bmapstart + i, bmap);
+    int jmax = (sb.size - i * BPB + 7) / 8;
+    jmax = jmax >= BSIZE ? BSIZE : jmax;
+    for (int j = 0; j < jmax; ++j) {
+      uchar b = bmap[j];
+      if (b == 0xff)
+        continue;
+
+      // Space found: detect which bit to use.
+      int bi = i * BPB + j * 8;
+      int kmax = sb.size - bi;
+      kmax = kmax >= 8 ? 8 : kmax;
+      for (int k = 0; k < 8; ++k) {
+        if ((b & (1 << k)) == 0)
+          return bi + k;
+      }
+    }
+  }
+  panic("Failed to allocate free block.");
+  return -1;
+}
+
+static int allocFreeBlock(void) {
+  int inum = findFreeBlock();
+  wbmap(inum, 1);
+  return inum;
+}
+
+static int findFreeInode(void) {
+  int inum;
+  struct dinode *dip;
+
+  for(inum = 1; inum < sb.ninodes; inum++){
+    char buf[BSIZE];
+    bread(IBLOCK(inum, sb), buf);
+    dip = (struct dinode*)buf + inum%IPB;
+    if(dip->type == 0){  // a free inode
+      return inum;
+    }
+  }
+  panic("findFreeInode: no inodes");
+  return -1;
+}
+
 // Read data from inode.
 // Caller must hold ip->lock.
 int
@@ -197,6 +299,138 @@ readi(struct dinode *ip, char *dst, uint off, uint n)
     //brelse(bp);
   }
   return n;
+}
+// Write data to inode.
+// Caller must hold ip->lock.
+int
+writei(uint inum, struct dinode *ip, char *src, uint off, uint n)
+{
+  uint tot, m;
+  //struct buf *bp;
+
+  //if(ip->type == T_DEV){
+  //  if(ip->major < 0 || ip->major >= NDEV || !devsw[ip->major].write)
+  //    return -1;
+  //  return devsw[ip->major].write(ip, src, n);
+  //}
+
+  if(off > ip->size || off + n < off)
+    return -1;
+  if(off + n > MAXFILE*BSIZE)
+    return -1;
+
+  for(tot=0; tot<n; tot+=m, off+=m, src+=m){
+    char buf[BSIZE];
+    bread(bmap(ip, off/BSIZE), buf);
+    m = min(n - tot, BSIZE - off%BSIZE);
+    memmove(buf + off%BSIZE, src, m);
+    //log_write(bp);
+    //brelse(bp);
+    wsect(bmap(ip, off/BSIZE), buf);
+  }
+
+  if(n > 0 && off > ip->size){
+    ip->size = off;
+    //iupdate(ip);
+    winode(inum, ip);
+  }
+  return n;
+}
+
+static void iappend(uint inum, void *xp, int n) {
+  char *p = (char*)xp;
+  uint fbn, off, n1;
+  struct dinode din;
+  char buf[BSIZE];
+  uint indirect[NINDIRECT];
+  uint x;
+
+  rinode(inum, &din);
+  off = xint(din.size);
+  // printf("append inum %d at off %d sz %d\n", inum, off, n);
+  while(n > 0){
+    fbn = off / BSIZE;
+    assert(fbn < MAXFILE);
+    if(fbn < NDIRECT){
+      if(xint(din.addrs[fbn]) == 0){
+        uint freeblock = allocFreeBlock();
+        din.addrs[fbn] = xint(freeblock);
+      }
+      x = xint(din.addrs[fbn]);
+    } else {
+      if(xint(din.addrs[NDIRECT]) == 0){
+        uint freeblock = allocFreeBlock();
+        din.addrs[NDIRECT] = xint(freeblock);
+      }
+      rsect(xint(din.addrs[NDIRECT]), (char*)indirect);
+      if(indirect[fbn - NDIRECT] == 0){
+        uint freeblock = allocFreeBlock();
+        indirect[fbn - NDIRECT] = xint(freeblock);
+        wsect(xint(din.addrs[NDIRECT]), (char*)indirect);
+      }
+      x = xint(indirect[fbn-NDIRECT]);
+    }
+    n1 = min(n, (fbn + 1) * BSIZE - off);
+    rsect(x, buf);
+    bcopy(p, buf + off - (fbn * BSIZE), n1);
+    wsect(x, buf);
+    n -= n1;
+    off += n1;
+    p += n1;
+  }
+  din.size = xint(off);
+  winode(inum, &din);
+}
+
+static void putdirent(uint parent, uint inum, const char *name) {
+  // Find space.
+  struct dinode din;
+  rinode(parent, &din);
+  struct dirent de;
+  for(uint off = 0; off < din.size; off += sizeof(de)){
+    if(readi(&din, (char*)&de, off, sizeof(de)) != sizeof(de))
+      panic("putdirent read");
+    if(de.d_ino == 0) {
+      // Found: put here.
+      bzero(&de, sizeof(de));
+      de.d_ino = xshort(inum);
+      strncpy(de.d_name, name, DIRSIZ);
+
+      if (writei(parent, &din, (char*)&de, off, sizeof(de)) != sizeof(de))
+        panic("putdirent write");
+      return;
+    }
+  }
+
+  // Add new one.
+  assert(strchr(name, DS) == NULL);
+  bzero(&de, sizeof(de));
+  de.d_ino = xshort(inum);
+  strncpy(de.d_name, name, DIRSIZ);
+  iappend(parent, &de, sizeof(de));
+}
+
+static int ialloc(ushort type) {
+  int inum = findFreeInode();
+
+  struct dinode din;
+  bzero(&din, sizeof(din));
+  din.type = xshort(type);
+  din.nlink = xshort(1);
+  din.size = xint(0);
+  winode(inum, &din);
+  return inum;
+}
+
+// Allocate inode for directory, and put defaults ("." and "..")
+static uint iallocdir(uint parent, const char *name) {
+  uint inum = ialloc(T_DIR);
+  putdirent(inum, inum, ".");
+  putdirent(inum, parent, "..");
+  if (name != NULL) {
+    putdirent(parent, inum, name);
+  }
+  return inum;
 }
 
 // Copy the next path element from path into name.
@@ -282,13 +516,8 @@ static int namei(const char* path) {
   return inum;
 }
 
-void setupImgFs(const char* imgFn, int write) {
-  if (write) {
-    fprintf(stderr, "TODO: Implement write open for image file\n");
-    exit(1);
-  }
-
-  fsfd = host_readopen(imgFn);
+void setupImgFs(const char* imgFn, int readwrite) {
+  fsfd = readwrite ? host_readwriteopen(imgFn) : host_readopen(imgFn);
   if (fsfd < 0) {
     perror(imgFn);
     exit(1);
@@ -424,6 +653,32 @@ void doPull(const char* srcPath, const char* dstPath) {
   free(contents);
 }
 
+void doMkdir(const char* path) {
+  // like -p option, automatically create directory recursively.
+
+  int inum = ROOTINO;
+  char name[DIRSIZ] = {'\0'};
+  while ((path = skipelem(path, name)) != 0) {
+    struct dinode din;
+    rinode(inum, &din);
+
+    if (din.type != T_DIR) {
+      fprintf(stderr, "%s is not a directory\n", name);  // TODO: Check length.
+      exit(1);
+    }
+
+    int next = dirlookup(&din, name);
+    if (next  == -1) {
+      next = iallocdir(inum, name);
+      if (next == -1) {
+        fprintf(stderr, "mkdir [%s] failed.\n", name);
+        exit(1);
+      }
+    }
+    inum = next;
+  }
+}
+
 int main(int argc, char *argv[]) {
   static_assert(sizeof(int) == 4, "Integers must be 4 bytes!");
 
@@ -457,6 +712,19 @@ int main(int argc, char *argv[]) {
 
       setupImgFs(imgFn, FALSE);
       doPull(src, dst);
+    }
+    break;
+  case MKDIR:
+    {
+      if (argc < 4) {
+        fprintf(stderr, "mkdir: path...\n");
+        exit(1);
+      }
+
+      setupImgFs(imgFn, TRUE);
+      for (int i = 3; i < argc; ++i) {
+        doMkdir(argv[i]);
+      }
     }
     break;
   case UNKNOWN:

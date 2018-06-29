@@ -214,7 +214,6 @@ uint iallocdir(uint parent, const char *name) {
   putdirent(inum, inum, ".");
   putdirent(inum, parent, "..");
   if (name != NULL) {
-    assert(strchr(name, DS) == NULL);
     putdirent(parent, inum, name);
   }
   return inum;
@@ -343,7 +342,7 @@ bfill(int used)
   assert(used < BSIZE*8);
   bzero(buf, BSIZE);
   for(i = 0; i < used; i++){
-    buf[i/8] = buf[i/8] | (0x1 << (i%8));
+    buf[i/8] |= 0x1 << (i % 8);
   }
   printf("bfill: write bitmap block at sector %d\n", sb.bmapstart);
   wsect(sb.bmapstart, buf);

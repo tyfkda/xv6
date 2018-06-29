@@ -34,8 +34,10 @@
 // Disk layout:
 // [ boot block | sb block | log | inode blocks | free bit map | data blocks ]
 
-const int nbitmap = FSSIZE / (BSIZE * 8) + 1;
-const int ninodeblocks = NINODES / IPB + 1;
+#define DIVROUNDUP(x, n)  (((x) + (n) - 1) / (n))
+
+const int nbitmap = DIVROUNDUP(FSSIZE, BSIZE * 8);
+const int ninodeblocks = DIVROUNDUP(NINODES, IPB);
 const int nlog = LOGSIZE;
 
 int fsfd;

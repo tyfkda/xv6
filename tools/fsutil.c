@@ -29,17 +29,21 @@
 
 #define DS  ('/')  // Directory separator
 
+void iupdate(struct dinode *ip, uint inum);
+
 typedef enum {
   UNKNOWN = -1,
   LS,
   PULL,
   MKDIR,
+  RM,
 } SUBCMD;
 
 static const char* kSubCommands[] = {
   "ls",
   "pull",
   "mkdir",
+  "rm",
   NULL,
 };
 
@@ -60,7 +64,10 @@ static void showHelp(void) {
           "Usage: fs <img> <subcommand>\n"
           "\n"
           "Subcommands:\n"
-          "\tls [path] ...    list files\n"
+          "\tls [path] ...         List files (default: /)\n"
+          "\tpull <source> [dest]  Pull a file from image to local (default: to current)\n"
+          "\tmkdir [path] ...      Make directory.\n"
+          "\trm [path] ...         Remove file(s).\n"
     );
 }
 
@@ -166,6 +173,13 @@ static void wbmap(uint inum, int value) {
     bmap[inum / 8] = nb;
     wsect(sb.bmapstart, bmap);
   }
+}
+
+// Free a disk block.
+static void
+bfree(uint b)
+{
+  wbmap(b, 0);
 }
 
 // Inode content
@@ -300,6 +314,7 @@ readi(struct dinode *ip, char *dst, uint off, uint n)
   }
   return n;
 }
+
 // Write data to inode.
 // Caller must hold ip->lock.
 int
@@ -331,8 +346,7 @@ writei(uint inum, struct dinode *ip, char *src, uint off, uint n)
 
   if(n > 0 && off > ip->size){
     ip->size = off;
-    //iupdate(ip);
-    winode(inum, ip);
+    iupdate(ip, inum);
   }
   return n;
 }
@@ -433,6 +447,86 @@ static uint iallocdir(uint parent, const char *name) {
   return inum;
 }
 
+// Truncate inode (discard contents).
+// Only called when the inode has no links
+// to it (no directory entries referring to it)
+// and has no in-memory reference to it (is
+// not an open file or current directory).
+static void
+itrunc(struct dinode *ip, uint inum)
+{
+  int i, j;
+  uint *a;
+
+  for(i = 0; i < NDIRECT; i++){
+    if(ip->addrs[i]){
+      bfree(ip->addrs[i]);
+      ip->addrs[i] = 0;
+    }
+  }
+
+  if(ip->addrs[NDIRECT]){
+    char buf[BSIZE];
+    bread(ip->addrs[NDIRECT], buf);
+    a = (uint*)buf;
+    for(j = 0; j < NINDIRECT; j++){
+      if(a[j])
+        bfree(a[j]);
+    }
+    //brelse(bp);
+    bfree(ip->addrs[NDIRECT]);
+    ip->addrs[NDIRECT] = 0;
+  }
+
+  ip->size = 0;
+  //iupdate(ip, inum);
+}
+
+// Copy a modified in-memory inode to disk.
+// Must be called after every change to an ip->xxx field
+// that lives on disk, since i-node cache is write-through.
+// Caller must hold ip->lock.
+void
+iupdate(struct dinode *ip, uint inum)
+{
+  //struct buf *bp;
+  char buf[BSIZE];
+  struct dinode *dip;
+
+  bread(IBLOCK(inum, sb), buf);
+  dip = (struct dinode*)buf + inum%IPB;
+  dip->type = ip->type;
+  dip->major = ip->major;
+  dip->minor = ip->minor;
+  dip->nlink = ip->nlink;
+  dip->size = ip->size;
+  memmove(dip->addrs, ip->addrs, sizeof(ip->addrs));
+  //log_write(bp);
+  //brelse(bp);
+  wsect(IBLOCK(inum, sb), buf);
+
+  if (ip->nlink == 0) {
+    assert(ip->nlink == 0);
+    itrunc(ip, inum);
+  }
+}
+
+// Is the directory dp empty except for "." and ".." ?
+static int
+isdirempty(struct dinode *dp)
+{
+  int off;
+  struct dirent de;
+
+  for(off=2*sizeof(de); off<dp->size; off+=sizeof(de)){
+    if(readi(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
+      panic("isdirempty: readi");
+    if(de.d_ino != 0)
+      return FALSE;
+  }
+  return TRUE;
+}
+
 // Copy the next path element from path into name.
 // Return a pointer to the element following the copied one.
 // The returned path has no leading slashes,
@@ -479,7 +573,7 @@ namecmp(const char *s, const char *t)
 // Look for a directory entry in a directory.
 // If found, set *poff to byte offset of entry.
 int
-dirlookup(struct dinode *din, const char *name)
+dirlookup(struct dinode *din, const char *name, uint* poff)
 {
   uint off;
   struct dirent de;
@@ -493,20 +587,31 @@ dirlookup(struct dinode *din, const char *name)
     if(de.d_ino == 0)
       continue;
     if(namecmp(name, de.d_name) == 0){
+      // entry matches path element
+      if(poff != NULL)
+        *poff = off;
       return de.d_ino;
     }
   }
   return -1;
 }
 
-static int namei(const char* path) {
+static int namex(const char* path, int nameiparent, char* name) {
   int inum = ROOTINO;
-  char name[DIRSIZ];
   while((path = skipelem(path, name)) != 0){
     struct dinode din;
     rinode(inum, &din);
 
-    int next = dirlookup(&din, name);
+    if (din.type != T_DIR) {
+      return -1;
+    }
+
+    if(nameiparent && *path == '\0'){
+      // Stop one level early.
+      return inum;
+    }
+
+    int next = dirlookup(&din, name, NULL);
     if (next  == -1) {
       inum = -1;
       break;
@@ -514,6 +619,15 @@ static int namei(const char* path) {
     inum = next;
   }
   return inum;
+}
+
+static int namei(const char* path) {
+  char name[DIRSIZ];
+  return namex(path, FALSE, name);
+}
+
+static int nameiparent(const char* path, char* name) {
+  return namex(path, TRUE, name);
 }
 
 void setupImgFs(const char* imgFn, int readwrite) {
@@ -667,7 +781,7 @@ void doMkdir(const char* path) {
       exit(1);
     }
 
-    int next = dirlookup(&din, name);
+    int next = dirlookup(&din, name, NULL);
     if (next  == -1) {
       next = iallocdir(inum, name);
       if (next == -1) {
@@ -677,6 +791,49 @@ void doMkdir(const char* path) {
     }
     inum = next;
   }
+}
+
+void doRm(const char* path) {
+  char name[DIRSIZ];
+  int parent = nameiparent(path, name);
+  if (parent == -1) {
+    fprintf(stderr, "rm: Cannot find path: %s\n", path);
+    exit(1);
+  }
+
+  // Cannot unlink "." or "..".
+  if (namecmp(name, ".") == 0 || namecmp(name, "..") == 0) {
+    fprintf(stderr, "rm: Cannot remove path: %s\n", path);
+    exit(1);
+  }
+
+  struct dinode dp;
+  rinode(parent, &dp);
+  uint off;
+  int inum = dirlookup(&dp, name, &off);
+  if (inum == -1) {
+    fprintf(stderr, "rm: Cannot find path: %s\n", path);
+    exit(1);
+  }
+
+  struct dinode ip;
+  rinode(inum, &ip);
+  if(ip.type == T_DIR && !isdirempty(&ip)){
+    fprintf(stderr, "rm: Directory not empty: %s\n", path);
+    exit(1);
+  }
+
+  struct dirent de;
+  memset(&de, 0, sizeof(de));
+  if(writei(parent, &dp, (char*)&de, off, sizeof(de)) != sizeof(de))
+    panic("unlink: writei");
+  //if(ip.type == T_DIR){
+  //  dp.nlink--;
+  //  iupdate(&dp, parent);
+  //}
+
+  ip.nlink--;
+  iupdate(&ip, inum);
 }
 
 int main(int argc, char *argv[]) {
@@ -724,6 +881,19 @@ int main(int argc, char *argv[]) {
       setupImgFs(imgFn, TRUE);
       for (int i = 3; i < argc; ++i) {
         doMkdir(argv[i]);
+      }
+    }
+    break;
+  case RM:
+    {
+      if (argc < 4) {
+        fprintf(stderr, "rm: path...\n");
+        exit(1);
+      }
+
+      setupImgFs(imgFn, TRUE);
+      for (int i = 3; i < argc; ++i) {
+        doRm(argv[i]);
       }
     }
     break;

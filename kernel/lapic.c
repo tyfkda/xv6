@@ -203,7 +203,7 @@ void cmostime(struct rtcdate *r)
   for(;;) {
     fill_rtcdate(&t1);
     if(cmos_read(CMOS_STATA) & CMOS_UIP)
-        continue;
+      continue;
     fill_rtcdate(&t2);
     if(memcmp(&t1, &t2, sizeof(t1)) == 0)
       break;

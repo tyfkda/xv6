@@ -16,14 +16,21 @@ sys_fork(void)
 int
 sys_exit(void)
 {
-  exit();
+  int code;
+
+  if(argint(0, &code) < 0)
+    return -1;
+  exit(code);
   return 0;  // not reached
 }
 
 int
 sys_wait(void)
 {
-  return wait();
+  uintp p;
+  if(arguintp(0, &p) < 0)
+    return -1;
+  return wait((int*)p);
 }
 
 int

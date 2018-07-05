@@ -11,12 +11,12 @@ cat(int fd)
   while((n = read(fd, buf, sizeof(buf))) > 0) {
     if (write(1, buf, n) != n) {
       printf(2, "cat: write error\n");
-      exit();
+      exit(1);
     }
   }
   if(n < 0){
     printf(2, "cat: read error\n");
-    exit();
+    exit(1);
   }
 }
 

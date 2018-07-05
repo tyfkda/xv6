@@ -89,6 +89,17 @@ snprintf(char *out, uint n, const char *fmt, ...)
   return len;
 }
 
+int
+sprintf(char *out, const char *fmt, ...)
+{
+  va_list ap;
+  int len;
+  va_start(ap, fmt);
+  len = vsnprintf(out, (uint)-1, fmt, ap);
+  va_end(ap);
+  return len;
+}
+
 // Print to the given fd. Only understands %d, %x, %p, %s.
 int
 printf(int fd, const char *fmt, ...)

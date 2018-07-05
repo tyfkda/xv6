@@ -53,7 +53,88 @@ int fork1(void);  // Fork but panics on failure.
 void panic(char*);
 struct cmd *parsecmd(char*);
 
+// Environment variables.
+struct envvar {
+  struct envvar *next;
+  const char *name;
+  char *value;
+};
+
+static struct envvar *s_envvars;
+
+struct envvar*
+findenv(const char *name)
+{
+  struct envvar *p;
+  for (p = s_envvars; p; p = p->next) {
+    if (strcmp(p->name, name) == 0)
+      return p;
+  }
+  return 0;
+}
+
+char*
+getenv(const char *name)
+{
+  struct envvar *p;
+  p = findenv(name);
+  return p ? p->value : 0;
+}
+
+void
+putenv(const char *name, const char *value)
+{
+  struct envvar *p;
+
+  p = findenv(name);
+  if (p != 0) {
+    free(p->value);
+  } else {
+    p = malloc(sizeof(*p));
+    p->next = s_envvars;
+    s_envvars = p;
+    p->name = strdup(name);
+  }
+  p->value = strdup(value);
+}
+
+// Expand environment variables.
+void
+expandenv(char **src, char **dst)
+{
+  for(; *src; ++src) {
+    if (**src != '$') {
+      *dst++ = *src;
+    } else {
+      char* var = getenv(*src + 1);
+      if (var)
+        *dst++ = var;  // TODO: Expand multi-values.
+    }
+  }
+  *dst = 0;
+}
+
+static void
+putLastExitCode(int exitcode)
+{
+  char buf[16];
+  sprintf(buf, "%d", exitcode);
+  putenv("?", buf);
+}
+
+// Execute execcmd.  Never returns.
+void
+runecmd(struct execcmd *ecmd)
+{
+  char *argv[MAXARGS];
+  expandenv(ecmd->argv, argv);
+
+  exec(argv[0], argv);
+  printf(2, "exec %s failed\n", ecmd->argv[0]);
+}
+
 // Execute cmd.  Never returns.
+void runcmd(struct cmd *cmd) __attribute__((noreturn));
 void
 runcmd(struct cmd *cmd)
 {
@@ -76,8 +157,7 @@ runcmd(struct cmd *cmd)
     ecmd = (struct execcmd*)cmd;
     if(ecmd->argv[0] == 0)
       exit(0);
-    exec(ecmd->argv[0], ecmd->argv);
-    printf(2, "exec %s failed\n", ecmd->argv[0]);
+    runecmd(ecmd);
     break;
 
   case REDIR:
@@ -94,7 +174,8 @@ runcmd(struct cmd *cmd)
     lcmd = (struct listcmd*)cmd;
     if(fork1() == 0)
       runcmd(lcmd->left);
-    wait(0);
+    wait(&ec1);
+    putLastExitCode(ec1);
     runcmd(lcmd->right);
     break;
 
@@ -170,6 +251,7 @@ main(void)
     if(fork1() == 0)
       runcmd(parsecmd(buf));
     wait(&exitcode);
+    putLastExitCode(exitcode);
     printf(2, "(exitcode = %d)\n", exitcode);
   }
   return 0;
@@ -263,8 +345,8 @@ backcmd(struct cmd *subcmd)
 //PAGEBREAK!
 // Parsing
 
-char whitespace[] = " \t\r\n\v";
-char symbols[] = "<|>&;()";
+static const char whitespace[] = " \t\r\n\v";
+static const char symbols[] = "<|>&;()";
 
 int
 gettoken(char **ps, char *es, char **q, char **eq)

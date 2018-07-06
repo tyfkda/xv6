@@ -268,28 +268,40 @@ runcmd(struct cmd *cmd)
     break;
 
   case PIPE:
-    pcmd = (struct pipecmd*)cmd;
-    if(pipe(p) < 0)
-      panic("pipe");
-    if(fork1() == 0){
-      close(1);
-      dup(p[1]);
+    {
+      pcmd = (struct pipecmd*)cmd;
+      if(pipe(p) < 0)
+        panic("pipe");
+      int pid1 = fork1();
+      if (pid1 < 0)
+        panic("pipe: fork failed");
+      if(pid1 == 0){
+        close(1);
+        dup(p[1]);
+        close(p[0]);
+        close(p[1]);
+        runcmd(pcmd->left);
+      }
+      int pid2 = fork1();
+      if (pid2 < 0)
+        panic("pipe: fork failed");
+      if(pid2 == 0){
+        close(0);
+        dup(p[0]);
+        close(p[0]);
+        close(p[1]);
+        runcmd(pcmd->right);
+      }
       close(p[0]);
       close(p[1]);
-      runcmd(pcmd->left);
+      wait(&ec1);
+      if (ec1 != 0) {
+        kill(pid2);
+        exit(ec1);
+      }
+      wait(&ec2);
+      exit(ec2);
     }
-    if(fork1() == 0){
-      close(0);
-      dup(p[0]);
-      close(p[0]);
-      close(p[1]);
-      runcmd(pcmd->right);
-    }
-    close(p[0]);
-    close(p[1]);
-    wait(&ec1);
-    wait(&ec2);
-    exit(ec1 != 0 ? ec1 : ec2);
     break;
 
   case BACK:

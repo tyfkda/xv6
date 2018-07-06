@@ -130,7 +130,8 @@ runecmd(struct execcmd *ecmd)
   expandenv(ecmd->argv, argv);
 
   exec(argv[0], argv);
-  printf(2, "exec %s failed\n", ecmd->argv[0]);
+  printf(2, "sh: command not found: %s\n", ecmd->argv[0]);
+  exit(1);
 }
 
 // Execute cmd.  Never returns.

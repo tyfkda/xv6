@@ -51,7 +51,6 @@ exec(const char *path, char* const *argv)
   ip = find_path(path);
   if(ip == 0){
     end_op();
-    cprintf("exec: fail\n");
     return -1;
   }
   ilock(ip);

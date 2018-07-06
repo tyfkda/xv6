@@ -3,18 +3,13 @@
 #include "types.h"
 #include "user.h"
 
-static void
-putc(int fd, char c)
-{
-  write(fd, &c, 1);
-}
-
-static void
-printint(int fd, int xx, int base, int sgn)
+// Output is not '\0' terminated.
+static int
+snprintint(char *out, uint n, int xx, int base, int sgn)
 {
   static char digits[] = "0123456789ABCDEF";
   char buf[16];
-  int i, neg;
+  int i, neg, o;
   uint x;
 
   neg = 0;
@@ -32,51 +27,79 @@ printint(int fd, int xx, int base, int sgn)
   if(neg)
     buf[i++] = '-';
 
-  while(--i >= 0)
-    putc(fd, buf[i]);
+  for (o = 0; --i >= 0 && o < n; ++o)
+    out[o] = buf[i];
+
+  return o;
+}
+
+int
+vsnprintf(char *out, uint n, const char *fmt, va_list ap)
+{
+  char *s;
+  int c, i;
+  int o;
+
+
+  for(i = o = 0; fmt[i] != '\0' && o < n; i++){
+    c = fmt[i] & 0xff;
+    if(c != '%'){
+      out[o++] = c;
+      continue;
+    }
+
+    // Handle '%'
+    c = fmt[++i] & 0xff;
+    if(c == 'd'){
+      o += snprintint(out + o, n - o, va_arg(ap, int), 10, 1);
+    } else if(c == 'x' || c == 'p'){
+      o += snprintint(out + o, n - o, va_arg(ap, int), 16, 0);
+    } else if(c == 's'){
+      s = va_arg(ap, char*);
+      if(s == 0)
+        s = "(null)";
+      while(*s != '\0' && o < n)
+        out[o++] = *s++;
+    } else if(c == 'c'){
+      out[o++] = va_arg(ap, uint);
+    } else if(c == '%'){
+      out[o++] = c;
+    } else {
+      // Unknown % sequence.  Print it to draw attention.
+      out[o++] = '%';
+      if (o >= n)
+        break;
+      out[o++] = c;
+    }
+  }
+
+  if (o < n)
+    out[o] = '\0';
+  return o;
+}
+
+int
+snprintf(char *out, uint n, const char *fmt, ...)
+{
+  va_list ap;
+  int len;
+  va_start(ap, fmt);
+  len = vsnprintf(out, n, fmt, ap);
+  va_end(ap);
+  return len;
 }
 
 // Print to the given fd. Only understands %d, %x, %p, %s.
-void
+int
 printf(int fd, const char *fmt, ...)
 {
+  // TODO: directly output to fd, not use vsnprintf.
   va_list ap;
-  char *s;
-  int c, i, state;
-  va_start(ap, fmt);
+  char buf[1024];
+  int len;
 
-  state = 0;
-  for(i = 0; fmt[i]; i++){
-    c = fmt[i] & 0xff;
-    if(state == 0){
-      if(c == '%'){
-        state = '%';
-      } else {
-        putc(fd, c);
-      }
-    } else if(state == '%'){
-      if(c == 'd'){
-        printint(fd, va_arg(ap, int), 10, 1);
-      } else if(c == 'x' || c == 'p'){
-        printint(fd, va_arg(ap, int), 16, 0);
-      } else if(c == 's'){
-        s = va_arg(ap, char*);
-        if(s == 0)
-          s = "(null)";
-        while(*s != 0){
-          putc(fd, *s);
-          s++;
-        }
-      } else if(c == 'c'){
-        putc(fd, va_arg(ap, uint));
-      } else if(c == '%'){
-        putc(fd, c);
-      } else {
-        // Unknown % sequence.  Print it to draw attention.
-        putc(fd, '%');
-        putc(fd, c);
-      }
-      state = 0;
-    }
-  }
+  va_start(ap, fmt);
+  len = vsnprintf(buf, sizeof(buf), fmt, ap);
+  va_end(ap);
+  return write(fd, buf, len);
 }

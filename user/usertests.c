@@ -3,10 +3,13 @@
 #include "user.h"
 #include "fs.h"
 #include "fcntl.h"
-#include "syscall.h"
 #include "../kernel/memlayout.h"
 #include "../kernel/param.h"
 #include "../kernel/traps.h"
+
+#ifndef X64
+#include "../kernel/syscall.h"
+#endif
 
 char buf[8192];
 char name[3];

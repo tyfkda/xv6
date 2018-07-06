@@ -63,6 +63,7 @@ runcmd(struct cmd *cmd)
   struct listcmd *lcmd;
   struct pipecmd *pcmd;
   struct redircmd *rcmd;
+  int ec1, ec2;
 
   if(cmd == 0)
     exit(0);
@@ -117,8 +118,9 @@ runcmd(struct cmd *cmd)
     }
     close(p[0]);
     close(p[1]);
-    wait(0);
-    wait(0);
+    wait(&ec1);
+    wait(&ec2);
+    exit(ec1 ? ec1 : ec2 ? ec2 : 0);
     break;
 
   case BACK:

@@ -1,6 +1,7 @@
 // init: The initial user-level program
 
 #include "types.h"
+#include "stdio.h"
 #include "user.h"
 #include "fcntl.h"
 
@@ -19,18 +20,18 @@ main(void)
   dup(0);  // stderr
 
   for(;;){
-    printf(1, "init: starting sh\n");
+    printf("init: starting sh\n");
     pid = fork();
     if(pid < 0){
-      printf(2, "init: fork failed\n");
+      fprintf(stderr, "init: fork failed\n");
       exit(1);
     }
     if(pid == 0){
       exec("sh", argv);
-      printf(2, "init: exec sh failed\n");
+      fprintf(stderr, "init: exec sh failed\n");
       exit(1);
     }
     while((wpid=wait(0)) >= 0 && wpid != pid)
-      printf(2, "zombie!\n");
+      fprintf(stderr, "zombie!\n");
   }
 }

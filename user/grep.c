@@ -1,6 +1,6 @@
 // Simple grep.  Only supports ^ . * $ operators.
 
-#include "types.h"
+#include "stdio.h"
 #include "user.h"
 
 char buf[1024];
@@ -41,7 +41,7 @@ main(int argc, char *argv[])
   char *pattern;
 
   if(argc <= 1){
-    printf(2, "usage: grep pattern [file ...]\n");
+    fprintf(stderr, "usage: grep pattern [file ...]\n");
     return 1;
   }
   pattern = argv[1];
@@ -53,7 +53,7 @@ main(int argc, char *argv[])
 
   for(i = 2; i < argc; i++){
     if((fd = open(argv[i], 0)) < 0){
-      printf(2, "grep: cannot open %s\n", argv[i]);
+      fprintf(stderr, "grep: cannot open %s\n", argv[i]);
       return 1;
     }
     grep(pattern, fd);

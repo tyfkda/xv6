@@ -1,7 +1,7 @@
-#include "types.h"
 #include "fcntl.h"
 #include "fs.h"
 #include "stat.h"
+#include "stdio.h"
 #include "user.h"
 
 #define NULL   ((void*)0)
@@ -17,11 +17,11 @@ static int dirlookup(int fd, int ino, char* p);
 int main(int argc, char *argv[]) {
   char resultPath[512];
   if (!getcwd(resultPath)) {
-    printf(2, "pwd failed");
+    fprintf(stderr, "pwd failed");
     return 1;
   }
 
-  printf(1, "%s\n", resultPath);
+  printf("%s\n", resultPath);
   return 0;
 }
 

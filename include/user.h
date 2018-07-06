@@ -1,4 +1,6 @@
-#include <stdarg.h>
+#pragma once
+
+#include "types.h"
 
 struct stat;
 struct rtcdate;
@@ -34,10 +36,6 @@ void *memmove(void*, const void*, int);
 char* strchr(const char*, char c);
 int strcmp(const char*, const char*);
 int strncmp(const char*, const char*, uint);
-int printf(int, const char*, ...);
-int sprintf(char*, const char*, ...);
-int snprintf(char*, uint n, const char*, ...);
-int vsnprintf(char*, uint n, const char*, va_list);
 char* gets(char*, int max);
 uint strlen(const char*);
 char* strdup(const char*);

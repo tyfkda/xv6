@@ -1,8 +1,8 @@
 // Shell.
 
-#include "types.h"
-#include "user.h"
 #include "fcntl.h"
+#include "stdio.h"
+#include "user.h"
 
 // Parsed command representation
 #define EXEC  1
@@ -130,7 +130,7 @@ runecmd(struct execcmd *ecmd)
   expandenv(ecmd->argv, argv);
 
   exec(argv[0], argv);
-  printf(2, "sh: command not found: %s\n", ecmd->argv[0]);
+  fprintf(stderr, "sh: command not found: %s\n", ecmd->argv[0]);
   exit(1);
 }
 
@@ -165,7 +165,7 @@ runcmd(struct cmd *cmd)
     rcmd = (struct redircmd*)cmd;
     close(rcmd->fd);
     if(open(rcmd->file, rcmd->mode) < 0){
-      printf(2, "open %s failed\n", rcmd->file);
+      fprintf(stderr, "open %s failed\n", rcmd->file);
       exit(1);
     }
     runcmd(rcmd->cmd);
@@ -217,7 +217,7 @@ runcmd(struct cmd *cmd)
 int
 getcmd(char *buf, int nbuf)
 {
-  printf(2, "$ ");
+  fprintf(stderr, "$ ");
   memset(buf, 0, nbuf);
   gets(buf, nbuf);
   if(buf[0] == 0) // EOF
@@ -246,14 +246,14 @@ main(void)
       // Chdir must be called by the parent, not the child.
       buf[strlen(buf)-1] = 0;  // chop \n
       if(chdir(buf+3) < 0)
-        printf(2, "cannot cd %s\n", buf+3);
+        fprintf(stderr, "cannot cd %s\n", buf+3);
       continue;
     }
     if(fork1() == 0)
       runcmd(parsecmd(buf));
     wait(&exitcode);
     putLastExitCode(exitcode);
-    printf(2, "(exitcode = %d)\n", exitcode);
+    fprintf(stderr, "(exitcode = %d)\n", exitcode);
   }
   return 0;
 }
@@ -261,7 +261,7 @@ main(void)
 void
 panic(char *s)
 {
-  printf(2, "%s\n", s);
+  fprintf(stderr, "%s\n", s);
   exit(1);
 }
 
@@ -421,7 +421,7 @@ parsecmd(char *s)
   cmd = parseline(&s, es);
   peek(&s, es, "");
   if(s != es){
-    printf(2, "leftovers: %s\n", s);
+    fprintf(stderr, "leftovers: %s\n", s);
     panic("syntax");
   }
   nulterminate(cmd);

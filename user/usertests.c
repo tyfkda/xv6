@@ -121,7 +121,7 @@ opentest(void)
   int fd;
 
   printf(stdout, "open test\n");
-  fd = open("echo", 0);
+  fd = open("/bin/echo", 0);
   if(fd < 0){
     printf(stdout, "open echo failed!\n");
     exit();
@@ -1729,7 +1729,7 @@ uio()
 void argptest()
 {
   int fd;
-  fd = open("init", O_RDONLY);
+  fd = open("/bin/init", O_RDONLY);
   if (fd < 0) {
     printf(2, "open failed\n");
     exit();

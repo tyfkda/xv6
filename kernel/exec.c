@@ -7,21 +7,15 @@
 #include "x86.h"
 #include "elf.h"
 
-// Is absolute path?
-static int is_abs_path(const char *path) {
-  return path[0] == '/';
-}
-
-// Is relative path?
-static int is_rel_path(const char *path) {
-  return path[0] == '.' && path[1] == '/';
-}
+#define FILE_SEPARATOR  '/'
 
 // Find exe path
 static struct inode *find_path(const char *path) {
-  struct inode *ip = namei(path);
-  if (ip == 0 &&
-      !is_abs_path(path) && !is_rel_path(path)) {
+  struct inode *ip;
+
+  if (strchr(path, FILE_SEPARATOR) != 0) {
+    ip = namei(path);
+  } else {
     // Also find at root path. TODO: Search from $PATH
     const char PATH[] = "/bin/";
     const int LEN = sizeof(PATH) - 1;

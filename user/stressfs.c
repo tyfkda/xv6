@@ -28,7 +28,7 @@ main(int argc, char *argv[])
   printf("write %d\n", i);
 
   path[8] += i;
-  fd = open(path, O_CREATE | O_RDWR);
+  fd = open(path, O_CREAT | O_RDWR);
   for(i = 0; i < 20; i++)
     write(fd, data, sizeof(data));
   close(fd);

@@ -6,7 +6,7 @@
 FILE* fopen(const char* fileName, const char* flag) {
   int o;
   if (flag[0] == 'w') {
-    o = O_WRONLY | O_CREATE;
+    o = O_WRONLY | O_CREAT;
   } else {
     o = O_RDONLY;
   }

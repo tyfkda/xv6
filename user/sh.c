@@ -219,8 +219,7 @@ getcmd(char *buf, int nbuf)
 {
   fprintf(stderr, "$ ");
   memset(buf, 0, nbuf);
-  gets(buf, nbuf);
-  if(buf[0] == 0) // EOF
+  if (gets_s(buf, nbuf) == 0)  // EOF
     return -1;
   return 0;
 }

@@ -4,11 +4,16 @@
 
 #include "types.h"
 
+#define EOF  (-1)
+
 typedef struct FILE FILE;
 
 extern FILE *stdin;
 extern FILE *stdout;
 extern FILE *stderr;
+
+FILE* fopen(const char* fileName, const char* flag);
+int fclose(FILE* fp);
 
 int printf(const char*, ...);
 int fprintf(FILE*, const char*, ...);

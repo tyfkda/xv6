@@ -1,9 +1,6 @@
+#include "file_def.h"
 #include "stdio.h"
 #include "user.h"
-
-struct FILE {
-  int fd;
-};
 
 static FILE _stdin = {0};
 static FILE _stdout = {1};
@@ -152,50 +149,4 @@ fprintf(FILE* fp, const char *fmt, ...)
   len = vfprintf(fp, fmt, ap);
   va_end(ap);
   return len;
-}
-
-int
-fgetc(FILE* fp)
-{
-  unsigned char c;
-  int len = read(fp->fd, &c, 1);
-  return len == 1 ? c : -1;
-}
-
-int
-getc(void)
-{
-  return fgetc(stdin);
-}
-
-char*
-fgets_s(char *buf, uint max, FILE* fp)
-{
-  int eof = 1;
-  int i;
-  for (i = 0; i < max - 1; ){
-    int c = fgetc(fp);
-    if (c < 0)
-      break;
-    eof = 0;
-    buf[i++] = c;
-    if (c == '\n' || c == '\r')
-      break;
-  }
-  buf[i] = '\0';
-  return eof ? 0 : buf;
-}
-
-char*
-gets_s(char *buf, uint max)
-{
-  char* result = fgets_s(buf, max, stdin);
-  if (result == 0)
-    return 0;
-
-  // Contrast to fgets, gets chomps tail '\n'
-  int len = strlen(buf);
-  if (len > 0 && (buf[len - 1] == '\n' || buf[len - 1] == '\r'))
-    buf[len - 1] = '\0';
-  return result;
 }

@@ -13,6 +13,13 @@
 
 #define MAXARGS 10
 
+#ifndef FALSE
+#define FALSE  (0)
+#endif
+#ifndef TRUE
+#define TRUE   (1)
+#endif
+
 struct cmd {
   int type;
 };
@@ -50,7 +57,7 @@ struct backcmd {
 };
 
 int fork1(void);  // Fork but panics on failure.
-void panic(char*);
+void panic(char*) __attribute__((noreturn));;
 struct cmd *parsecmd(char*);
 
 // Environment variables.
@@ -215,32 +222,26 @@ runcmd(struct cmd *cmd)
 }
 
 int
-getcmd(char *buf, int nbuf)
+getcmd(FILE* fp, char *buf, int nbuf)
 {
-  fprintf(stderr, "$ ");
   memset(buf, 0, nbuf);
-  if (gets_s(buf, nbuf) == 0)  // EOF
+  if (fgets_s(buf, nbuf, fp) == 0)  // EOF
     return -1;
   return 0;
 }
 
-int
-main(void)
+void
+sh(FILE* fp, int tty)
 {
-  static char buf[100];
-  int fd;
+  char buf[100];
   int exitcode;
 
-  // Ensure that three file descriptors are open.
-  while((fd = open("console", O_RDWR)) >= 0){
-    if(fd >= 3){
-      close(fd);
-      break;
-    }
-  }
-
   // Read and run input commands.
-  while(getcmd(buf, sizeof(buf)) >= 0){
+  for (;;) {
+    if (tty)
+      fprintf(stderr, "$ ");
+    if (getcmd(fp, buf, sizeof(buf)) < 0)
+      break;
     if(strncmp(buf, "cd ", 3) == 0){
       // Chdir must be called by the parent, not the child.
       buf[strlen(buf)-1] = 0;  // chop \n
@@ -252,7 +253,37 @@ main(void)
       runcmd(parsecmd(buf));
     wait(&exitcode);
     putLastExitCode(exitcode);
-    fprintf(stderr, "(exitcode = %d)\n", exitcode);
+    if (tty)
+      fprintf(stderr, "(exitcode = %d)\n", exitcode);
+  }
+}
+
+int
+main(int argc, char* argv[])
+{
+  int fd;
+
+  // Ensure that three file descriptors are open.
+  while((fd = open("console", O_RDWR)) >= 0){
+    if(fd >= 3){
+      close(fd);
+      break;
+    }
+  }
+
+  if (argc < 2) {
+    sh(stdin, TRUE);
+  } else {
+    for (int i = 1; i < argc; ++i) {
+      FILE* fp = fopen(argv[i], "r");
+      if (fp == 0) {
+        char buf[128];
+        sprintf(buf, "Cannot open: %s", argv[i]);
+        panic(buf);
+      }
+      sh(fp, FALSE);
+      fclose(fp);
+    }
   }
   return 0;
 }

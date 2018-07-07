@@ -86,3 +86,12 @@ malloc(uint nbytes)
         return 0;
   }
 }
+
+void*
+calloc(uint nbytes)
+{
+  void *adr = malloc(nbytes);
+  if (adr != 0)
+    memset(adr, 0, nbytes);
+  return adr;
+}

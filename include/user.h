@@ -40,5 +40,6 @@ uint strlen(const char*);
 char* strdup(const char*);
 void* memset(void*, int, uint);
 void* malloc(uint);
+void* calloc(uint);
 void free(void*);
 int atoi(const char*);

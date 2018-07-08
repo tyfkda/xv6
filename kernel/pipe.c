@@ -12,7 +12,7 @@
 
 struct pipe {
   struct spinlock lock;
-  char data[PIPESIZE];
+  uchar data[PIPESIZE];
   uint nread;     // number of bytes read
   uint nwrite;    // number of bytes written
   int readopen;   // read fd is still open
@@ -76,7 +76,7 @@ pipeclose(struct pipe *p, int writable)
 
 //PAGEBREAK: 40
 int
-pipewrite(struct pipe *p, char *addr, int n)
+pipewrite(struct pipe *p, void *addr, int n)
 {
   int i;
 
@@ -90,7 +90,7 @@ pipewrite(struct pipe *p, char *addr, int n)
       wakeup(&p->nread);
       sleep(&p->nwrite, &p->lock);  //DOC: pipewrite-sleep
     }
-    p->data[p->nwrite++ % PIPESIZE] = addr[i];
+    p->data[p->nwrite++ % PIPESIZE] = ((uchar*)addr)[i];
   }
   wakeup(&p->nread);  //DOC: pipewrite-wakeup1
   release(&p->lock);
@@ -98,7 +98,7 @@ pipewrite(struct pipe *p, char *addr, int n)
 }
 
 int
-piperead(struct pipe *p, char *addr, int n)
+piperead(struct pipe *p, void *addr, int n)
 {
   int i;
 
@@ -113,7 +113,7 @@ piperead(struct pipe *p, char *addr, int n)
   for(i = 0; i < n; i++){  //DOC: piperead-copy
     if(p->nread == p->nwrite)
       break;
-    addr[i] = p->data[p->nread++ % PIPESIZE];
+    ((uchar*)addr)[i] = p->data[p->nread++ % PIPESIZE];
   }
   wakeup(&p->nwrite);  //DOC: piperead-wakeup
   release(&p->lock);

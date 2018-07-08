@@ -94,7 +94,7 @@ filestat(struct file *f, struct stat *st)
 
 // Read from file f.
 int
-fileread(struct file *f, char *addr, int n)
+fileread(struct file *f, void *addr, int n)
 {
   int r;
 
@@ -115,7 +115,7 @@ fileread(struct file *f, char *addr, int n)
 //PAGEBREAK!
 // Write to file f.
 int
-filewrite(struct file *f, char *addr, int n)
+filewrite(struct file *f, void *addr, int n)
 {
   int r;
 

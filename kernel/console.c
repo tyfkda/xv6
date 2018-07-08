@@ -193,7 +193,7 @@ consputc(int c)
 
 #define INPUT_BUF 128
 struct {
-  char buf[INPUT_BUF];
+  uchar buf[INPUT_BUF];
   uint r;  // Read index
   uint w;  // Write index
   uint e;  // Edit index
@@ -249,8 +249,9 @@ consoleintr(int (*getc)(void))
 }
 
 int
-consoleread(struct inode *ip, char *dst, int n)
+consoleread(struct inode *ip, void *dst_, int n)
 {
+  uchar* dst = dst_;
   uint target;
   int c;
 
@@ -287,14 +288,15 @@ consoleread(struct inode *ip, char *dst, int n)
 }
 
 int
-consolewrite(struct inode *ip, char *buf, int n)
+consolewrite(struct inode *ip, void *buf_, int n)
 {
+  uchar* buf = buf_;
   int i;
 
   iunlock(ip);
   acquire(&cons.lock);
   for(i = 0; i < n; i++)
-    consputc(buf[i] & 0xff);
+    consputc(buf[i]);
   release(&cons.lock);
   ilock(ip);
 

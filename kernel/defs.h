@@ -30,9 +30,9 @@ struct file*    filealloc(void);
 void            fileclose(struct file*);
 struct file*    filedup(struct file*);
 void            fileinit(void);
-int             fileread(struct file*, char*, int n);
+int             fileread(struct file*, void*, int n);
 int             filestat(struct file*, struct stat*);
-int             filewrite(struct file*, char*, int n);
+int             filewrite(struct file*, void*, int n);
 
 // fs.c
 void            readsb(int dev, struct superblock *sb);
@@ -49,9 +49,9 @@ void            iupdate(struct inode*);
 int             namecmp(const char*, const char*);
 struct inode*   namei(const char*);
 struct inode*   nameiparent(const char*, char*);
-int             readi(struct inode*, char*, uint, uint);
+int             readi(struct inode*, void*, uint, uint);
 void            stati(struct inode*, struct stat*);
-int             writei(struct inode*, char*, uint, uint);
+int             writei(struct inode*, void*, uint, uint);
 
 // ide.c
 void            ideinit(void);
@@ -101,8 +101,8 @@ void            picinit(void);
 // pipe.c
 int             pipealloc(struct file**, struct file**);
 void            pipeclose(struct pipe*, int);
-int             piperead(struct pipe*, char*, int);
-int             pipewrite(struct pipe*, char*, int);
+int             piperead(struct pipe*, void*, int);
+int             pipewrite(struct pipe*, void*, int);
 
 //PAGEBREAK: 16
 // proc.c

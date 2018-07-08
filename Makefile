@@ -246,14 +246,14 @@ APPLS = ulib/xv6app.ls
 
 fs/bin/cpptest:	obj/user/cpptest.o obj/ulib/ulib.a
 	@mkdir -p fs/bin out
-	$(LD) $(LDFLAGS) -N -T $(APPLS) -Ttext 0 -o $@ $^
+	$(LD) $(LDFLAGS) -N -T $(APPLS) -Ttext 0x1000 -o $@ $^
 	$(OBJDUMP) -S $@ > out/cpptest.asm
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/cpptest.sym
 	strip $@
 
 fs/bin/%: obj/user/%.o obj/ulib/ulib.a
 	@mkdir -p fs/bin out
-	$(LD) $(LDFLAGS) -N -e _start -Ttext 0 -o $@ $^
+	$(LD) $(LDFLAGS) -N -e _start -Ttext 0x1000 -o $@ $^
 	$(OBJDUMP) -S $@ > out/$*.asm
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/$*.sym
 	strip $@
@@ -281,6 +281,7 @@ UPROGS=\
 	fs/bin/ln\
 	fs/bin/ls\
 	fs/bin/mkdir\
+	fs/bin/nullptr\
 	fs/bin/pwd\
 	fs/bin/rm\
 	fs/bin/sh\

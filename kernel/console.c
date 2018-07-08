@@ -19,6 +19,7 @@
 #include "input.h"
 
 static void consputc(int);
+static void consuartputc(int);
 
 static int panicked = 0;
 
@@ -33,7 +34,7 @@ static void
 printptr(uintp x) {
   int i;
   for (i = 0; i < (sizeof(uintp) * 2); i++, x <<= 4)
-    consputc(digits[x >> (sizeof(uintp) * 8 - 4)]);
+    consuartputc(digits[x >> (sizeof(uintp) * 8 - 4)]);
 }
 
 static void
@@ -57,7 +58,7 @@ printint(int xx, int base, int sign)
     buf[i++] = '-';
 
   while(--i >= 0)
-    consputc(buf[i]);
+    consuartputc(buf[i]);
 }
 //PAGEBREAK: 50
 
@@ -80,7 +81,7 @@ cprintf(char *fmt, ...)
 
   for(i = 0; (c = fmt[i] & 0xff) != 0; i++){
     if(c != '%'){
-      consputc(c);
+      consuartputc(c);
       continue;
     }
     c = fmt[++i] & 0xff;
@@ -100,15 +101,15 @@ cprintf(char *fmt, ...)
       if((s = va_arg(ap, char*)) == 0)
         s = "(null)";
       for(; *s; s++)
-        consputc(*s);
+        consuartputc(*s);
       break;
     case '%':
-      consputc('%');
+      consuartputc('%');
       break;
     default:
       // Print unknown % sequence to draw attention.
-      consputc('%');
-      consputc(c);
+      consuartputc('%');
+      consuartputc(c);
       break;
     }
   }
@@ -175,7 +176,7 @@ cgaputc(int c)
   crt[pos] = ' ' | 0x0700;
 }
 
-void
+static void
 consputc(int c)
 {
   if(panicked){
@@ -183,12 +184,14 @@ consputc(int c)
     for(;;)
       ;
   }
-
-  if(c == BACKSPACE){
-    uartputc('\b'); uartputc(' '); uartputc('\b');
-  } else
-    uartputc(c);
   cgaputc(c);
+}
+
+static void
+consuartputc(int c)
+{
+  consputc(c);
+  uartputc(c);
 }
 
 int

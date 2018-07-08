@@ -1,20 +1,74 @@
 // Intel 8250 serial port (UART).
 
-#include "types.h"
 #include "defs.h"
-#include "param.h"
+#include "input.h"
 #include "traps.h"
-#include "spinlock.h"
-#include "sleeplock.h"
-#include "fs.h"
-#include "file.h"
-#include "mmu.h"
-#include "proc.h"
 #include "x86.h"
 
 #define COM1    0x3f8
 
 static int uart;    // is there a uart?
+
+static struct {
+  struct spinlock lock;
+  int locking;
+} cons;
+
+static struct input s_input;
+
+static void
+uartputc_(int c)
+{
+  int i;
+
+  if(!uart)
+    return;
+  for(i = 0; i < 128 && !(inb(COM1+5) & 0x20); i++)
+    microdelay(10);
+  outb(COM1+0, c);
+}
+
+void
+uartputc(int c)
+{
+  if(c == BACKSPACE){
+    uartputc_('\b');
+    uartputc_(' ');
+    uartputc_('\b');
+  } else
+    uartputc_(c);
+}
+
+static int
+uartgetc(void)
+{
+  if(!uart)
+    return -1;
+  if(!(inb(COM1+5) & 0x01))
+    return -1;
+  return inb(COM1+0);
+}
+
+int
+uartread(void *dst, int n)
+{
+  return inputread(&s_input, dst, n);
+}
+
+int
+uartwrite(const void *buf_, int n)
+{
+  const uchar* buf = buf_;
+  int i;
+
+  acquire(&cons.lock);
+  for(i = 0; i < n; i++) {
+    uartputc_(buf[i]);
+  }
+  release(&cons.lock);
+
+  return n;
+}
 
 void
 uartearlyinit(void)
@@ -39,7 +93,7 @@ uartearlyinit(void)
 
   // Announce that we're here.
   for(p="xv6...\n"; *p; p++)
-    uartputc(*p);
+    uartputc_(*p);
 }
 
 void
@@ -53,32 +107,21 @@ uartinit(void)
   inb(COM1+2);
   inb(COM1+0);
   ioapicenable(IRQ_COM1, 0);
-}
 
-void
-uartputc(int c)
-{
-  int i;
 
-  if(!uart)
-    return;
-  for(i = 0; i < 128 && !(inb(COM1+5) & 0x20); i++)
-    microdelay(10);
-  outb(COM1+0, c);
-}
+  initlock(&cons.lock, "uart");
 
-static int
-uartgetc(void)
-{
-  if(!uart)
-    return -1;
-  if(!(inb(COM1+5) & 0x01))
-    return -1;
-  return inb(COM1+0);
+  devsw[UART].write = uartwrite;
+  devsw[UART].read = uartread;
+  cons.locking = 1;
+
+  inputinit(&s_input);
 }
 
 void
 uartintr(void)
 {
-  consoleintr(uartgetc);
+  acquire(&cons.lock);
+  inputintr(&s_input, uartgetc, uartputc);
+  release(&cons.lock);
 }

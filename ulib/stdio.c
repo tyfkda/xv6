@@ -3,15 +3,39 @@
 #include "stdio.h"
 #include "user.h"
 
-FILE* fopen(const char* fileName, const char* flag) {
-  int o;
-  if (flag[0] == 'w') {
-    o = O_WRONLY | O_CREAT;
-  } else {
-    o = O_RDONLY;
-  }
+FILE* fopen(const char* fileName, const char* mode) {
+  struct {
+    const char* str;
+    int flag;
+  } static const kTable[] = {
+    {"r", O_RDONLY},
+    {"w", O_WRONLY | O_CREAT | O_TRUNC},
+    {"a", O_WRONLY | O_CREAT | O_APPEND},
+    {"rb", O_RDONLY},
+    {"wb", O_WRONLY | O_CREAT | O_TRUNC},
+    {"ab", O_WRONLY | O_CREAT | O_APPEND},
+    {"r+", O_RDONLY},
+    {"w+", O_WRONLY | O_CREAT},
+    {"a+", O_WRONLY | O_CREAT | O_APPEND},
+    {"r+b", O_RDONLY},
+    {"w+b", O_WRONLY | O_CREAT},
+    {"a+b", O_WRONLY | O_CREAT | O_APPEND},
+    {"rb+", O_RDONLY},
+    {"wb+", O_WRONLY | O_CREAT},
+    {"ab+", O_WRONLY | O_CREAT | O_APPEND},
+  };
 
-  int fd = open(fileName, o);
+  int flag = 0;
+  for (int i = 0; i < sizeof(kTable) / sizeof(*kTable); ++i) {
+    if (strcmp(kTable[i].str, mode) == 0) {
+      flag = kTable[i].flag;
+      break;
+    }
+  }
+  if (flag == 0)
+    return 0;
+
+  int fd = open(fileName, flag);
   if (fd < 0) {
     return 0;
   }
@@ -33,6 +57,18 @@ int fclose(FILE* fp) {
   fp->fd = -1;
   free(fp);
   return 0;
+}
+
+uint
+fwrite(const void* buffer, uint size, uint count, FILE* fp)
+{
+  return write(fp->fd, buffer, size * count);
+}
+
+uint
+fread(void* buffer, uint size, uint count, FILE* fp)
+{
+  return read(fp->fd, buffer, size * count);
 }
 
 int

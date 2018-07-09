@@ -311,6 +311,51 @@ void truncatetest()
   printf("truncate test: OK\n");
 }
 
+void appendtest()
+{
+  const static char fileName[] = "append.txt";
+  int fd, sz;
+
+  unlink(fileName);
+
+  // Prepare a file.
+  fd = open(fileName, O_WRONLY | O_CREAT);
+  if (fd < 0) {
+    fprintf(stderr, "append test: Cannot open file\n");
+    exit(1);
+  }
+  sz = write(fd, "12345", 5);
+  if (sz != 5) {
+    fprintf(stderr, "append test: Write size different: %d != 10\n", sz);
+    exit(1);
+  }
+  close(fd);
+
+  // Truncate it.
+  fd = open(fileName, O_WRONLY | O_APPEND);
+  if (fd < 0) {
+    fprintf(stderr, "append test: Cannot open file\n");
+    exit(1);
+  }
+  sz = write(fd, "abcde", 5);
+  if (sz != 5) {
+    fprintf(stderr, "append test: Write size different: %d != 5\n", sz);
+    exit(1);
+  }
+  close(fd);
+
+  struct stat st;
+  stat(fileName, &st);
+  if (st.size != 10) {
+    fprintf(stderr, "append test: fileSize is not truncated: %d\n", st.size);
+    exit(1);
+  }
+
+  unlink(fileName);
+
+  printf("append test: OK\n");
+}
+
 void dirtest(void)
 {
   printf("mkdir test\n");
@@ -1824,6 +1869,7 @@ main(int argc, char *argv[])
   writetest1();
   createtest();
   truncatetest();
+  appendtest();
 
   openiputtest();
   exitiputtest();

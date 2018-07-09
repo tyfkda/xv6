@@ -331,8 +331,12 @@ sys_open(void)
   f->off = 0;
   f->readable = !(omode & O_WRONLY);
   f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
-  if (f->writable && (omode & O_TRUNC))
-    ip->size = 0;
+  if (f->writable) {
+    if (omode & O_APPEND)
+      f->off = ip->size;
+    if (omode & O_TRUNC)
+      ip->size = 0;
+  }
   return fd;
 }
 

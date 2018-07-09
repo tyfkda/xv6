@@ -22,6 +22,7 @@ OBJS := \
 	kobj/file.o\
 	kobj/fs.o\
 	kobj/ide.o\
+	kobj/input.o\
 	kobj/ioapic.o\
 	kobj/kalloc.o\
 	kobj/kbd.o\

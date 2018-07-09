@@ -1,3 +1,9 @@
+#pragma once
+
+#include "fs.h"  // NDIRECT
+#include "sleeplock.h"  // sleeplock
+#include "types.h"
+
 struct file {
   enum { FD_NONE, FD_PIPE, FD_INODE } type;
   int ref; // reference count

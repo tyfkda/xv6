@@ -16,6 +16,7 @@
 #include "mmu.h"
 #include "proc.h"
 #include "x86.h"
+#include "input.h"
 
 static void consputc(int);
 
@@ -137,7 +138,6 @@ panic(char *s)
 }
 
 //PAGEBREAK: 50
-#define BACKSPACE 0x100
 #define CRTPORT 0x3d4
 static ushort *crt = (ushort*)P2V(0xb8000);  // CGA memory
 
@@ -191,99 +191,6 @@ consputc(int c)
   cgaputc(c);
 }
 
-#define INPUT_BUF 128
-struct {
-  uchar buf[INPUT_BUF];
-  uint r;  // Read index
-  uint w;  // Write index
-  uint e;  // Edit index
-} input;
-
-#define C(x)  ((x)-'@')  // Control-x
-
-void
-consoleintr(int (*getc)(void))
-{
-  int c, doprocdump = 0;
-
-  acquire(&cons.lock);
-  while((c = getc()) >= 0){
-    switch(c){
-    case C('Z'): // reboot
-      lidt(0,0);
-      break;
-    case C('P'):  // Process listing.
-      // procdump() locks cons.lock indirectly; invoke later
-      doprocdump = 1;
-      break;
-    case C('U'):  // Kill line.
-      while(input.e != input.w &&
-            input.buf[(input.e-1) % INPUT_BUF] != '\n'){
-        input.e--;
-        consputc(BACKSPACE);
-      }
-      break;
-    case C('H'): case '\x7f':  // Backspace
-      if(input.e != input.w){
-        input.e--;
-        consputc(BACKSPACE);
-      }
-      break;
-    default:
-      if(c != 0 && input.e-input.r < INPUT_BUF){
-        c = (c == '\r') ? '\n' : c;
-        input.buf[input.e++ % INPUT_BUF] = c;
-        consputc(c);
-        if(c == '\n' || c == C('D') || input.e == input.r+INPUT_BUF){
-          input.w = input.e;
-          wakeup(&input.r);
-        }
-      }
-      break;
-    }
-  }
-  release(&cons.lock);
-  if(doprocdump) {
-    procdump();  // now call procdump() wo. cons.lock held
-  }
-}
-
-int
-consoleread(void *dst_, int n)
-{
-  uchar* dst = dst_;
-  uint target;
-  int c;
-
-  target = n;
-  acquire(&cons.lock);
-  while(n > 0){
-    while(input.r == input.w){
-      if(myproc()->killed){
-        release(&cons.lock);
-        return -1;
-      }
-      sleep(&input.r, &cons.lock);
-    }
-    c = input.buf[input.r++ % INPUT_BUF];
-    if(c == C('D')){  // EOF
-      if(n < target){
-        // Save ^D for next time, to make sure
-        // caller gets a 0-byte result.
-        input.r--;
-      }
-      break;
-    }
-    *dst++ = c;
-    --n;
-    if(c == '\n')
-      break;
-  }
-  release(&cons.lock);
-
-  return target - n;
-}
-
 int
 consolewrite(const void *buf_, int n)
 {
@@ -298,6 +205,22 @@ consolewrite(const void *buf_, int n)
   return n;
 }
 
+static struct input s_input;
+
+void
+consoleintr(int (*getc)(void))
+{
+  acquire(&cons.lock);
+  inputintr(&s_input, getc, consputc);
+  release(&cons.lock);
+}
+
+int
+consoleread(void *dst, int n)
+{
+  return inputread(&s_input, dst, n);
+}
+
 void
 consoleinit(void)
 {
@@ -308,4 +231,6 @@ consoleinit(void)
   cons.locking = 1;
 
   ioapicenable(IRQ_KBD, 0);
+
+  inputinit(&s_input);
 }

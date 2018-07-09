@@ -28,8 +28,8 @@ struct inode {
 // table mapping major device number to
 // device functions
 struct devsw {
-  int (*read)(struct inode*, void*, int);
-  int (*write)(struct inode*, void*, int);
+  int (*read)(void*, int);
+  int (*write)(const void*, int);
 };
 
 extern struct devsw devsw[];

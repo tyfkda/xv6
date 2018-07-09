@@ -249,20 +249,18 @@ consoleintr(int (*getc)(void))
 }
 
 int
-consoleread(struct inode *ip, void *dst_, int n)
+consoleread(void *dst_, int n)
 {
   uchar* dst = dst_;
   uint target;
   int c;
 
-  iunlock(ip);
   target = n;
   acquire(&cons.lock);
   while(n > 0){
     while(input.r == input.w){
       if(myproc()->killed){
         release(&cons.lock);
-        ilock(ip);
         return -1;
       }
       sleep(&input.r, &cons.lock);
@@ -282,23 +280,20 @@ consoleread(struct inode *ip, void *dst_, int n)
       break;
   }
   release(&cons.lock);
-  ilock(ip);
 
   return target - n;
 }
 
 int
-consolewrite(struct inode *ip, void *buf_, int n)
+consolewrite(const void *buf_, int n)
 {
-  uchar* buf = buf_;
+  const uchar* buf = buf_;
   int i;
 
-  iunlock(ip);
   acquire(&cons.lock);
   for(i = 0; i < n; i++)
     consputc(buf[i]);
   release(&cons.lock);
-  ilock(ip);
 
   return n;
 }

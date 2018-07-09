@@ -25,7 +25,7 @@
 static void itrunc(struct inode*);
 // there should be one superblock per disk device, but we run with
 // only one device
-struct superblock sb; 
+struct superblock sb;
 
 // Read the super block.
 void
@@ -173,7 +173,7 @@ void
 iinit(int dev)
 {
   int i = 0;
-  
+
   initlock(&icache.lock, "icache");
   for(i = 0; i < NINODE; i++) {
     initsleeplock(&icache.inode[i].lock, "inode");
@@ -459,7 +459,10 @@ readi(struct inode *ip, void *dst, uint off, uint n)
   if(ip->type == T_DEV){
     if(ip->major < 0 || ip->major >= NDEV || !devsw[ip->major].read)
       return -1;
-    return devsw[ip->major].read(ip, dst, n);
+    iunlock(ip);
+    int result = devsw[ip->major].read(dst, n);
+    ilock(ip);
+    return result;
   }
 
   if(off > ip->size || off + n < off)
@@ -488,7 +491,10 @@ writei(struct inode *ip, void *src, uint off, uint n)
   if(ip->type == T_DEV){
     if(ip->major < 0 || ip->major >= NDEV || !devsw[ip->major].write)
       return -1;
-    return devsw[ip->major].write(ip, src, n);
+    iunlock(ip);
+    int result = devsw[ip->major].write(src, n);
+    ilock(ip);
+    return result;
   }
 
   if(off > ip->size || off + n < off)

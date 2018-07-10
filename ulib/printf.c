@@ -9,18 +9,21 @@ FILE *stdin = &_stdin;
 FILE *stdout = &_stdout;
 FILE *stderr = &_stderr;
 
+static char kHexDigits[] = "0123456789abcdef";
+static char kUpperHexDigits[] = "0123456789ABCDEF";
+
 // Output is not '\0' terminated.
 static int
-snprintuint(char *out, uint n, uint x, int base)
+snprintuint(const char* digits, char *out, uint n, uint x, int base)
 {
-  static char digits[] = "0123456789ABCDEF";
   char buf[16];
   int i, o;
 
   i = 0;
   do{
     buf[i++] = digits[x % base];
-  }while((x /= base) != 0);
+    x /= base;
+  }while(x != 0);
 
   for (o = 0; --i >= 0 && o < n; ++o)
     out[o] = buf[i];
@@ -54,9 +57,13 @@ vsnprintf(char *out, uint n, const char *fmt, va_list ap)
         if (o >= n)
           break;
       }
-      o += snprintuint(out + o, n - o, x, 10);
-    } else if(c == 'x' || c == 'p'){
-      o += snprintuint(out + o, n - o, va_arg(ap, int), 16);
+      o += snprintuint(kHexDigits, out + o, n - o, x, 10);
+    } else if(c == 'x') {
+      o += snprintuint(kHexDigits, out + o, n - o, va_arg(ap, int), 16);
+    } else if(c == 'X') {
+      o += snprintuint(kUpperHexDigits, out + o, n - o, va_arg(ap, int), 16);
+    } else if(c == 'p') {
+      o += snprintuint(kHexDigits, out + o, n - o, (uintp)va_arg(ap, void*), 16);
     } else if(c == 's'){
       s = va_arg(ap, char*);
       if(s == 0)
@@ -73,7 +80,7 @@ vsnprintf(char *out, uint n, const char *fmt, va_list ap)
       if (o >= n)
         break;
       if (c != '\0')
-      out[o++] = c;
+        out[o++] = c;
     }
   }
 

@@ -5,11 +5,21 @@
 
 #define EOF  (-1)
 
+#ifdef __cplusplus
+#define RESTRICT  __restrict__
+#else
+#define RESTRICT  restrict
+#endif
+
 typedef struct FILE FILE;
 
 extern FILE *stdin;
 extern FILE *stdout;
 extern FILE *stderr;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 FILE* fopen(const char* fileName, const char* mode);
 int fclose(FILE* fp);
@@ -33,7 +43,11 @@ int vfprintf(FILE*, const char*, va_list);
 int vsprintf(char*, const char*, va_list);
 int vsnprintf(char*, size_t n, const char*, va_list);
 
-int sscanf(const char * restrict s, const char * restrict format, ...);
+int sscanf(const char * RESTRICT s, const char * RESTRICT format, ...);
 ssize_t getline(char **pline, size_t *pcap, FILE *fp);
 
 void perror(const char*);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif

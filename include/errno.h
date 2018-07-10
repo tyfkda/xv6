@@ -1,7 +1,5 @@
 #pragma once
 
-extern int errno;
-
 #define EPERM            (1)      /* Operation not permitted */
 #define ENOENT           (2)      /* No such file or directory */
 #define ESRCH            (3)      /* No such process */
@@ -27,3 +25,13 @@ extern int errno;
 #define ENFILE          (23)      /* File table overflow */
 #define EMFILE          (24)      /* Too many open files */
 #define ENOTTY          (25)      /* Not a typewriter */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+extern int errno;
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif

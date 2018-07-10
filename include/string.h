@@ -2,6 +2,10 @@
 
 #include "stddef.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 char* strcpy(char*, const char*);
 char* strncpy(char *s, const char *t, size_t n);
 char* strchr(const char*, char);
@@ -22,3 +26,7 @@ int memcmp(const void*, const void*, size_t);
 long strtol(const char *p, char **pp, int base);
 
 const char *strerror(int errnum);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif

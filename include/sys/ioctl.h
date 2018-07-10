@@ -15,4 +15,12 @@ struct winsize {
 #define TCSETSF         (0x5404)
 #define TIOCGWINSZ      (0x5413)
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int ioctl(int fd, int request, ...);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif

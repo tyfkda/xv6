@@ -19,5 +19,13 @@ struct timespec {
   long tv_nsec;   // nanoseconds
 };
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 time_t time(time_t *tloc);
 struct tm *localtime(time_t *tloc);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif

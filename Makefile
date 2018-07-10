@@ -99,6 +99,7 @@ QEMU = $(shell if which qemu > /dev/null; \
 endif
 
 CC = $(TOOLPREFIX)gcc
+CXX = $(TOOLPREFIX)g++
 AS = $(TOOLPREFIX)gas
 LD = $(TOOLPREFIX)ld
 OBJCOPY = $(TOOLPREFIX)objcopy
@@ -107,6 +108,7 @@ CFLAGS = -fno-pic -static -fno-builtin -fno-strict-aliasing -Wall -MD -ggdb -Wer
 CFLAGS += -ffreestanding -fno-common -nostdlib -Iinclude -gdwarf-2 $(XFLAGS) $(OPT)
 CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
 CFLAGS += -nostdinc
+CXXFLAGS = $(CFLAGS) -fno-rtti
 ASFLAGS = -fno-pic -gdwarf-2 -Wa,-divide -Iinclude $(XFLAGS)
 
 # Disable PIE when possible (for Ubuntu 16.10 toolchain)
@@ -145,9 +147,17 @@ obj/user/%.o: user/%.c
 	@mkdir -p obj/user
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+obj/user/%.o: user/%.cpp
+	@mkdir -p obj/user
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
 obj/ulib/%.o: ulib/%.c
 	@mkdir -p obj/ulib
 	$(CC) $(CFLAGS) -c -o $@ $<
+
+obj/ulib/%.o: ulib/%.cpp
+	@mkdir -p obj/ulib
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 obj/ulib/%.o: commonsrc/%.c
 	@mkdir -p obj/ulib
@@ -207,6 +217,7 @@ kernel/vectors.S: $(MKVECTORS)
 ULIBOBJS = \
 	obj/ulib/atexit.o\
 	obj/ulib/commonstr.o\
+	obj/ulib/cppaux.o\
 	obj/ulib/crt0.o\
 	obj/ulib/ctype.o\
 	obj/ulib/dirent.o\
@@ -231,8 +242,17 @@ ULIBOBJS = \
 obj/ulib/ulib.a:	$(ULIBOBJS)
 	ar rcs $@ $^
 
+APPLS = ulib/xv6app.ls
+
+fs/bin/cpptest:	obj/user/cpptest.o obj/ulib/ulib.a
+	@mkdir -p fs/bin out
+	$(LD) -nodefaultlibs -N -T $(APPLS) -Ttext 0 -o $@ $^
+	$(OBJDUMP) -S $@ > out/cpptest.asm
+	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/cpptest.sym
+	strip $@
+
 fs/bin/%: obj/user/%.o obj/ulib/ulib.a
-	@mkdir -p fs out fs/bin
+	@mkdir -p fs/bin out
 	$(LD) $(LDFLAGS) -N -e _start -Ttext 0 -o $@ $^
 	$(OBJDUMP) -S $@ > out/$*.asm
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/$*.sym
@@ -251,6 +271,7 @@ out/mkfs: tools/mkfs.c tools/hostfsaux.c tools/hostfsaux.h kernel/fs.h
 UPROGS=\
 	fs/bin/cat\
 	fs/bin/cp\
+	fs/bin/cpptest\
 	fs/bin/date\
 	fs/bin/echo\
 	fs/bin/forktest\

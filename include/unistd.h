@@ -16,6 +16,10 @@ struct rtcdate;
 typedef long off_t;
 typedef int pid_t;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // system calls
 pid_t fork(void);
 int pipe(int*);
@@ -44,3 +48,7 @@ int isatty(int fd);
 int stat(const char*, struct stat*);
 
 int ftruncate(int fd, unsigned int length);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif

@@ -10,7 +10,15 @@ struct dirent {
   char d_name[DIRSIZ];
 };
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 DIR* opendir(const char *path);
 DIR* fdopendir(int fd);
 int closedir(DIR*);
 struct dirent *readdir(DIR*);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif

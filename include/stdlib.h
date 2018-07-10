@@ -5,6 +5,10 @@
 #define EXIT_SUCCESS  (0)
 #define EXIT_FAILURE  (1)
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void exit(int) __attribute__((noreturn));
 int atexit(void (*function)(void));
 
@@ -18,3 +22,7 @@ int atoi(const char*);
 char *getenv(const char *);
 int setenv(const char *, const char *, int );
 int unsetenv(const char *);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif

@@ -2,6 +2,7 @@
 
 #define KBSTATP         0x64    // kbd controller status port(I)
 #define KBS_DIB         0x01    // kbd data in buffer
+#define KBS_MOUSE       0x20    // Auxiliary output buffer full
 #define KBDATAP         0x60    // kbd data port(I)
 
 #define NO              0
@@ -109,4 +110,3 @@ static uchar ctlmap[256] =
   [0x97] KEY_HOME,  [0xCF] KEY_END,
   [0xD2] KEY_INS,   [0xD3] KEY_DEL
 };
-

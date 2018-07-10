@@ -1,6 +1,7 @@
 // Simple grep.  Only supports ^ . * $ operators.
 
 #include "stdio.h"
+#include "string.h"
 #include "user.h"
 
 char buf[1024];

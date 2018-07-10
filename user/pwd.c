@@ -2,6 +2,7 @@
 #include "fs.h"
 #include "stat.h"
 #include "stdio.h"
+#include "string.h"
 #include "user.h"
 
 #define NULL   ((void*)0)

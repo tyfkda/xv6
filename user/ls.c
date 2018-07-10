@@ -1,6 +1,7 @@
 #include "fs.h"
 #include "stat.h"
 #include "stdio.h"
+#include "string.h"
 #include "time.h"
 #include "user.h"
 

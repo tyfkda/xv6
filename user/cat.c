@@ -1,6 +1,7 @@
 #include "types.h"
 #include "user.h"
 #include "stdio.h"
+#include "stdlib.h"
 
 char buf[512];
 

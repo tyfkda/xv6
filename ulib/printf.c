@@ -1,5 +1,6 @@
 #include "file_def.h"
 #include "stdio.h"
+#include "string.h"
 #include "user.h"
 
 static FILE _stdin = {0};

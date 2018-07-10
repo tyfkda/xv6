@@ -1,5 +1,7 @@
 #include "stat.h"
 #include "stdio.h"
+#include "stdlib.h"
+#include "string.h"
 #include "user.h"
 #include "fs.h"
 #include "fcntl.h"

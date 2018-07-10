@@ -1,6 +1,8 @@
 #include "fcntl.h"
 #include "file_def.h"
 #include "stdio.h"
+#include "stdlib.h"
+#include "string.h"
 #include "user.h"
 
 FILE* fopen(const char* fileName, const char* mode) {

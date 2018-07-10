@@ -1,4 +1,4 @@
-#include "user.h"
+#include "stdlib.h"
 
 extern int _sysexit(int) __attribute__((noreturn));
 

@@ -203,6 +203,7 @@ ULIBOBJS = \
 	uobj/sprintf.o\
 	uobj/stdio.o\
 	uobj/string.o\
+	uobj/strlib.o\
 	uobj/time.o\
 	uobj/ulib.o\
 	uobj/umalloc.o\

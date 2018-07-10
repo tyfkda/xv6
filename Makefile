@@ -12,8 +12,8 @@ LDFLAGS = -m elf_i386 -nodefaultlibs
 QEMUTARGET = qemu-system-i386
 endif
 
-OPT ?= -O0
-#OPT ?= -O2
+#OPT ?= -O0
+OPT ?= -O2
 
 OBJS := \
 	kobj/bio.o\
@@ -194,6 +194,7 @@ fs/bin/%: uobj/%.o uobj/ulib.a
 	$(LD) $(LDFLAGS) -N -e _start -Ttext 0 -o $@ $^
 	$(OBJDUMP) -S $@ > out/$*.asm
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/$*.sym
+	strip $@
 
 out/mkfs: tools/mkfs.c include/fs.h
 	@mkdir -p out

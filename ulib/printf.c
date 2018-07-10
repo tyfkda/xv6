@@ -11,27 +11,16 @@ FILE *stderr = &_stderr;
 
 // Output is not '\0' terminated.
 static int
-snprintint(char *out, uint n, int xx, int base, int sgn)
+snprintuint(char *out, uint n, uint x, int base)
 {
   static char digits[] = "0123456789ABCDEF";
   char buf[16];
-  int i, neg, o;
-  uint x;
-
-  neg = 0;
-  if(sgn && xx < 0){
-    neg = 1;
-    x = -xx;
-  } else {
-    x = xx;
-  }
+  int i, o;
 
   i = 0;
   do{
     buf[i++] = digits[x % base];
   }while((x /= base) != 0);
-  if(neg)
-    buf[i++] = '-';
 
   for (o = 0; --i >= 0 && o < n; ++o)
     out[o] = buf[i];
@@ -58,9 +47,16 @@ vsnprintf(char *out, uint n, const char *fmt, va_list ap)
     // Handle '%'
     c = fmt[++i] & 0xff;
     if(c == 'd'){
-      o += snprintint(out + o, n - o, va_arg(ap, int), 10, 1);
+      int x = va_arg(ap, int);
+      if (x < 0) {
+        x = -x;
+        out[o++] = '-';
+        if (o >= n)
+          break;
+      }
+      o += snprintuint(out + o, n - o, x, 10);
     } else if(c == 'x' || c == 'p'){
-      o += snprintint(out + o, n - o, va_arg(ap, int), 16, 0);
+      o += snprintuint(out + o, n - o, va_arg(ap, int), 16);
     } else if(c == 's'){
       s = va_arg(ap, char*);
       if(s == 0)

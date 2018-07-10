@@ -1,11 +1,10 @@
 #include "stdio.h"
 #include "user.h"
 
-char buf[512];
-
 void
-wc(int fd, char *name)
+wc(int fd, const char *name)
 {
+  char buf[512];
   int i, n;
   int l, w, c, inword;
 

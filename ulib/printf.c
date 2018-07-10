@@ -72,6 +72,7 @@ vsnprintf(char *out, uint n, const char *fmt, va_list ap)
       out[o++] = '%';
       if (o >= n)
         break;
+      if (c != '\0')
       out[o++] = c;
     }
   }

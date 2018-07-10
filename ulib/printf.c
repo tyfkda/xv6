@@ -9,29 +9,45 @@ FILE *stdin = &_stdin;
 FILE *stdout = &_stdout;
 FILE *stderr = &_stderr;
 
+static char kHexDigits[] = "0123456789abcdef";
+static char kUpperHexDigits[] = "0123456789ABCDEF";
+
+static int
+putstr(char *out, int o, int n, const char *s)
+{
+  while (*s != '\0' && o < n)
+    out[o++] = *s++;
+  return o;
+}
+
+static int
+putpadding(char *out, int o, int n, int m, char padding)
+{
+  if (m > n - o)
+    m = n - o;
+  for (; m > 0; --m)
+    out[o++] = padding;
+  return o;
+}
+
 // Output is not '\0' terminated.
 static int
-snprintint(char *out, uint n, int xx, int base, int sgn)
+snprintuint(const char* digits, char *out, uint n, uint x, int base,
+            int order, int padding)
 {
-  static char digits[] = "0123456789ABCDEF";
   char buf[16];
-  int i, neg, o;
-  uint x;
-
-  neg = 0;
-  if(sgn && xx < 0){
-    neg = 1;
-    x = -xx;
-  } else {
-    x = xx;
-  }
+  int i, o;
 
   i = 0;
   do{
     buf[i++] = digits[x % base];
-  }while((x /= base) != 0);
-  if(neg)
-    buf[i++] = '-';
+    x /= base;
+  }while(x != 0);
+
+  if (i < order) {
+    memset(buf + i, padding, order - i);
+    i = order;
+  }
 
   for (o = 0; --i >= 0 && o < n; ++o)
     out[o] = buf[i];
@@ -39,14 +55,13 @@ snprintint(char *out, uint n, int xx, int base, int sgn)
   return o;
 }
 
-// Only understands %d, %x, %p, %s.
+// Only understands %d, %x, %X, %p, %s, %c and "+-0~9".
+// '\0' is not put at the end if the buffer is smaller than output.
 int
 vsnprintf(char *out, uint n, const char *fmt, va_list ap)
 {
-  char *s;
   int c, i;
   int o;
-
 
   for(i = o = 0; fmt[i] != '\0' && o < n; i++){
     c = fmt[i] & 0xff;
@@ -56,17 +71,71 @@ vsnprintf(char *out, uint n, const char *fmt, va_list ap)
     }
 
     // Handle '%'
+    char padding = ' ';
+    int order = 0;
+    int sign = 0;
+    int leftalign = 0;
     c = fmt[++i] & 0xff;
+    if (c == '+') {
+      sign = 1;
+      c = fmt[++i] & 0xff;
+    } else if (c == '-') {
+      leftalign = 1;
+      c = fmt[++i] & 0xff;
+    }
+    if (c == '0') {
+      padding = '0';
+      c = fmt[++i] & 0xff;
+    }
+    if (c >= '1' && c <= '9') {
+      order = c - '0';
+      while (c = fmt[++i], c >= '0' && c <= '9')
+        order = order * 10 + (c - '0');
+    }
+
     if(c == 'd'){
-      o += snprintint(out + o, n - o, va_arg(ap, int), 10, 1);
-    } else if(c == 'x' || c == 'p'){
-      o += snprintint(out + o, n - o, va_arg(ap, int), 16, 0);
+      int x = va_arg(ap, int);
+      if (sign) {
+        c = '+';
+        if (x < 0) {
+          x = -x;
+          c = '-';
+        }
+        out[o++] = c;
+        if (o >= n)
+          break;
+        if (order > 1)
+          --order;
+      } else if (x < 0) {
+        x = -x;
+        out[o++] = '-';
+        if (o >= n)
+          break;
+      }
+      o += snprintuint(kHexDigits, out + o, n - o, x, 10, order, padding);
+    } else if(c == 'x') {
+      o += snprintuint(kHexDigits, out + o, n - o, va_arg(ap, int), 16,
+                       order, padding);
+    } else if(c == 'X') {
+      o += snprintuint(kUpperHexDigits, out + o, n - o, va_arg(ap, int), 16,
+                       order, padding);
+    } else if(c == 'p') {
+      o += snprintuint(kHexDigits, out + o, n - o, (uintp)va_arg(ap, void*), 16,
+                       order, padding);
     } else if(c == 's'){
-      s = va_arg(ap, char*);
+      const char *s = va_arg(ap, const char*);
       if(s == 0)
         s = "(null)";
-      while(*s != '\0' && o < n)
-        out[o++] = *s++;
+      uint len = strlen(s);
+      if (order <= 0 || len >= order) {
+        o = putstr(out, o, n, s);
+      } else if (leftalign) {
+        o = putstr(out, o, n, s);
+        o = putpadding(out, o, n, order - len, ' ');
+      } else {
+        o = putpadding(out, o, n, order - len, ' ');
+        o = putstr(out, o, n, s);
+      }
     } else if(c == 'c'){
       out[o++] = va_arg(ap, uint);
     } else if(c == '%'){
@@ -76,7 +145,8 @@ vsnprintf(char *out, uint n, const char *fmt, va_list ap)
       out[o++] = '%';
       if (o >= n)
         break;
-      out[o++] = c;
+      if (c != '\0')
+        out[o++] = c;
     }
   }
 

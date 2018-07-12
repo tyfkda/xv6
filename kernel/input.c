@@ -28,13 +28,6 @@ inputintr(struct input *input, int (*getc)(void), void (*putc)(int))
       // procdump() locks cons.lock indirectly; invoke later
       doprocdump = 1;
       break;
-    case C('U'):  // Kill line.
-      while(input->e != input->w &&
-            input->buf[(input->e - 1) % INPUT_BUF] != '\n'){
-        --input->e;
-        putc(BACKSPACE);
-      }
-      break;
     case C('H'): case '\x7f':  // Backspace
       if(input->c != input->w){
         // Shift after cursor to the left.
@@ -52,18 +45,38 @@ inputintr(struct input *input, int (*getc)(void), void (*putc)(int))
         --input->e;
       }
       break;
-    case C('B'):
+    case C('B'):  // Backward (Cursor left)
       if(input->c != input->w &&
          input->buf[(input->c - 1) % INPUT_BUF] != '\n'){
         --input->c;
         putc('\b');
       }
       break;
-    case C('F'):
+    case C('F'):  // Forward (Cursor right)
       if(input->c != input->e &&
          input->buf[(input->c + 1) % INPUT_BUF] != '\n'){
         putc(input->buf[input->c % INPUT_BUF]);  // Put same character to move right.
         ++input->c;
+      }
+      break;
+    case C('A'):  // Beginning of line
+      for (int i = input->c - input->w; i > 0; --i)
+        putc('\b');
+      input->c = input->w;
+      break;
+    case C('E'):  // End of line
+      for (uint i = input->c; i < input->e; ++i)
+        putc(input->buf[i % INPUT_BUF]);
+      input->c = input->e;
+      break;
+    case C('K'):  // Kill
+      if  (input->e > input->c) {
+        int n = input->e - input->c;
+        for (int i = 0; i < n; ++i)
+          putc(' ');
+        for (int i = 0; i < n; ++i)
+          putc('\b');
+        input->e = input->c;
       }
       break;
     default:

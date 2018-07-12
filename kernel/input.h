@@ -12,6 +12,7 @@ struct input {
   uint r;  // Read index
   uint w;  // Write index
   uint e;  // Edit index
+  uint c;  // Cursor index
 };
 
 void inputinit(struct input *input);

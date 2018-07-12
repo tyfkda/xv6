@@ -1,7 +1,7 @@
-#include "types.h"
-#include "x86.h"
-#include "defs.h"
 #include "kbd.h"
+#include "defs.h"
+#include "input.h"
+#include "x86.h"
 
 // C('A') == Control-A
 #define C(x) (x - '@')
@@ -85,6 +85,12 @@ static uchar ctlmap[256] =
   [0xD2] KEY_INS,   [0xD3] KEY_DEL
 };
 
+static int terminalmap[256] =
+{
+  [KEY_LF] C('B'),
+  [KEY_RT] C('F'),
+};
+
 int
 kbdgetc(void)
 {
@@ -92,7 +98,8 @@ kbdgetc(void)
   static uchar *charcode[4] = {
     normalmap, shiftmap, ctlmap, ctlmap
   };
-  uint st, data, c;
+  uint st, data;
+  int c;
 
   st = inb(KBSTATP);
   if((st & KBS_DIB) == 0)
@@ -124,6 +131,11 @@ kbdgetc(void)
     else if('A' <= c && c <= 'Z')
       c += 'a' - 'A';
   }
+
+  int tc = terminalmap[c];
+  if (tc != 0)
+    c = tc;
+
   return c;
 }
 

@@ -6,18 +6,27 @@
 #include "x86.h"
 
 #define COM1    0x3f8
+#define ESC     (0x1b)
+
+//#define CURSORUP        (0x001b5b41)
+//#define CURSORDOWN      (0x001b5b42)
+#define CURSORFORWARD   (0x001b5b43)
+#define CURSORBACKWARD  (0x001b5b44)
+
+#define C(x)  ((x)-'@')  // Control-x
 
 static int uart;    // is there a uart?
 
 static struct {
   struct spinlock lock;
   int locking;
+  int escape;
 } cons;
 
 static struct input s_input;
 
-static void
-uartputc_(int c)
+void
+uartputc(int c)
 {
   int i;
 
@@ -28,25 +37,42 @@ uartputc_(int c)
   outb(COM1+0, c);
 }
 
-void
-uartputc(int c)
-{
-  if(c == BACKSPACE){
-    uartputc_('\b');
-    uartputc_(' ');
-    uartputc_('\b');
-  } else
-    uartputc_(c);
-}
-
 static int
 uartgetc(void)
 {
+  const int NOINPUT = -1;
   if(!uart)
-    return -1;
+    return NOINPUT;
   if(!(inb(COM1+5) & 0x01))
-    return -1;
-  return inb(COM1+0);
+    return NOINPUT;
+  int c = inb(COM1+0);
+  if (cons.escape != 0) {
+    c = (cons.escape << 8) | c;
+    switch (c) {
+    case (ESC << 8) | '[':
+      cons.escape = c;
+      c = NOINPUT;
+      break;
+    default:
+      cons.escape = 0;
+      switch (c) {
+      case CURSORBACKWARD:
+        c = C('B');
+        break;
+      case CURSORFORWARD:
+        c = C('F');
+        break;
+      default:
+        c = NOINPUT;
+        break;
+      }
+      break;
+    }
+  } else if (c == ESC) {
+    cons.escape = c;
+    c = NOINPUT;
+  }
+  return c;
 }
 
 int
@@ -63,7 +89,7 @@ uartwrite(const void *buf_, int n)
 
   acquire(&cons.lock);
   for(i = 0; i < n; i++) {
-    uartputc_(buf[i]);
+    uartputc(buf[i]);
   }
   release(&cons.lock);
 
@@ -93,7 +119,7 @@ uartearlyinit(void)
 
   // Announce that we're here.
   for(p="xv6...\n"; *p; p++)
-    uartputc_(*p);
+    uartputc(*p);
 }
 
 void
@@ -110,6 +136,7 @@ uartinit(void)
 
 
   initlock(&cons.lock, "uart");
+  cons.escape = 0;
 
   devsw[UART].write = uartwrite;
   devsw[UART].read = uartread;

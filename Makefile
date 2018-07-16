@@ -277,6 +277,7 @@ UPROGS=\
 	fs/bin/forktest\
 	fs/bin/grep\
 	fs/bin/init\
+	fs/bin/jittest\
 	fs/bin/kill\
 	fs/bin/ln\
 	fs/bin/ls\

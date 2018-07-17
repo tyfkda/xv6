@@ -185,7 +185,7 @@ MKVECTORS = tools/vectors$(BITS).pl
 kernel/vectors.S: $(MKVECTORS)
 	perl $(MKVECTORS) > $@
 
-ULIBOBJS = uobj/crt0.o uobj/ulib.o uobj/usys.o uobj/stdio.o uobj/printf.o uobj/umalloc.o
+ULIBOBJS = uobj/crt0.o uobj/localtime.o uobj/ulib.o uobj/usys.o uobj/stdio.o uobj/printf.o uobj/time.o uobj/umalloc.o
 uobj/ulib.a:	$(ULIBOBJS)
 	ar rcs $@ $^
 

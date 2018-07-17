@@ -16,6 +16,7 @@
 #include "file.h"
 #include "fcntl.h"
 #include "date.h"
+#include "time.h"
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -452,13 +453,13 @@ sys_pipe(void)
 }
 
 int
-sys_date(void)
+sys_time(void)
 {
-  struct rtcdate *date;
+  time_t *pt;
 
-  if(arguintp(0, (uintp*)&date) < 0){
+  if(arguintp(0, (uintp*)&pt) < 0){
     return -1;
   }
-  cmostime(date);
+  *pt = cmosepochtime();
   return 0;
 }

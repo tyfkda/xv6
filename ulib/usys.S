@@ -1,12 +1,14 @@
 #include "../kernel/syscall.h"
 #include "../kernel/traps.h"
 
-#define SYSCALL(name) \
+#define SYSCALL2(name, syslabel) \
   .globl name; \
   name: \
-    movl $SYS_ ## name, %eax; \
+    movl $ ## syslabel, %eax; \
     int $T_SYSCALL; \
     ret
+
+#define SYSCALL(name)  SYSCALL2(name, SYS_ ## name)
 
 SYSCALL(fork)
 SYSCALL(exit)
@@ -29,4 +31,4 @@ SYSCALL(getpid)
 SYSCALL(sbrk)
 SYSCALL(sleep)
 SYSCALL(uptime)
-SYSCALL(date)
+SYSCALL2(_systime, SYS_time)

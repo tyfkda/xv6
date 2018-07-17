@@ -224,3 +224,46 @@ void cmostime(struct rtcdate *r)
   *r = t1;
   r->year += 2000;
 }
+
+static int isLeapYear(int year) {
+  if (year < 1 || year > 9999)
+    return 0;
+  if (year % 4 != 0)
+    return 0;
+  if (year % 100 == 0)
+    return year % 400 == 0;
+  return 1;
+}
+
+static uint dateToTicks(int year, int month, int day) {
+  static const int kDays[][13] = {
+    {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365},
+    {0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 366},  // Leap year.
+  };
+  const int BASE_YEAR = 1970 - 1;
+  const int BASE_DAYS =
+    BASE_YEAR * 365 + BASE_YEAR / 4 - BASE_YEAR / 100 + BASE_YEAR / 400;
+
+  if ((year >= 1 && year <= 9999) && (month >= 1 && month <= 12)) {
+    const int* daysToMonth = kDays[isLeapYear(year)];
+    if (day >= 1 && day <= daysToMonth[month] - daysToMonth[month - 1]) {
+      int ly = year - 1;  // Last epoch year
+      int days = ly * 365 + ly / 4 - ly / 100 + ly / 400;
+      int totalDays = days + daysToMonth[month - 1] + day - 1;
+      return (totalDays - BASE_DAYS) * (24 * 60 * 60);
+    }
+  }
+  return (uint)(-1);
+}
+
+static int timeToTicks(int hour, int minute, int second) {
+  return hour * 3600 + minute * 60 + second;
+}
+
+uint cmosepochtime(void)
+{
+  struct rtcdate date;
+  cmostime(&date);
+  return (dateToTicks(date.year, date.month, date.day) +
+          timeToTicks(date.hour, date.minute, date.second));
+}

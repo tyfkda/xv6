@@ -84,6 +84,7 @@ void            lapiceoi(void);
 void            lapicinit(void);
 void            lapicstartap(uchar, uint);
 void            microdelay(int);
+uint            cmosepochtime(void);
 
 // log.c
 void            initlog(int dev);

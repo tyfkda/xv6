@@ -171,7 +171,7 @@ cgaputc(int c)
       crt[i] = 0x00 | ATTR;
   }
 
-  if(pos < 0 || pos > SCRW * SCRH)
+  if(pos < 0 || pos >= SCRW * SCRH)
     panic("pos under/overflow");
 
   outb(CRTPORT, 14);

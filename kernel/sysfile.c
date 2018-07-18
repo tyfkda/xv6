@@ -267,6 +267,7 @@ create(char *path, short type, short major, short minor)
   ip->major = major;
   ip->minor = minor;
   ip->nlink = 1;
+  ip->mtime = cmosepochtime();
   iupdate(ip);
 
   if(type == T_DIR){  // Create . and .. entries.

@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
 #define stat xv6_stat  // avoid clash with host struct stat
@@ -44,7 +45,7 @@ int fsfd;
 struct superblock sb;
 uint freeinode = ROOTINO;
 uint freeblock;
-
+time_t mtime;
 
 void balloc(int);
 void wsect(uint, void*);
@@ -229,6 +230,9 @@ main(int argc, char *argv[])
   assert((BSIZE % sizeof(struct dinode)) == 0);
   assert((BSIZE % sizeof(struct xv6_dirent)) == 0);
 
+  //time(&mtime);
+  mtime = 0;  // for test
+
   fsfd = open(argv[1], O_RDWR|O_CREAT|O_TRUNC, 0666);
   if(fsfd < 0){
     perror(argv[1]);
@@ -324,6 +328,7 @@ ialloc(ushort type)
   din.type = xshort(type);
   din.nlink = xshort(1);
   din.size = xint(0);
+  din.mtime = (uint)mtime;
   winode(inum, &din);
   return inum;
 }

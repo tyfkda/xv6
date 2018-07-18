@@ -1,7 +1,8 @@
+#include "fs.h"
 #include "stat.h"
 #include "stdio.h"
+#include "time.h"
 #include "user.h"
-#include "fs.h"
 
 char*
 fmtname(char *path)
@@ -20,6 +21,15 @@ fmtname(char *path)
   memmove(buf, p, strlen(p));
   memset(buf+strlen(p), ' ', DIRSIZ-strlen(p));
   return buf;
+}
+
+void dumpinfo(const char* name, const struct stat* st) {
+  time_t mt = st->mtime;
+  struct tm *t = localtime(&mt);
+  printf("%s %d %3d %6d  %04d/%02d/%02d %02d:%02d\n",
+         name, st->type, st->ino, st->size,
+         t->tm_year + 1900, t->tm_mon + 1, t->tm_mday,
+         t->tm_hour, t->tm_min);
 }
 
 int
@@ -43,7 +53,7 @@ ls(char *path)
 
   switch(st.type){
   case T_FILE:
-    fprintf(stderr, "%s %d %d %d\n", fmtname(path), st.type, st.ino, st.size);
+    dumpinfo(fmtname(path), &st);
     break;
 
   case T_DIR:
@@ -63,7 +73,7 @@ ls(char *path)
         fprintf(stderr, "ls: cannot stat %s\n", buf);
         continue;
       }
-      printf("%s %d %d %d\n", fmtname(buf), st.type, st.ino, st.size);
+      dumpinfo(fmtname(buf), &st);
     }
     break;
   }

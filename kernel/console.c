@@ -114,6 +114,8 @@ cprintf(char *fmt, ...)
     }
   }
 
+  va_end(ap);
+
   if(locking)
     release(&cons.lock);
 }

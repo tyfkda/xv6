@@ -89,7 +89,7 @@ inputintr(struct input *input, int (*getc)(void), void (*putc)(int))
           break;
         }
 
-        if (c < ' ' || c >= 0x80)
+        if ((c < ' ' && c != 0x1b) || c >= 0x80)
           break;
 
         // Shift after cursor to the right.

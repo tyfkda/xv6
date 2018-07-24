@@ -21,6 +21,10 @@ static struct {
   struct spinlock lock;
   int locking;
   int escape;
+
+  int bufCount;
+  int emitIndex;
+  uchar buf[4];
 } cons;
 
 static struct input s_input;
@@ -38,15 +42,34 @@ uartputc(int c)
 }
 
 static int
+uartemit(void)
+{
+  int c = cons.buf[cons.emitIndex];
+  if (++cons.emitIndex >= cons.bufCount) {
+    cons.emitIndex = -1;  // Emission ended.
+    cons.bufCount = 0;
+  }
+  return c;
+}
+
+static int
 uartgetc(void)
 {
   const int NOINPUT = -1;
+
   if(!uart)
     return NOINPUT;
+
+  if (cons.emitIndex >= 0) {
+    return uartemit();
+  }
+
   if(!(inb(COM1+5) & 0x01))
     return NOINPUT;
+
   int c = inb(COM1+0);
   if (cons.escape != 0) {
+    cons.buf[cons.bufCount++] = c;
     c = (cons.escape << 8) | c;
     switch (c) {
     case (ESC << 8) | '[':
@@ -62,13 +85,14 @@ uartgetc(void)
       case CURSORFORWARD:
         c = C('F');
         break;
-      default:
-        c = NOINPUT;
-        break;
+        default:  // Not handled: pass through.
+        cons.emitIndex = 0;
+        return uartemit();
       }
       break;
     }
   } else if (c == ESC) {
+    cons.buf[cons.bufCount++] = c;
     cons.escape = c;
     c = NOINPUT;
   }
@@ -137,6 +161,8 @@ uartinit(void)
 
   initlock(&cons.lock, "uart");
   cons.escape = 0;
+  cons.bufCount = 0;
+  cons.emitIndex = -1;
 
   devsw[UART].write = uartwrite;
   devsw[UART].read = uartread;

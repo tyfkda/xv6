@@ -1,4 +1,5 @@
 #include "types.h"
+#include "commonsrc.h"
 #include "../kernel/x86.h"
 
 void*

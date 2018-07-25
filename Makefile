@@ -36,6 +36,7 @@ OBJS := \
 	kobj/proc.o\
 	kobj/sleeplock.o\
 	kobj/spinlock.o\
+	kobj/sprintf.o\
 	kobj/string.o\
 	kobj/swtch$(BITS).o\
 	kobj/syscall.o\
@@ -200,6 +201,7 @@ ULIBOBJS = \
 	uobj/usys.o\
 	uobj/stdio.o\
 	uobj/printf.o\
+	uobj/sprintf.o\
 	uobj/string.o\
 	uobj/time.o\
 	uobj/umalloc.o\

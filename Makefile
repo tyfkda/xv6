@@ -121,6 +121,10 @@ kobj/%.o: kernel/%.c
 	@mkdir -p kobj
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+kobj/%.o: commonsrc/%.c
+	@mkdir -p kobj
+	$(CC) $(CFLAGS) -c -o $@ $<
+
 kobj/%.o: kernel/%.S
 	@mkdir -p kobj
 	$(CC) $(ASFLAGS) -c -o $@ $<
@@ -131,6 +135,10 @@ uobj/%.o: user/%.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 uobj/%.o: ulib/%.c
+	@mkdir -p uobj
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+uobj/%.o: commonsrc/%.c
 	@mkdir -p uobj
 	$(CC) $(CFLAGS) -c -o $@ $<
 
@@ -185,7 +193,17 @@ MKVECTORS = tools/vectors$(BITS).pl
 kernel/vectors.S: $(MKVECTORS)
 	perl $(MKVECTORS) > $@
 
-ULIBOBJS = uobj/crt0.o uobj/localtime.o uobj/ulib.o uobj/usys.o uobj/stdio.o uobj/printf.o uobj/time.o uobj/umalloc.o
+ULIBOBJS = \
+	uobj/crt0.o\
+	uobj/localtime.o\
+	uobj/ulib.o\
+	uobj/usys.o\
+	uobj/stdio.o\
+	uobj/printf.o\
+	uobj/string.o\
+	uobj/time.o\
+	uobj/umalloc.o\
+
 uobj/ulib.a:	$(ULIBOBJS)
 	ar rcs $@ $^
 

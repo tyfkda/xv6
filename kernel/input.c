@@ -12,6 +12,13 @@ inputinit(struct input *input)
   input->r = input->w = input->e = input->c = 0;
 }
 
+static void flushedit(struct input *input) {
+  if (input->w < input->e) {
+    input->w = input->c = input->e;
+    wakeup(&input->r);
+  }
+}
+
 void
 inputintr(struct input *input, int (*getc)(void), void (*putc)(int))
 {
@@ -83,9 +90,8 @@ inputintr(struct input *input, int (*getc)(void), void (*putc)(int))
       if(c != 0 && input->e - input->r < INPUT_BUF){
         if (c == '\n' || c == '\r') {
           input->buf[input->e++ % INPUT_BUF] = '\n';
-          input->w = input->c = input->e;
           putc('\n');
-          wakeup(&input->r);
+          flushedit(input);
           break;
         }
 
@@ -107,8 +113,7 @@ inputintr(struct input *input, int (*getc)(void), void (*putc)(int))
         ++input->e;
 
         if(/*|| c == C('D') ||*/ input->e == input->r + INPUT_BUF){
-          input->w = input->c = input->e;
-          wakeup(&input->r);
+          flushedit(input);
         }
       }
       break;
@@ -154,4 +159,19 @@ inputread(struct input *input, void *dst_, int n)
   release(&input->lock);
 
   return target - n;
+}
+
+int
+inputwrite(struct input *input, void *dst_, int n)
+{
+  uchar* dst = dst_;
+  int count = 0;
+  acquire(&input->lock);
+  for (; n > 0 && input->e < input->r + INPUT_BUF; --n) {
+    input->buf[input->e++ % INPUT_BUF] = *dst++;
+    ++count;
+  }
+  flushedit(input);
+  release(&input->lock);
+  return count;
 }

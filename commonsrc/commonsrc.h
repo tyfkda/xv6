@@ -10,3 +10,5 @@ int strncmp(const char*, const char*, uint);
 char* strncpy(char*, const char*, int);
 int strlen(const char*);
 char* strchr(const char*, char);
+
+int atoi(const char *s);

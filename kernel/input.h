@@ -17,4 +17,5 @@ struct input {
 
 void inputinit(struct input *input);
 int inputread(struct input *input, void *dst, int n);
+int inputwrite(struct input *input, void *dst, int n);
 void inputintr(struct input *input, int (*getc)(void), void (*putc)(int));

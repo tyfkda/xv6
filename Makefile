@@ -228,6 +228,7 @@ out/mkfs: tools/mkfs.c include/fs.h
 
 UPROGS=\
 	fs/bin/cat\
+	fs/bin/color\
 	fs/bin/date\
 	fs/bin/echo\
 	fs/bin/forktest\

@@ -17,6 +17,7 @@
 #include "proc.h"
 #include "x86.h"
 #include "input.h"
+#include "stdio.h"  // for sprintf
 
 static void consputc(int);
 static void consuartputc(int);
@@ -26,6 +27,11 @@ static int panicked = 0;
 static struct {
   struct spinlock lock;
   int locking;
+
+  ushort attr;
+  int escape;
+  int bufCount;
+  uchar buf[16];
 } cons;
 
 static char digits[] = "0123456789abcdef";
@@ -145,18 +151,64 @@ panic(char *s)
 static ushort *crt = (ushort*)P2V(0xb8000);  // CGA memory
 
 const int SCRW = 80, SCRH = 25;
+const int ESC = '\x1b';
+
+static const ushort kColorTable[16] = {
+  0,   // Black
+  4,   // Red
+  2,   // Green
+  6,   // Orange
+  1,   // Blue
+  5,   // Purple
+  3,   // Cyan
+  7,   // White
+  8,   // Gray
+  12,
+  10,
+  14,
+  9,
+  13,
+  11,
+  15,
+};
+const int kDefaultColor = 7;
+const int kDefaultBgColor = 0;
+
+static void
+setFontColor(int c)
+{
+  cons.attr = (cons.attr & 0xf0ff) | (kColorTable[c] << 8);
+}
+
+static void
+setBgColor(int c)
+{
+  cons.attr = (cons.attr & 0x0fff) | (kColorTable[c] << 12);
+}
+
+static int getCursorPos(void) {
+  // Cursor position: col + SCRW * row.
+  outb(CRTPORT, 14);
+  int pos = inb(CRTPORT + 1) << 8;
+  outb(CRTPORT, 15);
+  pos |= inb(CRTPORT + 1);
+  return pos;
+}
+
+static void setCursorPos(int pos) {
+  outb(CRTPORT, 14);
+  outb(CRTPORT + 1, pos >> 8);
+  outb(CRTPORT, 15);
+  outb(CRTPORT + 1, pos);
+}
 
 static void
 cgaputc(int c)
 {
-  const ushort ATTR = 0x0700;  // black on white
   int pos;
 
   // Cursor position: col + SCRW * row.
-  outb(CRTPORT, 14);
-  pos = inb(CRTPORT + 1) << 8;
-  outb(CRTPORT, 15);
-  pos |= inb(CRTPORT + 1);
+  pos = getCursorPos();
 
   if(c == '\n')
     pos += SCRW - pos % SCRW;
@@ -164,22 +216,19 @@ cgaputc(int c)
     if(pos > 0)
       --pos;
   } else
-    crt[pos++] = (c & 0xff) | ATTR;
+    crt[pos++] = (c & 0xff) | cons.attr;
 
   if(pos >= SCRW * SCRH){  // Scroll up.
     memmove(crt, crt + SCRW, sizeof(crt[0]) * SCRW * (SCRH - 1));
     pos -= SCRW;
     for (int i = pos; i < SCRW * SCRH; ++i)
-      crt[i] = 0x00 | ATTR;
+      crt[i] = cons.attr;
   }
 
   if(pos < 0 || pos >= SCRW * SCRH)
     panic("pos under/overflow");
 
-  outb(CRTPORT, 14);
-  outb(CRTPORT + 1, pos >> 8);
-  outb(CRTPORT, 15);
-  outb(CRTPORT + 1, pos);
+  setCursorPos(pos);
 }
 
 static void
@@ -200,6 +249,129 @@ consuartputc(int c)
   uartputc(c);
 }
 
+static struct input s_input;
+
+static void
+procescseq(uchar c)
+{
+  cons.buf[cons.bufCount++] = c;
+  if (cons.buf[1] == '[') {
+    switch (c) {
+    case 'B':
+      // CUD: CUrsor Downward.
+      {
+        int d = atoi((char*)&cons.buf[2]);
+        int pos = getCursorPos();
+        int y = pos / SCRW;
+        int ny = y + d;
+        if (ny > SCRH - 1)
+          ny = SCRH - 1;
+        setCursorPos(pos + (ny - y) * SCRW);
+      }
+      break;
+    case 'C':
+      // CUF: CUrsor Forward.
+      {
+        int f = atoi((char*)&cons.buf[2]);
+        int pos = getCursorPos();
+        int x = pos % SCRW;
+        int nx = x + f;
+        if (nx > SCRW - 1)
+          nx = SCRW - 1;
+        setCursorPos(pos - x + nx);
+      }
+      break;
+    case 'H':
+      // CUP
+      {
+        // Set cursor position
+        int cols = 0, rows = 0;
+        for (int i = 2; i < cons.bufCount - 1; ++i) {
+          if (cons.buf[i] == ';') {
+            cols = atoi((char*)&cons.buf[2]) - 1;
+            rows = atoi((char*)&cons.buf[i + 1]) - 1;
+            cols = cols < 0 ? 0 : cols > SCRH - 1 ? SCRH - 1 : cols;
+            rows = rows < 0 ? 0 : rows > SCRW - 1 ? SCRW - 1 : rows;
+            break;
+          }
+        }
+        setCursorPos(cols * SCRW + rows);
+      }
+      break;
+    case 'J':
+      // ED
+      {
+        // TODO: Consider SPA and ERM.
+        int n = atoi((char*)&cons.buf[2]);
+        if (0 <= n && n <= 2) {
+          int pos = getCursorPos();
+          int start = 0, end = SCRW * SCRH;
+          switch (n) {
+          case 0:  end = pos; break;
+          case 1:  start = pos; break;
+          }
+          for (int i = start; i < end; ++i)
+            crt[i] = 0x00 | 0x0700;
+        }
+      }
+      break;
+    case 'm':
+      // SGR: Select Graphic Rendition
+      {
+        int v = atoi((char*)&cons.buf[2]);
+        switch (v) {
+        case 0:  // Reset
+          setFontColor(kDefaultColor);
+          setBgColor(kDefaultBgColor);
+          break;
+        default:
+          {
+            int x = v % 10;
+            switch (v / 10) {
+            case 3: case 9:
+              setFontColor(x == 9 ? kDefaultColor : x + (v >= 90 ? 8 : 0));
+              break;
+            case 4: case 10:
+              setBgColor(x == 9 ? kDefaultBgColor : x + (v >= 100 ? 8 : 0));
+              break;
+            }
+          }
+          break;
+        }
+      }
+      break;
+    case 'n':
+      // DSR: Device Status Report.
+      switch (cons.buf[2]) {
+      case '6':  // Return cursor position
+        {
+          int pos = getCursorPos();
+          char buf[16];
+          snprintf(buf, sizeof(buf), "\x1b[%d;%dR", pos / SCRW + 1, pos % SCRW + 1);
+          inputwrite(&s_input, buf, strlen(buf));
+        }
+        break;
+      }
+      break;
+    default:
+      if ((c < 'A'|| c > 'Z') && (c < 'a' || c > 'z') &&
+          cons.bufCount < sizeof(cons.buf)) {
+        return;  // Continue.
+      }
+
+      // Unhandled: emit buffered characters and quit escape sequence.
+      for (int i = 0; i < cons.bufCount; ++i) {
+        consputc(cons.buf[i]);
+      }
+      break;
+    }
+  }
+
+  // Quit escape sequence.
+  cons.escape = 0;
+  cons.bufCount = 0;
+}
+
 int
 consolewrite(const void *buf_, int n)
 {
@@ -207,14 +379,22 @@ consolewrite(const void *buf_, int n)
   int i;
 
   acquire(&cons.lock);
-  for(i = 0; i < n; i++)
-    consputc(buf[i]);
+  for(i = 0; i < n; i++) {
+    uchar c = buf[i];
+    if (cons.escape) {
+      procescseq(c);
+    } else if (c == ESC) {
+      cons.buf[0] = c;
+      cons.bufCount = 1;
+      cons.escape = 1;
+    } else {
+      consputc(c);
+    }
+  }
   release(&cons.lock);
 
   return n;
 }
-
-static struct input s_input;
 
 void
 consoleintr(int (*getc)(void))
@@ -238,6 +418,9 @@ consoleinit(void)
   devsw[CONSOLE].write = consolewrite;
   devsw[CONSOLE].read = consoleread;
   cons.locking = 1;
+  cons.attr = 0x0700;
+  cons.escape = 0;
+  cons.bufCount = 0;
 
   ioapicenable(IRQ_KBD, 0);
 

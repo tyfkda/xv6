@@ -28,6 +28,7 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 int date(struct rtcdate *);
+int ioctl(int fd, int request, int flag);
 
 // ulib.c
 int stat(const char*, struct stat*);

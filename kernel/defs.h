@@ -158,6 +158,9 @@ int             fetchuintp(uintp, uintp*);
 int             fetchstr(uintp, char**);
 void            syscall(void);
 
+// sysfile.c
+int             argfd(int n, int *pfd, struct file **pf);
+
 // timer.c
 void            timerinit(void);
 

@@ -13,6 +13,10 @@ struct input {
   uint w;  // Write index
   uint e;  // Edit index
   uint c;  // Cursor index
+
+  // Flags
+  int nobuffering: 1;  // No line buffering?
+  int noechoback: 1;   // No echo back?
 };
 
 void inputinit(struct input *input);

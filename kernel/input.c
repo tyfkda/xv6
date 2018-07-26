@@ -10,6 +10,7 @@ inputinit(struct input *input)
 {
   initlock(&input->lock, "input");
   input->r = input->w = input->e = input->c = 0;
+  input->nobuffering = input->noechoback = 0;
 }
 
 static void flushedit(struct input *input) {
@@ -19,11 +20,16 @@ static void flushedit(struct input *input) {
   }
 }
 
+static void nullputc(int c) { /* nothing */ }
+
 void
 inputintr(struct input *input, int (*getc)(void), void (*putc)(int))
 {
   int c;
   int doprocdump = 0;
+
+  if (input->noechoback)
+    putc = nullputc;
 
   acquire(&input->lock);
   while((c = getc()) != -1){
@@ -119,6 +125,9 @@ inputintr(struct input *input, int (*getc)(void), void (*putc)(int))
       break;
     }
   }
+  if (input->nobuffering)
+    flushedit(input);
+
   release(&input->lock);
   if(doprocdump) {
     procdump();  // now call procdump() wo. cons.lock held

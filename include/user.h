@@ -7,7 +7,7 @@ struct rtcdate;
 
 // system calls
 int fork(void);
-int exit(int) __attribute__((noreturn));
+int exit(int);
 int wait(int*);
 int pipe(int*);
 int write(int, const void*, int);
@@ -43,3 +43,4 @@ void* malloc(uint);
 void* calloc(uint);
 void free(void*);
 int atoi(const char*);
+int atexit(void (*function)(void));

@@ -196,15 +196,16 @@ kernel/vectors.S: $(MKVECTORS)
 
 ULIBOBJS = \
 	uobj/crt0.o\
+	uobj/exit.o\
 	uobj/localtime.o\
-	uobj/ulib.o\
-	uobj/usys.o\
-	uobj/stdio.o\
 	uobj/printf.o\
 	uobj/sprintf.o\
+	uobj/stdio.o\
 	uobj/string.o\
 	uobj/time.o\
+	uobj/ulib.o\
 	uobj/umalloc.o\
+	uobj/usys.o\
 
 uobj/ulib.a:	$(ULIBOBJS)
 	ar rcs $@ $^

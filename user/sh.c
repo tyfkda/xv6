@@ -57,7 +57,7 @@ struct backcmd {
 };
 
 int fork1(void);  // Fork but panics on failure.
-void panic(char*) __attribute__((noreturn));;
+void panic(char*);
 struct cmd *parsecmd(char*);
 
 // Environment variables.
@@ -142,7 +142,6 @@ runecmd(struct execcmd *ecmd)
 }
 
 // Execute cmd.  Never returns.
-void runcmd(struct cmd *cmd) __attribute__((noreturn));
 void
 runcmd(struct cmd *cmd)
 {

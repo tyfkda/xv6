@@ -11,7 +11,7 @@
 #define SYSCALL(name)  SYSCALL2(name, SYS_ ## name)
 
 SYSCALL(fork)
-SYSCALL(exit)
+SYSCALL2(_sysexit, SYS_exit)
 SYSCALL(wait)
 SYSCALL(pipe)
 SYSCALL(read)

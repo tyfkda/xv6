@@ -1,5 +1,6 @@
-#include "sprintf.h"
 #include "commonsrc.h"
+#include "sprintf.h"
+#include "stdint.h"  // uintptr_t
 
 static char kHexDigits[] = "0123456789abcdef";
 static char kUpperHexDigits[] = "0123456789ABCDEF";
@@ -24,7 +25,7 @@ putpadding(char *out, int o, int n, int m, char padding)
 
 // Output is not '\0' terminated.
 static int
-snprintuint(const char* digits, char *out, uint n, uint x, int base,
+snprintuint(const char* digits, char *out, unsigned int n, unsigned int x, int base,
             int order, int padding)
 {
   char buf[16];
@@ -50,7 +51,7 @@ snprintuint(const char* digits, char *out, uint n, uint x, int base,
 // Only understands %d, %x, %X, %p, %s, %c and "+-0~9".
 // '\0' is not put at the end if the buffer is smaller than output.
 int
-vsnprintf(char *out, uint n, const char *fmt, va_list ap)
+vsnprintf(char *out, size_t n, const char *fmt, va_list ap)
 {
   int c, i;
   int o;
@@ -112,13 +113,13 @@ vsnprintf(char *out, uint n, const char *fmt, va_list ap)
       o += snprintuint(kUpperHexDigits, out + o, n - o, va_arg(ap, int), 16,
                        order, padding);
     } else if(c == 'p') {
-      o += snprintuint(kHexDigits, out + o, n - o, (uintp)va_arg(ap, void*), 16,
+      o += snprintuint(kHexDigits, out + o, n - o, (uintptr_t)va_arg(ap, void*), 16,
                        order, padding);
     } else if(c == 's'){
       const char *s = va_arg(ap, const char*);
       if(s == 0)
         s = "(null)";
-      uint len = strlen(s);
+      size_t len = strlen(s);
       if (order <= 0 || len >= order) {
         o = putstr(out, o, n, s);
       } else if (leftalign) {
@@ -129,7 +130,7 @@ vsnprintf(char *out, uint n, const char *fmt, va_list ap)
         o = putstr(out, o, n, s);
       }
     } else if(c == 'c'){
-      out[o++] = va_arg(ap, uint);
+      out[o++] = va_arg(ap, unsigned int);
     } else if(c == '%'){
       out[o++] = c;
     } else {
@@ -148,7 +149,7 @@ vsnprintf(char *out, uint n, const char *fmt, va_list ap)
 }
 
 int
-snprintf(char *out, uint n, const char *fmt, ...)
+snprintf(char *out, size_t n, const char *fmt, ...)
 {
   va_list ap;
   int len;
@@ -164,7 +165,7 @@ sprintf(char *out, const char *fmt, ...)
   va_list ap;
   int len;
   va_start(ap, fmt);
-  len = vsnprintf(out, (uint)-1, fmt, ap);
+  len = vsnprintf(out, (size_t)-1, fmt, ap);
   va_end(ap);
   return len;
 }

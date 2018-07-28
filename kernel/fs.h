@@ -3,7 +3,7 @@
 // On-disk file system format.
 // Both the kernel and user programs use this header file.
 
-#include "../include/types.h"
+#include "./types.h"
 #include "../include/dirent.h"
 
 #define ROOTINO 1  // root i-number

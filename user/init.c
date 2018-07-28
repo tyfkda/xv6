@@ -1,6 +1,5 @@
 // init: The initial user-level program
 
-#include "types.h"
 #include "stdio.h"
 #include "stdlib.h"
 #include "unistd.h"

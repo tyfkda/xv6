@@ -65,14 +65,14 @@ int fclose(FILE* fp) {
   return 0;
 }
 
-uint
-fwrite(const void* buffer, uint size, uint count, FILE* fp)
+size_t
+fwrite(const void* buffer, size_t size, size_t count, FILE* fp)
 {
   return write(fp->fd, buffer, size * count);
 }
 
-uint
-fread(void* buffer, uint size, uint count, FILE* fp)
+size_t
+fread(void* buffer, size_t size, size_t count, FILE* fp)
 {
   return read(fp->fd, buffer, size * count);
 }
@@ -98,10 +98,10 @@ getchar(void)
 }
 
 char*
-fgets_s(char *buf, uint max, FILE* fp)
+fgets_s(char *buf, size_t max, FILE* fp)
 {
   int eof = 1;
-  int i;
+  size_t i;
   for (i = 0; i < max - 1; ){
     int c = fgetc(fp);
     if (c < 0)
@@ -116,7 +116,7 @@ fgets_s(char *buf, uint max, FILE* fp)
 }
 
 char*
-gets_s(char *buf, uint max)
+gets_s(char *buf, size_t max)
 {
   char* result = fgets_s(buf, max, stdin);
   if (result == 0)
@@ -130,6 +130,6 @@ gets_s(char *buf, uint max)
 }
 
 int putchar(int c) {
-  uchar buf = c;
+  unsigned char buf = c;
   return fwrite(&buf, 1, 1, stdout);
 }

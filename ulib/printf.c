@@ -13,7 +13,7 @@ FILE *stderr = &_stderr;
 int
 vsprintf(char *out, const char *fmt, va_list ap)
 {
-  return vsnprintf(out, (uint)-1, fmt, ap);
+  return vsnprintf(out, (size_t)-1, fmt, ap);
 }
 
 // Print to the given fd. Only understands %d, %x, %p, %s.

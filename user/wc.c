@@ -1,7 +1,7 @@
 #include "stdio.h"
 #include "stdlib.h"
 #include "string.h"
-#include "user.h"
+#include "unistd.h"
 
 void
 wc(int fd, const char *name)

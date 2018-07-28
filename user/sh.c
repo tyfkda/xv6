@@ -4,7 +4,7 @@
 #include "stdio.h"
 #include "stdlib.h"
 #include "string.h"
-#include "user.h"
+#include "unistd.h"
 
 // Parsed command representation
 #define EXEC  1

@@ -3,7 +3,7 @@
 #include "stat.h"
 #include "stdio.h"
 #include "string.h"
-#include "user.h"
+#include "unistd.h"
 
 #define NULL   ((void*)0)
 #define FALSE  (0)

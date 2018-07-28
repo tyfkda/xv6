@@ -1,6 +1,6 @@
 #include "stdlib.h"
 #include "string.h"
-#include "user.h"  // for sbrk
+#include "unistd.h"  // for sbrk
 
 // Memory allocator by Kernighan and Ritchie,
 // The C programming Language, 2nd ed.  Section 8.7.

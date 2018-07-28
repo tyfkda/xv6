@@ -2,7 +2,7 @@
 #include "stdio.h"
 #include "stdlib.h"
 #include "string.h"
-#include "user.h"
+#include "unistd.h"
 #include "../kernel/fs.h"
 #include "fcntl.h"
 #include "../kernel/memlayout.h"

@@ -1,6 +1,6 @@
 #include "fcntl.h"
 #include "stat.h"
-#include "user.h"
+#include "unistd.h"
 
 int
 stat(const char *n, struct stat *st)

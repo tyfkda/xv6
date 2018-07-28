@@ -3,7 +3,7 @@
 
 #include "stdio.h"
 #include "stdlib.h"
-#include "user.h"
+#include "unistd.h"
 
 #define N  1000
 

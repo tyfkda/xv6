@@ -1,7 +1,7 @@
 #include "file_def.h"
 #include "stdio.h"
 #include "string.h"
-#include "user.h"
+#include "unistd.h"
 
 static FILE _stdin = {0};
 static FILE _stdout = {1};

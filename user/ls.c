@@ -3,7 +3,7 @@
 #include "stdio.h"
 #include "string.h"
 #include "time.h"
-#include "user.h"
+#include "unistd.h"
 
 char*
 fmtname(char *path)

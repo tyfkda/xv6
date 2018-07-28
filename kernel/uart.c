@@ -85,13 +85,13 @@ uartgetc(void)
       case CURSORFORWARD:
         c = C('F');
         break;
-        default:  // Not handled: pass through.
+      default:  // Not handled: pass through.
         cons.emitIndex = 0;
         return uartemit();
       }
       break;
     }
-  } else if (c == ESC) {
+  } else if (c == ESC && !s_input.nobuffering) {
     cons.buf[cons.bufCount++] = c;
     cons.escape = c;
     c = NOINPUT;
@@ -118,6 +118,14 @@ uartwrite(const void *buf_, int n)
   release(&cons.lock);
 
   return n;
+}
+
+int
+uartioctl(int request, int flag)
+{
+  s_input.nobuffering = flag & 1;
+  s_input.noechoback = (flag >> 1) & 1;
+  return 0;
 }
 
 void
@@ -166,6 +174,7 @@ uartinit(void)
 
   devsw[UART].write = uartwrite;
   devsw[UART].read = uartread;
+  devsw[UART].ioctl = uartioctl;
   cons.locking = 1;
 
   inputinit(&s_input);

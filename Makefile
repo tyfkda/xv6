@@ -24,6 +24,7 @@ OBJS := \
 	kobj/ide.o\
 	kobj/input.o\
 	kobj/ioapic.o\
+	kobj/ioctl.o\
 	kobj/kalloc.o\
 	kobj/kbd.o\
 	kobj/lapic.o\

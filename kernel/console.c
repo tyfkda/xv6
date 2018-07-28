@@ -410,6 +410,14 @@ consoleread(void *dst, int n)
   return inputread(&s_input, dst, n);
 }
 
+int
+consoleioctl(int request, int flag)
+{
+  s_input.nobuffering = flag & 1;
+  s_input.noechoback = (flag >> 1) & 1;
+  return 0;
+}
+
 void
 consoleinit(void)
 {
@@ -417,6 +425,7 @@ consoleinit(void)
 
   devsw[CONSOLE].write = consolewrite;
   devsw[CONSOLE].read = consoleread;
+  devsw[CONSOLE].ioctl = consoleioctl;
   cons.locking = 1;
   cons.attr = 0x0700;
   cons.escape = 0;

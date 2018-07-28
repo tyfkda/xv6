@@ -5,6 +5,10 @@
 #include "string.h"
 #include "user.h"
 
+int fileno(const FILE *fp) {
+  return fp->fd;
+}
+
 FILE* fopen(const char* fileName, const char* mode) {
   struct {
     const char* str;
@@ -87,6 +91,12 @@ getc(void)
   return fgetc(stdin);
 }
 
+int
+getchar(void)
+{
+  return fgetc(stdin);
+}
+
 char*
 fgets_s(char *buf, uint max, FILE* fp)
 {
@@ -117,4 +127,9 @@ gets_s(char *buf, uint max)
   if (len > 0 && (buf[len - 1] == '\n' || buf[len - 1] == '\r'))
     buf[len - 1] = '\0';
   return result;
+}
+
+int putchar(int c) {
+  uchar buf = c;
+  return fwrite(&buf, 1, 1, stdout);
 }

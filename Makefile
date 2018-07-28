@@ -285,6 +285,7 @@ UPROGS=\
 	fs/bin/rm\
 	fs/bin/sh\
 	fs/bin/stressfs\
+	fs/bin/ted\
 	fs/bin/usertests\
 	fs/bin/wc\
 	fs/bin/zombie\

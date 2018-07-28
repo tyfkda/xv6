@@ -1,17 +1,24 @@
-#include "stdio.h"
-#include "stdlib.h"
-#include "string.h"
-#include "unistd.h"
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <termios.h>
 
+#ifndef NULL
 #define NULL   ((void*)0)
+#endif
+#ifndef FALSE
 #define FALSE  (0)
+#endif
+#ifndef TRUE
 #define TRUE   (1)
+#endif
 
 #define ESC  '\x1b'
 #define C(x)  ((x)-'@')  // Control-x
 
-int puts(const char* s) {
-  return write(1, s, strlen(s));
+void setCursorPosition(int col, int row) {
+  printf("\x1b[%d;%dH", col, row);
 }
 
 int getCursorPosition(int* cols, int* rows) {
@@ -21,7 +28,7 @@ int getCursorPosition(int* cols, int* rows) {
   char buf[32];
   int i = 0;
   for (i = 0; i < sizeof(buf) - 1; ++i) {
-    int c = getc();
+    int c = getchar();
     if (c == EOF)
       break;
     buf[i] = c;
@@ -49,7 +56,7 @@ int getWindowSize(int* cols, int* rows) {
 
 typedef struct {
   int maxcols, maxrows;
-  int col, row;
+  int cx, cy;  // Cursor position
 } Window;
 
 int init_editor(Window* win) {
@@ -57,7 +64,7 @@ int init_editor(Window* win) {
     fprintf(stderr, "getWindowSize failed\n");
     return FALSE;
   }
-  win->col = win->row = 0;
+  win->cx = win->cy = 0;
 
   printf("\x1b[2J"  // Clear screen.
          "\x1b[H");  // Move to the top left.
@@ -67,73 +74,100 @@ int init_editor(Window* win) {
 
 void edit(Window* win) {
   for (;;) {
-    unsigned char c;
-    if (read(0, &c, 1) != 1)
+    int c = getchar();
+    if (c == EOF || c == '\0' || c == '\x03')  // Ctrl-C
       break;
-    if (c == '\0' || c == '\x03')  // Ctrl-C
-      break;
+
+    setCursorPosition(win->maxcols, 1);
+    printf("[%02x]    ", c);
+    setCursorPosition(win->cy + 1, win->cx + 1);
 
     switch (c) {
     case '\n':
     case '\r':
-      if (win->col < win->maxcols - 1) {
+      if (win->cy < win->maxcols - 1) {
         putchar('\n');
-        win->row = 0;
-        ++win->col;
+        win->cx = 0;
+        ++win->cy;
       }
       break;
 
     case C('F'):
-      if (win->row < win->maxrows) {
-        ++win->row;
-        printf("\x1b[D");  // Cursor left
+      if (win->cx < win->maxrows - 1) {
+        ++win->cx;
+        //puts("\x1b[C");  // Cursor right
+        setCursorPosition(win->cy + 1, win->cx + 1);
       }
       break;
 
     case C('B'):
-      if (win->col > 0) {
-        --win->col;
-        printf("\x1b[C");  // Cursor right
+      if (win->cx > 0) {
+        --win->cx;
+        //puts("\x1b[D");  // Cursor left
+        setCursorPosition(win->cy + 1, win->cx + 1);
       }
       break;
 
     case C('P'):
-      if (win->col > 0) {
-        --win->col;
-        printf("\x1b[A");  // Cursor up
+      if (win->cy > 0) {
+        --win->cy;
+        //puts("\x1b[A");  // Cursor up
+        setCursorPosition(win->cy + 1, win->cx + 1);
       }
       break;
 
     case C('N'):
-      if (win->col < win->maxcols - 1) {
-        ++win->col;
-        printf("\x1b[B");  // Cursor down
+      if (win->cy < win->maxcols - 1) {
+        ++win->cy;
+        //puts("\x1b[B");  // Cursor down
+        setCursorPosition(win->cy + 1, win->cx + 1);
       }
       break;
 
     default:
       if (c >= ' ') {
         putchar(c);
-        ++win->row;
-        if (win->row >= win->maxrows) {
-          win->row = 0;
-          ++win->col;
-          if (win->col >= win->maxcols) {
-            // TODO: Scroll
-          }
+        ++win->cx;
+        if (win->cx >= win->maxrows) {
+          --win->cx;
+          //puts("\x1b[C");  // Cursor right
+          setCursorPosition(win->cy + 1, win->cx + 1);
         }
       }
     }
   }
 }
 
+static struct termios save_term;
+
 static void farewell() {
-  ioctl(0, 0, 0);
+  if (tcsetattr(fileno(stdin), TCSANOW, &save_term) == -1) {
+    //perror("tcsetattr(save_term) failure");
+    //exit(EXIT_FAILURE);
+  }
 }
 
 int main() {
   atexit(farewell);
-  ioctl(0, 0, -1);
+
+  errno = 0;
+  if (tcgetattr(fileno(stdin), &save_term) == -1) {
+    perror("tcgetattr failure");
+    exit(EXIT_FAILURE);
+  }
+
+  struct termios temp_term = save_term;
+  //temp_term.c_iflag &= IGNCR;
+  temp_term.c_lflag &= ~ICANON;
+  temp_term.c_lflag &= ~ECHO;
+  temp_term.c_lflag &= ~ISIG;
+  temp_term.c_cc[VMIN] = 1;
+  temp_term.c_cc[VTIME] = 0;
+
+  if (tcsetattr(fileno(stdin), TCSANOW, &temp_term) == -1) {
+    perror("tcsetattr(temp_term) failure");
+    exit(EXIT_FAILURE);
+  }
 
   Window win;
   if (!init_editor(&win)) {

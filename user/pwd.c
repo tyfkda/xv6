@@ -1,5 +1,5 @@
+#include "dirent.h"
 #include "fcntl.h"
-#include "fs.h"
 #include "stat.h"
 #include "stdio.h"
 #include "string.h"

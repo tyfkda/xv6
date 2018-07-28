@@ -220,7 +220,7 @@ fs/bin/%: uobj/%.o uobj/ulib.a
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/$*.sym
 	strip $@
 
-out/mkfs: tools/mkfs.c include/fs.h
+out/mkfs: tools/mkfs.c kernel/fs.h
 	@mkdir -p out
 	gcc -Werror -Wall -o $@ tools/mkfs.c
 

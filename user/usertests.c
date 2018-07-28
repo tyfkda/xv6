@@ -3,7 +3,7 @@
 #include "stdlib.h"
 #include "string.h"
 #include "user.h"
-#include "fs.h"
+#include "../kernel/fs.h"
 #include "fcntl.h"
 #include "../kernel/memlayout.h"
 #include "../kernel/param.h"

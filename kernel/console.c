@@ -174,6 +174,8 @@ static const ushort kColorTable[16] = {
 const int kDefaultColor = 7;
 const int kDefaultBgColor = 0;
 
+static struct input s_input;
+
 static void
 setFontColor(int c)
 {
@@ -202,6 +204,16 @@ static void setCursorPos(int pos) {
   outb(CRTPORT + 1, pos);
 }
 
+static int
+scrollUp(int pos)
+{
+  memmove(crt, crt + SCRW, sizeof(crt[0]) * SCRW * (SCRH - 1));
+  pos -= SCRW;
+  for (int i = pos; i < SCRW * SCRH; ++i)
+    crt[i] = cons.attr;
+  return pos;
+}
+
 static void
 cgaputc(int c)
 {
@@ -218,11 +230,11 @@ cgaputc(int c)
   } else
     crt[pos++] = (c & 0xff) | cons.attr;
 
-  if(pos >= SCRW * SCRH){  // Scroll up.
-    memmove(crt, crt + SCRW, sizeof(crt[0]) * SCRW * (SCRH - 1));
-    pos -= SCRW;
-    for (int i = pos; i < SCRW * SCRH; ++i)
-      crt[i] = cons.attr;
+  if(pos >= SCRW * SCRH){
+    if (s_input.noechoback)
+      --pos;
+    else
+      pos = scrollUp(pos);
   }
 
   if(pos < 0 || pos >= SCRW * SCRH)
@@ -248,8 +260,6 @@ consuartputc(int c)
   consputc(c);
   uartputc(c);
 }
-
-static struct input s_input;
 
 static void
 procescseq(uchar c)

@@ -99,3 +99,23 @@ calloc(size_t nbytes)
     memset(adr, 0, nbytes);
   return adr;
 }
+
+void*
+realloc(void* p, size_t size)
+{
+  if (size <= 0) {
+    free(p);
+    return 0;
+  }
+
+  if (p == 0) {
+    return malloc(size);
+  }
+
+  void* buf = malloc(size);
+  if (buf != 0) {
+    memcpy(buf, p, size);
+    free(p);
+  }
+  return buf;
+}

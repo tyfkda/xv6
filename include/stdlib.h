@@ -11,5 +11,6 @@ int atexit(void (*function)(void));
 void* malloc(size_t);
 void* calloc(size_t);
 void free(void*);
+void* realloc(void*, size_t);
 
 int atoi(const char*);

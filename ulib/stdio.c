@@ -31,14 +31,14 @@ FILE* fopen(const char* fileName, const char* mode) {
     {"ab+", O_WRONLY | O_CREAT | O_APPEND},
   };
 
-  int flag = 0;
+  int flag = -1;
   for (int i = 0; i < sizeof(kTable) / sizeof(*kTable); ++i) {
     if (strcmp(kTable[i].str, mode) == 0) {
       flag = kTable[i].flag;
       break;
     }
   }
-  if (flag == 0)
+  if (flag == -1)
     return 0;
 
   int fd = open(fileName, flag);

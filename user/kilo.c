@@ -1243,6 +1243,9 @@ void initEditor(void) {
     E.dirty = 0;
     E.filename = NULL;
     E.syntax = NULL;
+}
+
+void initEditor2(void) {
     if (getWindowSize(STDIN_FILENO,STDOUT_FILENO,
                       &E.screenrows,&E.screencols) == -1)
     {
@@ -1259,9 +1262,13 @@ int main(int argc, char **argv) {
     }
 
     initEditor();
+    if (enableRawMode(STDIN_FILENO) < 0) {
+        fprintf(stderr,"Failed to set raw mode\n");
+        exit(1);
+    }
+    initEditor2();
     editorSelectSyntaxHighlight(argv[1]);
     editorOpen(argv[1]);
-    enableRawMode(STDIN_FILENO);
     editorSetStatusMessage(
         "HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find");
     while(1) {

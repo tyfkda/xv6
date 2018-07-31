@@ -6,7 +6,7 @@
 // C('A') == Control-A
 #define C(x) (x - '@')
 
-static uchar shiftcode[256] =
+static const uchar shiftcode[256] =
 {
   [0x1D] CTL,
   [0x2A] SHIFT,
@@ -16,14 +16,14 @@ static uchar shiftcode[256] =
   [0xB8] ALT
 };
 
-static uchar togglecode[256] =
+static const uchar togglecode[256] =
 {
   [0x3A] CAPSLOCK,
   [0x45] NUMLOCK,
   [0x46] SCROLLLOCK
 };
 
-static uchar normalmap[256] =
+static const uchar normalmap[256] =
 {
   NO,   0x1B, '1',  '2',  '3',  '4',  '5',  '6',  // 0x00
   '7',  '8',  '9',  '0',  '-',  '=',  '\b', '\t',
@@ -45,7 +45,7 @@ static uchar normalmap[256] =
   [0xD2] KEY_INS,   [0xD3] KEY_DEL
 };
 
-static uchar shiftmap[256] =
+static const uchar shiftmap[256] =
 {
   NO,   033,  '!',  '@',  '#',  '$',  '%',  '^',  // 0x00
   '&',  '*',  '(',  ')',  '_',  '+',  '\b', '\t',
@@ -67,7 +67,7 @@ static uchar shiftmap[256] =
   [0xD2] KEY_INS,   [0xD3] KEY_DEL
 };
 
-static uchar ctlmap[256] =
+static const uchar ctlmap[256] =
 {
   NO,      NO,      NO,      NO,      NO,      NO,      NO,      NO,
   NO,      NO,      NO,      NO,      NO,      NO,      NO,      NO,
@@ -85,21 +85,31 @@ static uchar ctlmap[256] =
   [0xD2] KEY_INS,   [0xD3] KEY_DEL
 };
 
-static int terminalmap[256] =
+static const uint terminalmap[256] =
 {
-  [KEY_LF] C('B'),
-  [KEY_RT] C('F'),
+  [KEY_LF] 0x1b | ('[' << 8) | ('D' << 16),
+  [KEY_RT] 0x1b | ('[' << 8) | ('C' << 16),
+  [KEY_UP] 0x1b | ('[' << 8) | ('A' << 16),
+  [KEY_DN] 0x1b | ('[' << 8) | ('B' << 16),
 };
 
 int
 kbdgetc(void)
 {
   static uint shift;
-  static uchar *charcode[4] = {
+  static uint unget;
+
+  static const uchar *charcode[4] = {
     normalmap, shiftmap, ctlmap, ctlmap
   };
   uint st, data;
   int c;
+
+  if (unget != 0) {
+    c = unget & 0xff;
+    unget >>= 8;
+    return c;
+  }
 
   st = inb(KBSTATP);
   if((st & KBS_DIB) == 0)
@@ -132,9 +142,11 @@ kbdgetc(void)
       c += 'a' - 'A';
   }
 
-  int tc = terminalmap[c];
-  if (tc != 0)
-    c = tc;
+  uint tc = terminalmap[c];
+  if (tc != 0) {
+    c = tc & 0xff;
+    unget = tc >> 8;
+  }
 
   return c;
 }

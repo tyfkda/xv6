@@ -2,6 +2,8 @@
 #include "sprintf.h"
 #include "stdint.h"  // uintptr_t
 
+#define MIN(a, b)  ((a) < (b) ? (a) : (b))
+
 static char kHexDigits[] = "0123456789abcdef";
 static char kUpperHexDigits[] = "0123456789ABCDEF";
 
@@ -65,7 +67,7 @@ vsnprintf(char *out, size_t n, const char *fmt, va_list ap)
 
     // Handle '%'
     char padding = ' ';
-    int order = 0;
+    int order = 0, suborder = 0;
     int sign = 0;
     int leftalign = 0;
     c = fmt[++i] & 0xff;
@@ -84,6 +86,11 @@ vsnprintf(char *out, size_t n, const char *fmt, va_list ap)
       order = c - '0';
       while (c = fmt[++i], c >= '0' && c <= '9')
         order = order * 10 + (c - '0');
+    }
+    if (c == '.') {
+      while (c = fmt[++i], c >= '0' && c <= '9') {
+        suborder = suborder * 10 + (c - '0');
+      }
     }
 
     if(c == 'd'){
@@ -116,18 +123,29 @@ vsnprintf(char *out, size_t n, const char *fmt, va_list ap)
       o += snprintuint(kHexDigits, out + o, n - o, (uintptr_t)va_arg(ap, void*), 16,
                        order, padding);
     } else if(c == 's'){
+      // ("%5", "foo")         = "  foo"
+      // ("%-5", "foo")        = "foo  "
+      // ("%5", "foobarbaz")   = "foobarbaz"
+      // ("%.3", "foobarbaz")  = "foo"
+      // ("%5.7", "foobarbaz") = "foobarb"
+      // ("%5.3", "foobarbaz") = "  foo"
+
       const char *s = va_arg(ap, const char*);
       if(s == 0)
         s = "(null)";
       size_t len = strlen(s);
+      if (suborder > 0)
+        len = MIN(len, suborder);
       if (order <= 0 || len >= order) {
-        o = putstr(out, o, n, s);
-      } else if (leftalign) {
-        o = putstr(out, o, n, s);
-        o = putpadding(out, o, n, order - len, ' ');
+        o = putstr(out, o, MIN(n, o + len), s);
       } else {
-        o = putpadding(out, o, n, order - len, ' ');
-        o = putstr(out, o, n, s);
+        if (leftalign) {
+          o = putstr(out, o, MIN(n, o + len), s);
+          o = putpadding(out, o, n, order - len, ' ');
+        } else {
+          o = putpadding(out, o, n, order - len, ' ');
+          o = putstr(out, o, MIN(n, o + len), s);
+        }
       }
     } else if(c == 'c'){
       out[o++] = va_arg(ap, unsigned int);

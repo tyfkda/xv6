@@ -232,7 +232,7 @@ out/mkfs: tools/mkfs.c kernel/fs.h
 
 UPROGS=\
 	fs/bin/cat\
-	fs/bin/color\
+	fs/bin/clr\
 	fs/bin/date\
 	fs/bin/echo\
 	fs/bin/forktest\

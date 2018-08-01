@@ -264,6 +264,7 @@ UPROGS=\
 	fs/bin/ln\
 	fs/bin/ls\
 	fs/bin/mkdir\
+	fs/bin/mv\
 	fs/bin/pwd\
 	fs/bin/rm\
 	fs/bin/sh\

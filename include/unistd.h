@@ -34,7 +34,7 @@ int open(const char*, int, ...);
 int mknod(const char*, short, short);
 int unlink(const char*);
 int fstat(int fd, struct stat*);
-int link(const char*, char*);
+int link(const char*, const char*);
 int chdir(const char*);
 int dup(int);
 pid_t getpid(void);

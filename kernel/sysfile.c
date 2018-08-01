@@ -17,6 +17,7 @@
 #include "fcntl.h"
 #include "date.h"
 #include "time.h"
+#include "errno.h"
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -295,7 +296,7 @@ sys_open(void)
   struct inode *ip;
 
   if(argstr(0, &path) < 0 || argint(1, &omode) < 0)
-    return -1;
+    return -EINVAL;
 
   begin_op();
 
@@ -303,18 +304,18 @@ sys_open(void)
     ip = create(path, T_FILE, 0, 0);
     if(ip == 0){
       end_op();
-      return -1;
+      return -EIO;
     }
   } else {
     if((ip = namei(path)) == 0){
       end_op();
-      return -1;
+      return -ENOENT;
     }
     ilock(ip);
     if(ip->type == T_DIR && omode != O_RDONLY){
       iunlockput(ip);
       end_op();
-      return -1;
+      return -EINVAL;
     }
   }
 
@@ -323,7 +324,7 @@ sys_open(void)
       fileclose(f);
     iunlockput(ip);
     end_op();
-    return -1;
+    return -ENOMEM;
   }
   iunlock(ip);
   end_op();

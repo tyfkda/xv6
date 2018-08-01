@@ -28,10 +28,12 @@ static struct {
   struct spinlock lock;
   int locking;
 
-  ushort attr;
   int escape;
   int bufCount;
   uchar buf[16];
+
+  ushort attr;
+  int flipColor;
 } cons;
 
 static char digits[] = "0123456789abcdef";
@@ -171,7 +173,7 @@ static const ushort kColorTable[16] = {
   11,
   15,
 };
-const int kDefaultColor = 7;
+const int kDefaultColor = 15;
 const int kDefaultBgColor = 0;
 
 static struct input s_input;
@@ -179,13 +181,27 @@ static struct input s_input;
 static void
 setFontColor(int c)
 {
-  cons.attr = (cons.attr & 0xf0ff) | (kColorTable[c] << 8);
+  if (!cons.flipColor)
+    cons.attr = (cons.attr & 0xf0ff) | (kColorTable[c] << 8);
+  else
+    cons.attr = (cons.attr & 0x0fff) | (kColorTable[c] << 12);
 }
 
 static void
 setBgColor(int c)
 {
-  cons.attr = (cons.attr & 0x0fff) | (kColorTable[c] << 12);
+  if (!cons.flipColor)
+    cons.attr = (cons.attr & 0x0fff) | (kColorTable[c] << 12);
+  else
+    cons.attr = (cons.attr & 0xf0ff) | (kColorTable[c] << 8);
+}
+
+static void
+flipColor(void)
+{
+  ushort a = cons.attr;
+  cons.attr = (a & 0x00ff) | ((a & 0xf000) >> 4) | ((a & 0x0f00) << 4);
+  cons.flipColor = 1 - cons.flipColor;
 }
 
 static int getCursorPos(void) {
@@ -331,8 +347,14 @@ procescseq(uchar c)
         int v = atoi((char*)&cons.buf[2]);
         switch (v) {
         case 0:  // Reset
+          cons.flipColor = 0;
           setFontColor(kDefaultColor);
           setBgColor(kDefaultBgColor);
+          break;
+        case 7:
+          if (!cons.flipColor) {
+            flipColor();
+          }
           break;
         default:
           {
@@ -437,9 +459,12 @@ consoleinit(void)
   devsw[CONSOLE].read = consoleread;
   devsw[CONSOLE].ioctl = consoleioctl;
   cons.locking = 1;
-  cons.attr = 0x0700;
   cons.escape = 0;
   cons.bufCount = 0;
+  cons.attr = 0x0000;
+  cons.flipColor = 0;
+  setFontColor(kDefaultColor);
+  setBgColor(kDefaultBgColor);
 
   ioapicenable(IRQ_KBD, 0);
 

@@ -104,10 +104,20 @@ strlen(const char *s)
 char*
 strchr(const char *s, char c)
 {
-  for(; *s; s++)
+  for(; *s != '\0'; ++s)
     if(*s == c)
       return (char*)s;
   return 0;
+}
+
+char*
+strrchr(const char *s, char c)
+{
+  char* last = 0;
+  for(; *s != '\0'; ++s)
+    if(*s == c)
+      last = (char*)s;
+  return last;
 }
 
 int

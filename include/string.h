@@ -5,6 +5,7 @@
 char* strcpy(char*, const char*);
 char* strncpy(char *s, const char *t, size_t n);
 char* strchr(const char*, char);
+char* strrchr(const char*, char);
 char* strstr(const char*, const char*);
 int strcmp(const char*, const char*);
 int strncmp(const char*, const char*, size_t);

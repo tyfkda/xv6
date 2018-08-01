@@ -235,6 +235,7 @@ out/mkfs: tools/mkfs.c kernel/fs.h
 UPROGS=\
 	fs/bin/cat\
 	fs/bin/clr\
+	fs/bin/cp\
 	fs/bin/date\
 	fs/bin/echo\
 	fs/bin/forktest\

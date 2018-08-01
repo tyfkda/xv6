@@ -151,6 +151,8 @@ extern int sys_write(void);
 extern int sys_uptime(void);
 extern int sys_time(void);
 extern int sys_ioctl(void);
+extern int sys_isatty(void);
+extern int sys_ftruncate(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -176,6 +178,8 @@ static int (*syscalls[])(void) = {
 [SYS_close]   sys_close,
 [SYS_time]    sys_time,
 [SYS_ioctl]   sys_ioctl,
+[SYS_isatty]  sys_isatty,
+[SYS_ftruncate]  sys_ftruncate,
 };
 
 void

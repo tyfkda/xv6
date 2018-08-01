@@ -133,3 +133,78 @@ int putchar(int c) {
   unsigned char buf = c;
   return fwrite(&buf, 1, 1, stdout);
 }
+
+ssize_t getline(char **pline, size_t *pcap, FILE *fp) {
+  const size_t MINSIZE = 16;
+  char* line = *pline;
+  size_t cap = *pcap;
+
+  ssize_t i = 0;
+  for (;;) {
+    int c = fgetc(fp);
+    if (c == EOF)
+      break;
+    if (i + 1 >= cap) {  // +1 for '\0'
+      size_t newcap = i + 2 < MINSIZE ? MINSIZE : (i + 1) * 2;
+      char* newline = realloc(line, newcap);
+      if (newline == 0) {
+        i = -1;
+        break;
+      }
+      line = newline;
+      cap = newcap;
+    }
+    line[i++] = c;
+    if (c == '\n')
+      break;
+  }
+
+  if (i == 0) {  // EOF
+    i = -1;
+  } else {
+  if (line != 0)
+    line[i] = '\0';
+  }
+
+  *pline = line;
+  *pcap = cap;
+
+  return i;
+}
+
+int sscanf(const char * restrict s_, const char * restrict format_, ...) {
+  const unsigned char* s = (const unsigned char*)s_;
+  const unsigned char* format = (const unsigned char*)format_;
+
+  va_list ap;
+  va_start(ap, format_);
+
+  int count = 0;
+  for (;;) {
+    unsigned char c = *format++;
+    if (c == '\0')
+      break;
+    if (c != '%') {
+      if (*s++ != c)
+        return count;
+    } else {
+      if (*format == '\0')
+        break;
+      switch (*format++) {
+      case 'd':
+        {
+          long val = strtol((const char*)s, (char**)&s, 10);
+          *va_arg(ap, int*) = (int)val;
+          ++count;
+        }
+        break;
+      default:
+        // TODO: Fix
+        break;
+      }
+    }
+  }
+
+  va_end(ap);
+  return count;
+}

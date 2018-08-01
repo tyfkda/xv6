@@ -678,3 +678,10 @@ nameiparent(const char *path, char *name)
 {
   return namex(path, 1, name);
 }
+
+void
+isetsize(struct inode* ip, uint size)
+{
+  ip->size = size;
+  // TODO: Release unused blocks.
+}

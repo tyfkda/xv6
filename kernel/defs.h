@@ -38,6 +38,8 @@ void            fileinit(void);
 int             fileread(struct file*, void*, int n);
 int             filestat(struct file*, struct stat*);
 int             filewrite(struct file*, void*, int n);
+int             filetruncate(struct file*, uint);
+int             fileisatty(struct file*);
 
 // fs.c
 void            readsb(int dev, struct superblock *sb);
@@ -57,6 +59,7 @@ struct inode*   nameiparent(const char*, char*);
 int             readi(struct inode*, void*, uint, uint);
 void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, void*, uint, uint);
+void            isetsize(struct inode*, uint);
 
 // ide.c
 void            ideinit(void);

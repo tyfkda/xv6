@@ -455,6 +455,17 @@ sys_pipe(void)
 }
 
 int
+sys_ftruncate(void)
+{
+  struct file *f;
+  uint length;
+
+  if(argfd(0, 0, &f) < 0 || argint(1, (int*)&length) < 0)
+    return -1;
+  return filetruncate(f, length);
+}
+
+int
 sys_time(void)
 {
   time_t *pt;
@@ -464,4 +475,14 @@ sys_time(void)
   }
   *pt = cmosepochtime();
   return 0;
+}
+
+int
+sys_isatty(void)
+{
+  struct file *f;
+
+  if(argfd(0, 0, &f) < 0)
+    return 0;
+  return fileisatty(f);
 }

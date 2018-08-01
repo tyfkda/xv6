@@ -97,15 +97,17 @@ inputintr(struct input *input, int (*getc)(void), void (*putc)(int))
     }
 
     if(c != 0 && input->e - input->r < INPUT_BUF){
-      if (c == '\n' || c == '\r') {
-        input->buf[input->e++ % INPUT_BUF] = '\n';
-        putc('\n');
-        flushedit(input);
-        break;
-      }
+      if (!input->nobuffering) {
+        if (c == '\n' || c == '\r') {
+          input->buf[input->e++ % INPUT_BUF] = '\n';
+          putc('\n');
+          flushedit(input);
+          break;
+        }
 
-      if (((c < ' ' && c != 0x1b) || c >= 0x80) && !input->nobuffering)
-        break;
+        if ((c < ' ' && c != 0x1b) || c >= 0x80)
+          break;
+      }
 
       // Shift after cursor to the right.
       for (uint i = input->e + 1; i > input->c; --i) {

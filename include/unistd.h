@@ -1,5 +1,13 @@
 #pragma once
 
+#define STDIN_FILENO   (0)
+#define STDOUT_FILENO  (1)
+#define STDERR_FILENO  (2)
+
+#ifndef NULL
+#define NULL  ((void*)0)
+#endif
+
 struct stat;
 struct rtcdate;
 
@@ -25,7 +33,12 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 int date(struct rtcdate *);
-int ioctl(int fd, int request, int flag);
+int ioctl(int fd, int request, ...);
+int isatty(int fd);
 
 // ulib.c
 int stat(const char*, struct stat*);
+
+int isatty(int fd);
+
+int ftruncate(int fd, unsigned int length);

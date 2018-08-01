@@ -33,4 +33,7 @@ int vfprintf(FILE*, const char*, va_list);
 int vsprintf(char*, const char*, va_list);
 int vsnprintf(char*, size_t n, const char*, va_list);
 
+int sscanf(const char * restrict s, const char * restrict format, ...);
+ssize_t getline(char **pline, size_t *pcap, FILE *fp);
+
 void perror(const char*);

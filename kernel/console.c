@@ -238,17 +238,23 @@ cgaputc(int c)
   // Cursor position: col + SCRW * row.
   pos = getCursorPos();
 
-  if(c == '\n')
-    pos += SCRW - pos % SCRW;
-  else if(c == '\b'){
+  if(c == '\n') {
+    if (!s_input.noechoback || pos < SCRW * (SCRH - 1))
+      pos += SCRW - pos % SCRW;
+  } else if (c == '\r') {
+    pos -= pos % SCRW;
+  } else if(c == '\b'){
     if(pos > 0)
       --pos;
-  } else
-    crt[pos++] = (c & 0xff) | cons.attr;
+  } else {
+    crt[pos] = (c & 0xff) | cons.attr;
+    if (!s_input.noechoback || pos % SCRW < SCRW - 1)
+      ++pos;
+  }
 
   if(pos >= SCRW * SCRH){
     if (s_input.noechoback)
-      --pos;
+      pos = SCRW * SCRH - 1;
     else
       pos = scrollUp(pos);
   }
@@ -283,6 +289,9 @@ procescseq(uchar c)
   cons.buf[cons.bufCount++] = c;
   if (cons.buf[1] == '[') {
     switch (c) {
+    case '?':
+      //cons.question = TRUE;
+      return;
     case 'B':
       // CUD: CUrsor Downward.
       {
@@ -333,13 +342,39 @@ procescseq(uchar c)
           int pos = getCursorPos();
           int start = 0, end = SCRW * SCRH;
           switch (n) {
-          case 0:  end = pos; break;
-          case 1:  start = pos; break;
+          case 0:  start = pos; break;
+          case 1:  end = pos; break;
           }
           for (int i = start; i < end; ++i)
-            crt[i] = 0x00 | 0x0700;
+            crt[i] = cons.attr;
         }
       }
+      break;
+    case 'K':
+      // EL
+      {
+        // TODO: Consider SPA and ERM.
+        int n = atoi((char*)&cons.buf[2]);
+        if (0 <= n && n <= 2) {
+          int pos = getCursorPos();
+          int y = pos / SCRW;
+          int start = 0 + y * SCRW, end = 0 + (y + 1) * SCRW;
+          switch (n) {
+          case 0:  start = pos; break;
+          case 1:  end = pos; break;
+          }
+          for (int i = start; i < end; ++i)
+            crt[i] = cons.attr;
+        }
+      }
+      break;
+    case 'h':
+      // DECSET
+      // TODO: Implement
+      break;
+    case 'l':
+      // DECRST
+      // TODO: Implement
       break;
     case 'm':
       // SGR: Select Graphic Rendition

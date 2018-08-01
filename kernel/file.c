@@ -9,6 +9,7 @@
 #include "fs.h"
 #include "spinlock.h"
 #include "sleeplock.h"
+#include "stat.h"
 
 struct devsw devsw[NDEV];
 struct {
@@ -165,4 +166,37 @@ filewrite(struct file *f, void *addr, int n)
     return i == n ? n : -1;
   }
   panic("filewrite");
+}
+
+int
+filetruncate(struct file* f, uint length)
+{
+  if(f->type == FD_INODE){
+    ilock(f->ip);
+    isetsize(f->ip, length);
+    iunlock(f->ip);
+    return 0;
+  }
+  return -1;
+}
+
+int
+fileisatty(struct file* f)
+{
+  int result = 0;
+  switch (f->type) {
+  case FD_INODE:
+    {
+      ilock(f->ip);
+      short type = f->ip->type;
+      iunlock(f->ip);
+      if (type == T_DEV) {  // TODO: Check
+        result = 1;
+      }
+    }
+    break;
+  default:
+    break;
+  }
+  return result;
 }

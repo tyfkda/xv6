@@ -27,8 +27,8 @@ putpadding(char *out, int o, int n, int m, char padding)
 
 // Output is not '\0' terminated.
 static int
-snprintuint(const char* digits, char *out, unsigned int n, unsigned int x, int base,
-            int order, int padding)
+snprintuint(char *out, unsigned int n, unsigned int x,
+            int base, const char* digits, int order, int padding)
 {
   char buf[16];
   int i, o;
@@ -112,15 +112,15 @@ vsnprintf(char *out, size_t n, const char *fmt_, va_list ap)
       int x = va_arg(ap, int);
       o += sprintsign(out + o, x < 0, sign, &order);
       unsigned int ux = x < 0 ? -x : x;
-      o += snprintuint(kHexDigits, out + o, n - o, ux, 10, order, padding);
+      o += snprintuint(out + o, n - o, ux, 10, kHexDigits, order, padding);
     } else if(c == 'x') {
-      o += snprintuint(kHexDigits, out + o, n - o, va_arg(ap, int), 16,
+      o += snprintuint(out + o, n - o, va_arg(ap, int), 16, kHexDigits,
                        order, padding);
     } else if(c == 'X') {
-      o += snprintuint(kUpperHexDigits, out + o, n - o, va_arg(ap, int), 16,
+      o += snprintuint(out + o, n - o, va_arg(ap, int), 16, kUpperHexDigits,
                        order, padding);
     } else if(c == 'p') {
-      o += snprintuint(kHexDigits, out + o, n - o, (uintptr_t)va_arg(ap, void*), 16,
+      o += snprintuint(out + o, n - o, (uintptr_t)va_arg(ap, void*), 16, kHexDigits,
                        order, padding);
     } else if(c == 's'){
       // ("%5", "foo")         = "  foo"

@@ -1,4 +1,5 @@
 #include "dirent.h"
+#include "fcntl.h"
 #include "stat.h"
 #include "stdio.h"
 #include "string.h"
@@ -41,7 +42,7 @@ ls(char *path)
   struct dirent de;
   struct stat st;
 
-  if((fd = open(path, 0)) < 0){
+  if((fd = open(path, O_RDONLY)) < 0){
     fprintf(stderr, "ls: cannot open %s\n", path);
     return 1;
   }

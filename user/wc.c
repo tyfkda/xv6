@@ -1,3 +1,4 @@
+#include "fcntl.h"
 #include "stdio.h"
 #include "stdlib.h"
 #include "string.h"
@@ -43,7 +44,7 @@ main(int argc, char *argv[])
   }
 
   for(i = 1; i < argc; i++){
-    if((fd = open(argv[i], 0)) < 0){
+    if((fd = open(argv[i], O_RDONLY)) < 0){
       fprintf(stderr, "wc: cannot open %s\n", argv[i]);
       exit(1);
     }

@@ -79,7 +79,7 @@ findenv(const char *name)
     if (strcmp(p->name, name) == 0)
       return p;
   }
-  return 0;
+  return NULL;
 }
 
 char*
@@ -87,7 +87,7 @@ getenv(const char *name)
 {
   struct envvar *p;
   p = findenv(name);
-  return p ? p->value : 0;
+  return p ? p->value : NULL;
 }
 
 void
@@ -96,7 +96,7 @@ putenv(const char *name, const char *value)
   struct envvar *p;
 
   p = findenv(name);
-  if (p != 0) {
+  if (p != NULL) {
     free(p->value);
   } else {
     p = malloc(sizeof(*p));
@@ -111,7 +111,7 @@ putenv(const char *name, const char *value)
 void
 expandenv(char **src, char **dst)
 {
-  for(; *src; ++src) {
+  for(; *src != '\0'; ++src) {
     if (**src != '$') {
       *dst++ = *src;
     } else {
@@ -120,7 +120,7 @@ expandenv(char **src, char **dst)
         *dst++ = var;  // TODO: Expand multi-values.
     }
   }
-  *dst = 0;
+  *dst = NULL;
 }
 
 static void
@@ -155,7 +155,7 @@ runcmd(struct cmd *cmd)
   struct redircmd *rcmd;
   int ec1, ec2;
 
-  if(cmd == 0)
+  if(cmd == NULL)
     exit(0);
 
   switch(cmd->type){
@@ -164,7 +164,7 @@ runcmd(struct cmd *cmd)
 
   case EXEC:
     ecmd = (struct execcmd*)cmd;
-    if(ecmd->argv[0] == 0)
+    if(ecmd->argv[0] == NULL)
       exit(0);
     runecmd(ecmd);
     break;
@@ -245,7 +245,7 @@ sh(FILE* fp, int tty)
       break;
     if(strncmp(buf, "cd ", 3) == 0){
       // Chdir must be called by the parent, not the child.
-      buf[strlen(buf)-1] = 0;  // chop \n
+      buf[strlen(buf)-1] = '\0';  // chop \n
       if(chdir(buf+3) < 0)
         fprintf(stderr, "cannot cd %s\n", buf+3);
       continue;
@@ -277,7 +277,7 @@ main(int argc, char* argv[])
   } else {
     for (int i = 1; i < argc; ++i) {
       FILE* fp = fopen(argv[i], "r");
-      if (fp == 0) {
+      if (fp == NULL) {
         char buf[128];
         sprintf(buf, "Cannot open: %s", argv[i]);
         panic(buf);
@@ -382,13 +382,13 @@ gettoken(char **ps, char *es, char **q, char **eq)
   int ret;
 
   s = *ps;
-  while(s < es && strchr(whitespace, *s))
+  while(s < es && strchr(whitespace, *s) != NULL)
     s++;
   if(q)
     *q = s;
   ret = *s;
   switch(*s){
-  case 0:
+  case '\0':
     break;
   case '|':
   case '(':
@@ -407,14 +407,15 @@ gettoken(char **ps, char *es, char **q, char **eq)
     break;
   default:
     ret = 'a';
-    while(s < es && !strchr(whitespace, *s) && !strchr(symbols, *s))
+    while(s < es && strchr(whitespace, *s) == NULL &&
+          strchr(symbols, *s) == NULL)
       s++;
     break;
   }
   if(eq)
     *eq = s;
 
-  while(s < es && strchr(whitespace, *s))
+  while(s < es && strchr(whitespace, *s) != NULL)
     s++;
   *ps = s;
   return ret;
@@ -426,10 +427,10 @@ peek(char **ps, char *es, char *toks)
   char *s;
 
   s = *ps;
-  while(s < es && strchr(whitespace, *s))
+  while(s < es && strchr(whitespace, *s) != NULL)
     s++;
   *ps = s;
-  return *s && strchr(toks, *s);
+  return *s != '\0' && strchr(toks, *s) != NULL;
 }
 
 struct cmd *parseline(char**, char*);
@@ -461,11 +462,11 @@ parseline(char **ps, char *es)
 
   cmd = parsepipe(ps, es);
   while(peek(ps, es, "&")){
-    gettoken(ps, es, 0, 0);
+    gettoken(ps, es, NULL, NULL);
     cmd = backcmd(cmd);
   }
   if(peek(ps, es, ";")){
-    gettoken(ps, es, 0, 0);
+    gettoken(ps, es, NULL, NULL);
     cmd = listcmd(cmd, parseline(ps, es));
   }
   return cmd;
@@ -478,7 +479,7 @@ parsepipe(char **ps, char *es)
 
   cmd = parseexec(ps, es);
   if(peek(ps, es, "|")){
-    gettoken(ps, es, 0, 0);
+    gettoken(ps, es, NULL, NULL);
     cmd = pipecmd(cmd, parsepipe(ps, es));
   }
   return cmd;
@@ -491,7 +492,7 @@ parseredirs(struct cmd *cmd, char **ps, char *es)
   char *q, *eq;
 
   while(peek(ps, es, "<>")){
-    tok = gettoken(ps, es, 0, 0);
+    tok = gettoken(ps, es, NULL, NULL);
     if(gettoken(ps, es, &q, &eq) != 'a')
       panic("missing file for redirection");
     switch(tok){
@@ -516,11 +517,11 @@ parseblock(char **ps, char *es)
 
   if(!peek(ps, es, "("))
     panic("parseblock");
-  gettoken(ps, es, 0, 0);
+  gettoken(ps, es, NULL, NULL);
   cmd = parseline(ps, es);
   if(!peek(ps, es, ")"))
     panic("syntax - missing )");
-  gettoken(ps, es, 0, 0);
+  gettoken(ps, es, NULL, NULL);
   cmd = parseredirs(cmd, ps, es);
   return cmd;
 }
@@ -553,8 +554,8 @@ parseexec(char **ps, char *es)
       panic("too many args");
     ret = parseredirs(ret, ps, es);
   }
-  cmd->argv[argc] = 0;
-  cmd->eargv[argc] = 0;
+  cmd->argv[argc] = NULL;
+  cmd->eargv[argc] = NULL;
   return ret;
 }
 
@@ -576,13 +577,13 @@ nulterminate(struct cmd *cmd)
   case EXEC:
     ecmd = (struct execcmd*)cmd;
     for(i=0; ecmd->argv[i]; i++)
-      *ecmd->eargv[i] = 0;
+      *ecmd->eargv[i] = '\0';
     break;
 
   case REDIR:
     rcmd = (struct redircmd*)cmd;
     nulterminate(rcmd->cmd);
-    *rcmd->efile = 0;
+    *rcmd->efile = '\0';
     break;
 
   case PIPE:

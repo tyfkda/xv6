@@ -95,7 +95,7 @@ void*
 calloc(size_t nbytes)
 {
   void *adr = malloc(nbytes);
-  if (adr != 0)
+  if (adr != NULL)
     memset(adr, 0, nbytes);
   return adr;
 }
@@ -105,15 +105,14 @@ realloc(void* p, size_t size)
 {
   if (size <= 0) {
     free(p);
-    return 0;
+    return NULL;
   }
 
-  if (p == 0) {
+  if (p == NULL)
     return malloc(size);
-  }
 
   void* buf = malloc(size);
-  if (buf != 0) {
+  if (buf != NULL) {
     Header* h = (Header*)p - 1;
     size_t s = (h->s.size - 1) * sizeof(Header);
     memcpy(buf, p, size > s ? s : size);

@@ -1,3 +1,4 @@
+#include "fcntl.h"
 #include "stdio.h"
 #include "stdlib.h"
 #include "unistd.h"
@@ -27,12 +28,12 @@ main(int argc, char *argv[])
   int fd, i;
 
   if(argc <= 1){
-    cat(0);
+    cat(STDIN_FILENO);
     return 0;
   }
 
   for(i = 1; i < argc; i++){
-    if((fd = open(argv[i], 0)) < 0){
+    if((fd = open(argv[i], O_RDONLY)) < 0){
       fprintf(stderr, "cat: cannot open %s\n", argv[i]);
       return 1;
     }

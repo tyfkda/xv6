@@ -32,7 +32,7 @@ runsh(int dev, const char* devname)
       fprintf(stderr, "init: exec sh failed\n");
       exit(1);
     }
-    while((wpid=wait(0)) >= 0 && wpid != pid)
+    while((wpid=wait(NULL)) >= 0 && wpid != pid)
       fprintf(stderr, "zombie!\n");
   }
 }
@@ -55,7 +55,7 @@ main(void)
       runsh(i + 1, devnames[i]);
   }
   for (int i = 0; i < 2; ++i) {
-    wait(0);
+    wait(NULL);
   }
   return 0;
 }

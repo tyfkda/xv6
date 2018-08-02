@@ -2,6 +2,7 @@
 #include "sprintf.h"
 #include "stdint.h"  // uintptr_t
 
+#define NULL  ((void*)0)
 #define MIN(a, b)  ((a) < (b) ? (a) : (b))
 
 static char kHexDigits[] = "0123456789abcdef";
@@ -167,7 +168,7 @@ vsnprintf(char *out, size_t n, const char *fmt_, va_list ap)
       // ("%5.3", "foobarbaz") = "  foo"
 
       const char *s = va_arg(ap, const char*);
-      if(s == 0)
+      if(s == NULL)
         s = "(null)";
       size_t len = strlen(s);
       if (suborder > 0)

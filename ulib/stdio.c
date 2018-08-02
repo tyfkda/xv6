@@ -162,7 +162,7 @@ ssize_t getline(char **pline, size_t *pcap, FILE *fp) {
   if (i == 0) {  // EOF
     i = -1;
   } else {
-  if (line != 0)
+  if (line != NULL)
     line[i] = '\0';
   }
 

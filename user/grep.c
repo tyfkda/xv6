@@ -1,5 +1,6 @@
 // Simple grep.  Only supports ^ . * $ operators.
 
+#include "fcntl.h"
 #include "stdio.h"
 #include "string.h"
 #include "unistd.h"
@@ -48,12 +49,12 @@ main(int argc, char *argv[])
   pattern = argv[1];
 
   if(argc <= 2){
-    grep(pattern, 0);
+    grep(pattern, STDIN_FILENO);
     return 1;
   }
 
   for(i = 2; i < argc; i++){
-    if((fd = open(argv[i], 0)) < 0){
+    if((fd = open(argv[i], O_RDONLY)) < 0){
       fprintf(stderr, "grep: cannot open %s\n", argv[i]);
       return 1;
     }

@@ -202,6 +202,7 @@ ULIBOBJS = \
 	obj/ulib/exit.o\
 	obj/ulib/localtime.o\
 	obj/ulib/printf.o\
+	obj/ulib/setjmp$(BITS).o\
 	obj/ulib/sprintf.o\
 	obj/ulib/stdio.o\
 	obj/ulib/string.o\

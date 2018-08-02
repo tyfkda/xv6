@@ -835,22 +835,27 @@ writeerr:
  * output in a single call, to avoid flickering effects. */
 struct abuf {
     char *b;
+    int capa;
     int len;
 };
 
-#define ABUF_INIT {NULL,0}
+#define ABUF_INIT {NULL,0,0}
 
 void abAppend(struct abuf *ab, const char *s, int len) {
-    char *new = realloc(ab->b,ab->len+len);
+    int addedLen = ab->len+len;
+    if (addedLen > ab->capa) {
+        char *new = realloc(ab->b,addedLen);
+        if (new == NULL) return;
+        ab->b = new;
+        ab->capa = addedLen;
+    }
 
-    if (new == NULL) return;
-    memcpy(new+ab->len,s,len);
-    ab->b = new;
-    ab->len += len;
+    memcpy(ab->b+ab->len,s,len);
+    ab->len = addedLen;
 }
 
 void abFree(struct abuf *ab) {
-    free(ab->b);
+    ab->len = 0;
 }
 
 /* This function writes the whole screen using VT100 escape characters
@@ -859,7 +864,7 @@ void editorRefreshScreen(void) {
     int y;
     erow *r;
     char buf[32];
-    struct abuf ab = ABUF_INIT;
+    static struct abuf ab = ABUF_INIT;
 
     abAppend(&ab,"\x1b[?25l",6); /* Hide cursor. */
     abAppend(&ab,"\x1b[H",3); /* Go home. */

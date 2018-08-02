@@ -2,7 +2,7 @@
 
 ifeq ("$(X32)","")
 BITS = 64
-XOBJS = kobj/vm64.o
+XOBJS = obj/knl/vm64.o
 XFLAGS = -m64 -DX64 -mcmodel=kernel -mtls-direct-seg-refs -mno-red-zone
 LDFLAGS = -m elf_x86_64 -nodefaultlibs
 QEMUTARGET = qemu-system-x86_64
@@ -16,44 +16,44 @@ endif
 OPT ?= -O2
 
 OBJS := \
-	kobj/bio.o\
-	kobj/console.o\
-	kobj/exec.o\
-	kobj/file.o\
-	kobj/fs.o\
-	kobj/ide.o\
-	kobj/input.o\
-	kobj/ioapic.o\
-	kobj/ioctl.o\
-	kobj/kalloc.o\
-	kobj/kbd.o\
-	kobj/lapic.o\
-	kobj/log.o\
-	kobj/main.o\
-	kobj/mp.o\
-	kobj/acpi.o\
-	kobj/picirq.o\
-	kobj/pipe.o\
-	kobj/proc.o\
-	kobj/sleeplock.o\
-	kobj/spinlock.o\
-	kobj/sprintf.o\
-	kobj/string.o\
-	kobj/swtch$(BITS).o\
-	kobj/syscall.o\
-	kobj/sysfile.o\
-	kobj/sysproc.o\
-	kobj/trapasm$(BITS).o\
-	kobj/trap.o\
-	kobj/uart.o\
-	kobj/vectors.o\
-	kobj/vm.o\
+	obj/knl/bio.o\
+	obj/knl/console.o\
+	obj/knl/exec.o\
+	obj/knl/file.o\
+	obj/knl/fs.o\
+	obj/knl/ide.o\
+	obj/knl/input.o\
+	obj/knl/ioapic.o\
+	obj/knl/ioctl.o\
+	obj/knl/kalloc.o\
+	obj/knl/kbd.o\
+	obj/knl/lapic.o\
+	obj/knl/log.o\
+	obj/knl/main.o\
+	obj/knl/mp.o\
+	obj/knl/acpi.o\
+	obj/knl/picirq.o\
+	obj/knl/pipe.o\
+	obj/knl/proc.o\
+	obj/knl/sleeplock.o\
+	obj/knl/spinlock.o\
+	obj/knl/sprintf.o\
+	obj/knl/string.o\
+	obj/knl/swtch$(BITS).o\
+	obj/knl/syscall.o\
+	obj/knl/sysfile.o\
+	obj/knl/sysproc.o\
+	obj/knl/trapasm$(BITS).o\
+	obj/knl/trap.o\
+	obj/knl/uart.o\
+	obj/knl/vectors.o\
+	obj/knl/vm.o\
 	$(XOBJS)
 
 ifneq ("$(MEMFS)","")
 # build filesystem image in to kernel and use memory-ide-device
 # instead of mounting the filesystem on ide1
-#OBJS := $(filter-out kobj/ide.o,$(OBJS)) kobj/memide.o
+#OBJS := $(filter-out obj/knl/ide.o,$(OBJS)) obj/knl/memide.o
 FSIMAGE := fs.img
 endif
 
@@ -119,33 +119,33 @@ xv6memfs.img: out/bootblock out/kernelmemfs.elf
 	dd if=out/kernelmemfs.elf of=$@ seek=1 conv=notrunc
 
 # kernel object files
-kobj/%.o: kernel/%.c
+obj/knl/%.o: kernel/%.c
+	@mkdir -p obj/knl
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+obj/knl/%.o: commonsrc/%.c
 	@mkdir -p kobj
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-kobj/%.o: commonsrc/%.c
-	@mkdir -p kobj
-	$(CC) $(CFLAGS) -c -o $@ $<
-
-kobj/%.o: kernel/%.S
+obj/knl/%.o: kernel/%.S
 	@mkdir -p kobj
 	$(CC) $(ASFLAGS) -c -o $@ $<
 
 # userspace object files
-uobj/%.o: user/%.c
-	@mkdir -p uobj
+obj/user/%.o: user/%.c
+	@mkdir -p obj/user
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-uobj/%.o: ulib/%.c
-	@mkdir -p uobj
+obj/ulib/%.o: ulib/%.c
+	@mkdir -p obj/ulib
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-uobj/%.o: commonsrc/%.c
-	@mkdir -p uobj
+obj/ulib/%.o: commonsrc/%.c
+	@mkdir -p obj/ulib
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-uobj/%.o: ulib/%.S
-	@mkdir -p uobj
+obj/ulib/%.o: ulib/%.S
+	@mkdir -p obj/ulib
 	$(CC) $(ASFLAGS) -c -o $@ $<
 
 out/bootblock: kernel/bootasm.S kernel/bootmain.c
@@ -172,7 +172,7 @@ out/initcode: $(INITCODESRC)
 	$(OBJCOPY) -S -O binary out/initcode.out $@
 	$(OBJDUMP) -S out/initcode.o > out/initcode.asm
 
-ENTRYCODE = kobj/entry$(BITS).o
+ENTRYCODE = obj/knl/entry$(BITS).o
 LINKSCRIPT = kernel/kernel$(BITS).ld
 out/kernel.elf: $(OBJS) $(ENTRYCODE) out/entryother out/initcode $(LINKSCRIPT) $(FSIMAGE)
 	$(LD) $(LDFLAGS) -T $(LINKSCRIPT) -o $@ $(ENTRYCODE) $(OBJS) -b binary out/initcode out/entryother $(FSIMAGE)
@@ -185,7 +185,7 @@ out/kernel.elf: $(OBJS) $(ENTRYCODE) out/entryother out/initcode $(LINKSCRIPT) $
 # exploring disk buffering implementations, but it is
 # great for testing the kernel on real hardware without
 # needing a scratch disk.
-MEMFSOBJS = $(filter-out kobj/ide.o,$(OBJS)) kobj/memide.o
+MEMFSOBJS = $(filter-out obj/knl/ide.o,$(OBJS)) obj/knl/memide.o
 out/kernelmemfs.elf: $(MEMFSOBJS) $(ENTRYCODE) out/entryother out/initcode $(LINKSCRIPT) fs.img
 	$(LD) $(LDFLAGS) -T $(LINKSCRIPT) -o $@ $(ENTRYCODE)  $(MEMFSOBJS) -b binary out/initcode out/entryother fs.img
 	$(OBJDUMP) -S $@ > out/kernelmemfs.asm
@@ -196,26 +196,26 @@ kernel/vectors.S: $(MKVECTORS)
 	perl $(MKVECTORS) > $@
 
 ULIBOBJS = \
-	uobj/crt0.o\
-	uobj/ctype.o\
-	uobj/errno.o\
-	uobj/exit.o\
-	uobj/localtime.o\
-	uobj/printf.o\
-	uobj/sprintf.o\
-	uobj/stdio.o\
-	uobj/string.o\
-	uobj/strlib.o\
-	uobj/termios.o\
-	uobj/time.o\
-	uobj/ulib.o\
-	uobj/umalloc.o\
-	uobj/usys.o\
+	obj/ulib/crt0.o\
+	obj/ulib/ctype.o\
+	obj/ulib/errno.o\
+	obj/ulib/exit.o\
+	obj/ulib/localtime.o\
+	obj/ulib/printf.o\
+	obj/ulib/sprintf.o\
+	obj/ulib/stdio.o\
+	obj/ulib/string.o\
+	obj/ulib/strlib.o\
+	obj/ulib/termios.o\
+	obj/ulib/time.o\
+	obj/ulib/ulib.o\
+	obj/ulib/umalloc.o\
+	obj/ulib/usys.o\
 
-uobj/ulib.a:	$(ULIBOBJS)
+obj/ulib/ulib.a:	$(ULIBOBJS)
 	ar rcs $@ $^
 
-fs/bin/%: uobj/%.o uobj/ulib.a
+fs/bin/%: obj/user/%.o obj/ulib/ulib.a
 	@mkdir -p fs out fs/bin
 	$(LD) $(LDFLAGS) -N -e _start -Ttext 0 -o $@ $^
 	$(OBJDUMP) -S $@ > out/$*.asm
@@ -230,7 +230,7 @@ out/mkfs: tools/mkfs.c kernel/fs.h
 # that disk image changes after first build are persistent until clean.  More
 # details:
 # http://www.gnu.org/software/make/manual/html_node/Chained-Rules.html
-.PRECIOUS: uobj/%.o
+.PRECIOUS: obj/ulib/%.o, obj/user/%.o
 
 UPROGS=\
 	fs/bin/cat\
@@ -264,7 +264,7 @@ fs.img: out/mkfs fs/README $(UPROGS)
 -include */*.d
 
 clean:
-	rm -rf out fs uobj kobj
+	rm -rf out fs obj
 	rm -f kernel/vectors.S xv6.img xv6memfs.img fs.img .gdbinit
 
 # run in emulators

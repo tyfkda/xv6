@@ -50,6 +50,20 @@ snprintuint(const char* digits, char *out, unsigned int n, unsigned int x, int b
   return o;
 }
 
+static int
+sprintsign(char *out, int negative, int force, int *porder)
+{
+  int o = 0;
+  if (negative) {
+    out[o++] = '-';
+  } else if (force) {
+    out[o++] = '+';
+  }
+  if (*porder > 1 && o > 0)
+    *porder -= o;
+  return o;
+}
+
 // Only understands %d, %x, %X, %p, %s, %c and "+-0~9".
 // '\0' is not put at the end if the buffer is smaller than output.
 int
@@ -96,24 +110,9 @@ vsnprintf(char *out, size_t n, const char *fmt_, va_list ap)
 
     if(c == 'd'){
       int x = va_arg(ap, int);
-      if (sign) {
-        c = '+';
-        if (x < 0) {
-          x = -x;
-          c = '-';
-        }
-        out[o++] = c;
-        if (o >= n)
-          break;
-        if (order > 1)
-          --order;
-      } else if (x < 0) {
-        x = -x;
-        out[o++] = '-';
-        if (o >= n)
-          break;
-      }
-      o += snprintuint(kHexDigits, out + o, n - o, x, 10, order, padding);
+      o += sprintsign(out + o, x < 0, sign, &order);
+      unsigned int ux = x < 0 ? -x : x;
+      o += snprintuint(kHexDigits, out + o, n - o, ux, 10, order, padding);
     } else if(c == 'x') {
       o += snprintuint(kHexDigits, out + o, n - o, va_arg(ap, int), 16,
                        order, padding);

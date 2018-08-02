@@ -53,13 +53,14 @@ snprintuint(const char* digits, char *out, unsigned int n, unsigned int x, int b
 // Only understands %d, %x, %X, %p, %s, %c and "+-0~9".
 // '\0' is not put at the end if the buffer is smaller than output.
 int
-vsnprintf(char *out, size_t n, const char *fmt, va_list ap)
+vsnprintf(char *out, size_t n, const char *fmt_, va_list ap)
 {
+  const unsigned char *fmt = (const unsigned char*)fmt_;
   int c, i;
   int o;
 
   for(i = o = 0; fmt[i] != '\0' && o < n; i++){
-    c = fmt[i] & 0xff;
+    c = fmt[i];
     if(c != '%'){
       out[o++] = c;
       continue;
@@ -70,17 +71,17 @@ vsnprintf(char *out, size_t n, const char *fmt, va_list ap)
     int order = 0, suborder = 0;
     int sign = 0;
     int leftalign = 0;
-    c = fmt[++i] & 0xff;
+    c = fmt[++i];
     if (c == '+') {
       sign = 1;
-      c = fmt[++i] & 0xff;
+      c = fmt[++i];
     } else if (c == '-') {
       leftalign = 1;
-      c = fmt[++i] & 0xff;
+      c = fmt[++i];
     }
     if (c == '0') {
       padding = '0';
-      c = fmt[++i] & 0xff;
+      c = fmt[++i];
     }
     if (c >= '1' && c <= '9') {
       order = c - '0';

@@ -25,12 +25,12 @@ runsh(int dev, const char* devname)
     pid = fork();
     if(pid < 0){
       fprintf(stderr, "init: fork failed\n");
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     if(pid == 0){
       exec("sh", argv);
       fprintf(stderr, "init: exec sh failed\n");
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     while((wpid=wait(0)) >= 0 && wpid != pid)
       fprintf(stderr, "zombie!\n");
@@ -49,7 +49,7 @@ main(void)
     int pid = fork();
     if (pid < 0) {
       fprintf(stderr, "init: fork failed\n");
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     if (pid == 0)
       runsh(i + 1, devnames[i]);
@@ -57,5 +57,5 @@ main(void)
   for (int i = 0; i < 2; ++i) {
     wait(0);
   }
-  return 0;
+  return EXIT_SUCCESS;
 }

@@ -140,7 +140,7 @@ runecmd(struct execcmd *ecmd)
 
   exec(argv[0], argv);
   fprintf(stderr, "sh: command not found: %s\n", ecmd->argv[0]);
-  exit(1);
+  exit(EXIT_FAILURE);
 }
 
 // Execute cmd.  Never returns.
@@ -156,7 +156,7 @@ runcmd(struct cmd *cmd)
   int ec1, ec2;
 
   if(cmd == 0)
-    exit(0);
+    exit(EXIT_SUCCESS);
 
   switch(cmd->type){
   default:
@@ -165,7 +165,7 @@ runcmd(struct cmd *cmd)
   case EXEC:
     ecmd = (struct execcmd*)cmd;
     if(ecmd->argv[0] == 0)
-      exit(0);
+      exit(EXIT_SUCCESS);
     runecmd(ecmd);
     break;
 
@@ -174,7 +174,7 @@ runcmd(struct cmd *cmd)
     close(rcmd->fd);
     if(open(rcmd->file, rcmd->mode) < 0){
       fprintf(stderr, "open %s failed\n", rcmd->file);
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     runcmd(rcmd->cmd);
     break;
@@ -210,7 +210,7 @@ runcmd(struct cmd *cmd)
     close(p[1]);
     wait(&ec1);
     wait(&ec2);
-    exit(ec1 ? ec1 : ec2 ? ec2 : 0);
+    exit(ec1 ? ec1 : ec2 ? ec2 : EXIT_SUCCESS);
     break;
 
   case BACK:
@@ -219,7 +219,7 @@ runcmd(struct cmd *cmd)
       runcmd(bcmd->cmd);
     break;
   }
-  exit(1);
+  exit(EXIT_FAILURE);
 }
 
 int
@@ -293,7 +293,7 @@ void
 panic(char *s)
 {
   fprintf(stderr, "%s\n", s);
-  exit(1);
+  exit(EXIT_FAILURE);
 }
 
 int

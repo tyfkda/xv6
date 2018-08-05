@@ -1,6 +1,7 @@
 // Simple grep.  Only supports ^ . * $ operators.
 
 #include "stdio.h"
+#include "stdlib.h"
 #include "string.h"
 #include "unistd.h"
 
@@ -43,13 +44,13 @@ main(int argc, char *argv[])
 
   if(argc <= 1){
     fprintf(stderr, "usage: grep pattern [file ...]\n");
-    return 1;
+    return EXIT_FAILURE;
   }
   pattern = argv[1];
 
   if(argc <= 2){
     grep(pattern, 0);
-    return 1;
+    return EXIT_FAILURE;
   }
 
   for(i = 2; i < argc; i++){
@@ -60,7 +61,7 @@ main(int argc, char *argv[])
     grep(pattern, fd);
     close(fd);
   }
-  return 0;
+  return EXIT_SUCCESS;
 }
 
 // Regexp matcher from Kernighan & Pike,

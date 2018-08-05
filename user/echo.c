@@ -1,4 +1,5 @@
 #include "stdio.h"
+#include "stdlib.h"
 
 int
 main(int argc, char *argv[])
@@ -7,5 +8,5 @@ main(int argc, char *argv[])
 
   for(i = 1; i < argc; i++)
     printf("%s%s", argv[i], i+1 < argc ? " " : "\n");
-  return 0;
+  return EXIT_SUCCESS;
 }

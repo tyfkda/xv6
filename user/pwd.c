@@ -2,6 +2,7 @@
 #include "fcntl.h"
 #include "stat.h"
 #include "stdio.h"
+#include "stdlib.h"
 #include "string.h"
 #include "unistd.h"
 
@@ -19,11 +20,11 @@ int main(int argc, char *argv[]) {
   char resultPath[512];
   if (!getcwd(resultPath)) {
     fprintf(stderr, "pwd failed");
-    return 1;
+    return EXIT_FAILURE;
   }
 
   printf("%s\n", resultPath);
-  return 0;
+  return EXIT_SUCCESS;
 }
 
 static int getcwd(char* resultPath) {

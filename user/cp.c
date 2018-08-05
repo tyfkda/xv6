@@ -9,7 +9,7 @@ int isDirectory(const char* fn) {
   struct stat st;
   if (stat(fn, &st) < 0) {
     fprintf(stderr, "stat failed [%s]\n", fn);
-    exit(1);
+    exit(EXIT_FAILURE);
   }
   return st.type == T_DIR;
 }
@@ -23,13 +23,13 @@ void cp(const char* srcFn, const char* dstFn) {
   int srcFd = open(srcFn, O_RDONLY);
   if (srcFd < 0) {
     fprintf(stderr, "cp: file not found [%s]\n", srcFn);
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 
   int dstFd = open(dstFn, O_WRONLY | O_TRUNC | O_CREAT);
   if (dstFd < 0) {
     fprintf(stderr, "cp: open failed [%s]\n", dstFn);
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 
   for (;;) {
@@ -44,7 +44,7 @@ void cp(const char* srcFn, const char* dstFn) {
 
     if (write(dstFd, buf, n) != n) {
       fprintf(stderr, "cp: write error\n");
-      exit(1);
+      exit(EXIT_FAILURE);
     }
   }
 
@@ -55,7 +55,7 @@ void cp(const char* srcFn, const char* dstFn) {
 int main(int argc, char *argv[]) {
   if (argc < 3) {
     fprintf(stderr, "usage: src ... dest\n");
-    return 1;
+    return EXIT_FAILURE;
   }
 
   const char* dstFn = argv[argc - 1];
@@ -71,5 +71,5 @@ int main(int argc, char *argv[]) {
     cp(srcFn, dstFn);
   }
 
-  return 0;
+  return EXIT_SUCCESS;
 }

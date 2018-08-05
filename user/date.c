@@ -1,4 +1,5 @@
 #include "stdio.h"
+#include "stdlib.h"
 #include "time.h"
 #include "unistd.h"
 
@@ -10,7 +11,7 @@ int main() {
   time_t t;
   if (time(&t) == (time_t)-1) {
     fprintf(stderr, "Failed to get time\n");
-    return 1;
+    return EXIT_FAILURE;
   }
 
   struct tm* t2 = localtime(&t);
@@ -18,5 +19,5 @@ int main() {
          t2->tm_year + 1900, t2->tm_mon + 1, t2->tm_mday, kDayOfWeek[t2->tm_wday],
          t2->tm_hour, t2->tm_min, t2->tm_sec, (int)t);
 
-  return 0;
+  return EXIT_SUCCESS;
 }

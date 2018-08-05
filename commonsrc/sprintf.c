@@ -27,8 +27,8 @@ putpadding(char *out, int o, int n, int m, char padding)
 
 // Output is not '\0' terminated.
 static int
-snprintuint(const char* digits, char *out, unsigned int n, unsigned int x, int base,
-            int order, int padding)
+snprintuint(char *out, unsigned int n, unsigned int x,
+            int base, const char* digits, int order, int padding)
 {
   char buf[16];
   int i, o;
@@ -47,6 +47,44 @@ snprintuint(const char* digits, char *out, unsigned int n, unsigned int x, int b
   for (o = 0; --i >= 0 && o < n; ++o)
     out[o] = buf[i];
 
+  return o;
+}
+
+static int
+snprintulong(char *out, unsigned int n, unsigned long x,
+             int base, const char* digits, int order, int padding)
+{
+  char buf[32];
+  int i, o;
+
+  i = 0;
+  do{
+    buf[i++] = digits[x % base];
+    x /= base;
+  }while(x != 0);
+
+  if (i < order) {
+    memset(buf + i, padding, order - i);
+    i = order;
+  }
+
+  for (o = 0; --i >= 0 && o < n; ++o)
+    out[o] = buf[i];
+
+  return o;
+}
+
+static int
+sprintsign(char *out, int negative, int force, int *porder)
+{
+  int o = 0;
+  if (negative) {
+    out[o++] = '-';
+  } else if (force) {
+    out[o++] = '+';
+  }
+  if (*porder > 1 && o > 0)
+    *porder -= o;
   return o;
 }
 
@@ -71,6 +109,7 @@ vsnprintf(char *out, size_t n, const char *fmt_, va_list ap)
     int order = 0, suborder = 0;
     int sign = 0;
     int leftalign = 0;
+    int bLong = 0;
     c = fmt[++i];
     if (c == '+') {
       sign = 1;
@@ -94,34 +133,30 @@ vsnprintf(char *out, size_t n, const char *fmt_, va_list ap)
       }
     }
 
+    if(c == 'l'){
+      bLong = 1;
+      c = fmt[++i];
+    }
     if(c == 'd'){
-      int x = va_arg(ap, int);
-      if (sign) {
-        c = '+';
-        if (x < 0) {
-          x = -x;
-          c = '-';
-        }
-        out[o++] = c;
-        if (o >= n)
-          break;
-        if (order > 1)
-          --order;
-      } else if (x < 0) {
-        x = -x;
-        out[o++] = '-';
-        if (o >= n)
-          break;
+      if (bLong) {
+        long x = va_arg(ap, long);
+        o += sprintsign(out + o, x < 0, sign, &order);
+        unsigned long ux = x < 0 ? -x : x;
+        o += snprintulong(out + o, n - o, ux, 10, kHexDigits, order, padding);
+      } else {
+        int x = va_arg(ap, int);
+        o += sprintsign(out + o, x < 0, sign, &order);
+        unsigned int ux = x < 0 ? -x : x;
+        o += snprintuint(out + o, n - o, ux, 10, kHexDigits, order, padding);
       }
-      o += snprintuint(kHexDigits, out + o, n - o, x, 10, order, padding);
     } else if(c == 'x') {
-      o += snprintuint(kHexDigits, out + o, n - o, va_arg(ap, int), 16,
+      o += snprintuint(out + o, n - o, va_arg(ap, int), 16, kHexDigits,
                        order, padding);
     } else if(c == 'X') {
-      o += snprintuint(kUpperHexDigits, out + o, n - o, va_arg(ap, int), 16,
+      o += snprintuint(out + o, n - o, va_arg(ap, int), 16, kUpperHexDigits,
                        order, padding);
     } else if(c == 'p') {
-      o += snprintuint(kHexDigits, out + o, n - o, (uintptr_t)va_arg(ap, void*), 16,
+      o += snprintuint(out + o, n - o, (uintptr_t)va_arg(ap, void*), 16, kHexDigits,
                        order, padding);
     } else if(c == 's'){
       // ("%5", "foo")         = "  foo"

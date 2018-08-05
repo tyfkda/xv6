@@ -8,9 +8,9 @@ sys_ioctl(void)
 {
   struct file *f;
   int request;
-  int flag;
+  uintp arg;
 
-  if(argfd(0, 0, &f) < 0 || argint(1, &request) < 0 || argint(2, &flag) < 0)
+  if(argfd(0, 0, &f) < 0 || argint(1, &request) < 0 || arguintp(2, &arg) < 0)
     return -1;
 
   // file
@@ -26,7 +26,7 @@ sys_ioctl(void)
     iunlock(f->ip);
   } else {
     iunlock(ip);
-    result = devsw[ip->major].ioctl(request, flag);
+    result = devsw[ip->major].ioctl(request, arg);
   }
 
   return result;

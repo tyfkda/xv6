@@ -1,8 +1,9 @@
 #pragma once
 
 // tcgetattr, tcsetattr
-#define TCSANOW    (0)
-#define TCSAFLUSH  (1)
+#define	TCSANOW		(0)
+#define	TCSADRAIN	(1)
+#define	TCSAFLUSH	(2)
 
 // c_iflag
 #define BRKINT  (0)

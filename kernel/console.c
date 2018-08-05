@@ -18,6 +18,7 @@
 #include "x86.h"
 #include "input.h"
 #include "stdio.h"  // for sprintf
+#include "sys/ioctl.h"
 
 static void consputc(int);
 static void consuartputc(int);
@@ -478,10 +479,29 @@ consoleread(void *dst, int n)
 }
 
 int
-consoleioctl(int request, int flag)
+consoleioctl(int request, uintp flag)
 {
-  s_input.nobuffering = flag & 1;
-  s_input.noechoback = (flag >> 1) & 1;
+  switch (request) {
+  case TCGETS:
+    {
+      int value = 0;
+      if (s_input.nobuffering)
+        value |= 1 << 0;
+      if (s_input.noechoback)
+        value |= 1 << 1;
+      return value;
+    }
+
+  case TCSETS:
+  case TCSETSW:
+  case TCSETSF:
+    s_input.nobuffering = flag & 1;
+    s_input.noechoback = (flag >> 1) & 1;
+    return 0;
+
+  default:
+    return -1;
+  }
   return 0;
 }
 

@@ -2,6 +2,7 @@
 
 #include "defs.h"
 #include "input.h"
+#include "sys/ioctl.h"
 #include "traps.h"
 #include "x86.h"
 
@@ -121,11 +122,29 @@ uartwrite(const void *buf_, int n)
 }
 
 int
-uartioctl(int request, int flag)
+uartioctl(int request, uintp flag)
 {
-  s_input.nobuffering = flag & 1;
-  s_input.noechoback = (flag >> 1) & 1;
-  return 0;
+  switch (request) {
+  case TCGETS:
+    {
+      int value = 0;
+      if (s_input.nobuffering)
+        value |= 1 << 0;
+      if (s_input.noechoback)
+        value |= 1 << 1;
+      return value;
+    }
+
+  case TCSETS:
+  case TCSETSW:
+  case TCSETSF:
+    s_input.nobuffering = flag & 1;
+    s_input.noechoback = (flag >> 1) & 1;
+    return 0;
+
+  default:
+    return -1;
+  }
 }
 
 void

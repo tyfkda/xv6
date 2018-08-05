@@ -37,7 +37,7 @@ struct inode {
 struct devsw {
   int (*read)(void*, int);
   int (*write)(const void*, int);
-  int (*ioctl)(int /*request*/, int /*flag*/);
+  int (*ioctl)(int /*request*/, uintp /*arg*/);
 };
 
 extern struct devsw devsw[];

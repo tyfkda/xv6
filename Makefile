@@ -125,11 +125,11 @@ obj/knl/%.o: kernel/%.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 obj/knl/%.o: commonsrc/%.c
-	@mkdir -p kobj
+	@mkdir -p obj/knl
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 obj/knl/%.o: kernel/%.S
-	@mkdir -p kobj
+	@mkdir -p obj/knl
 	$(CC) $(ASFLAGS) -c -o $@ $<
 
 # userspace object files

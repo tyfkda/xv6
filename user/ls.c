@@ -7,10 +7,10 @@
 #include "unistd.h"
 
 char*
-fmtname(char *path)
+fmtname(const char *path)
 {
   static char buf[DIRSIZ+1];
-  char *p;
+  const char *p;
 
   // Find first character after last slash.
   for(p=path+strlen(path); p >= path && *p != '/'; p--)
@@ -19,7 +19,7 @@ fmtname(char *path)
 
   // Return blank-padded name.
   if(strlen(p) >= DIRSIZ)
-    return p;
+    return (char*)p;
   memmove(buf, p, strlen(p));
   memset(buf+strlen(p), ' ', DIRSIZ-strlen(p));
   return buf;
@@ -34,12 +34,36 @@ void dumpinfo(const char* name, const struct stat* st) {
          t->tm_hour, t->tm_min);
 }
 
-int
-ls(char *path)
+void lsdir(const char *path, int fd)
 {
   char buf[512], *p;
-  int fd;
   struct dirent de;
+  struct stat st;
+
+  if(strlen(path) + 1 + DIRSIZ + 1 > sizeof buf){
+    fprintf(stderr, "ls: path too long\n");
+    return;
+  }
+  strcpy(buf, path);
+  p = buf+strlen(buf);
+  *p++ = '/';
+  while(read(fd, &de, sizeof(de)) == sizeof(de)){
+    if(de.inum == 0)
+      continue;
+    memmove(p, de.name, DIRSIZ);
+    p[DIRSIZ] = 0;
+    if(stat(buf, &st) < 0){
+      fprintf(stderr, "ls: cannot stat %s\n", buf);
+      continue;
+    }
+    dumpinfo(fmtname(buf), &st);
+  }
+}
+
+int
+ls(const char *path)
+{
+  int fd;
   struct stat st;
 
   if((fd = open(path, O_RDONLY)) < 0){
@@ -59,24 +83,7 @@ ls(char *path)
     break;
 
   case T_DIR:
-    if(strlen(path) + 1 + DIRSIZ + 1 > sizeof buf){
-      fprintf(stderr, "ls: path too long\n");
-      break;
-    }
-    strcpy(buf, path);
-    p = buf+strlen(buf);
-    *p++ = '/';
-    while(read(fd, &de, sizeof(de)) == sizeof(de)){
-      if(de.inum == 0)
-        continue;
-      memmove(p, de.name, DIRSIZ);
-      p[DIRSIZ] = 0;
-      if(stat(buf, &st) < 0){
-        fprintf(stderr, "ls: cannot stat %s\n", buf);
-        continue;
-      }
-      dumpinfo(fmtname(buf), &st);
-    }
+    lsdir(path, fd);
     break;
   }
   close(fd);

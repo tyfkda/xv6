@@ -82,6 +82,17 @@ sys_read(void)
 }
 
 int
+sys_readdir(void)
+{
+  struct file *f;
+  char *p;
+
+  if(argfd(0, 0, &f) < 0 || argptr(1, &p, sizeof(struct dirent)) < 0)
+    return -1;
+  return filereaddir(f, p);
+}
+
+int
 sys_write(void)
 {
   struct file *f;

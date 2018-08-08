@@ -117,12 +117,40 @@ fileread(struct file *f, void *addr, int n)
     return piperead(f->pipe, addr, n);
   if(f->type == FD_INODE){
     ilock(f->ip);
-    if((r = readi(f->ip, addr, f->off, n)) > 0)
-      f->off += r;
+    if (f->ip->type == T_DIR) {
+      r = -1;
+    } else {
+      if((r = readi(f->ip, addr, f->off, n)) > 0)
+        f->off += r;
+    }
     iunlock(f->ip);
     return r;
   }
   panic("fileread");
+}
+
+// Read directory from file f.
+int
+filereaddir(struct file *f, void *addr)
+{
+  int r;
+
+  if(f->readable == 0)
+    return -1;
+  if(f->type == FD_PIPE)
+    return -1;
+  if(f->type == FD_INODE){
+    ilock(f->ip);
+    if (f->ip->type == T_DIR) {
+      if((r = readi(f->ip, addr, f->off, sizeof(struct dirent))) > 0)
+        f->off += r;
+    } else {
+      r = -1;
+    }
+    iunlock(f->ip);
+    return r;
+  }
+  panic("filereaddir");
 }
 
 //PAGEBREAK!

@@ -24,3 +24,4 @@
 #define SYS_ioctl  23
 #define SYS_isatty 24
 #define SYS_ftruncate 25
+#define SYS_readdir 26

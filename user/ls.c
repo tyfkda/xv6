@@ -2,6 +2,7 @@
 #include "fcntl.h"
 #include "stat.h"
 #include "stdio.h"
+#include "stdlib.h"
 #include "string.h"
 #include "time.h"
 #include "unistd.h"
@@ -34,10 +35,9 @@ void dumpinfo(const char* name, const struct stat* st) {
          t->tm_hour, t->tm_min);
 }
 
-void lsdir(const char *path, int fd)
+void lsdir(const char *path)
 {
   char buf[512], *p;
-  struct dirent de;
   struct stat st;
 
   if(strlen(path) + 1 + DIRSIZ + 1 > sizeof buf){
@@ -47,10 +47,19 @@ void lsdir(const char *path, int fd)
   strcpy(buf, path);
   p = buf+strlen(buf);
   *p++ = '/';
-  while(read(fd, &de, sizeof(de)) == sizeof(de)){
-    if(de.inum == 0)
-      continue;
-    memmove(p, de.name, DIRSIZ);
+
+  DIR *dir = opendir(path);
+  if (dir == NULL) {
+    fprintf(stderr, "opendir failed: %s\n", path);
+    exit(1);
+  }
+
+  for (;;) {
+    struct dirent* de = readdir(dir);
+    if (de == NULL)
+      break;
+
+    memmove(p, de->name, DIRSIZ);
     p[DIRSIZ] = 0;
     if(stat(buf, &st) < 0){
       fprintf(stderr, "ls: cannot stat %s\n", buf);
@@ -58,22 +67,17 @@ void lsdir(const char *path, int fd)
     }
     dumpinfo(fmtname(buf), &st);
   }
+
+  closedir(dir);
 }
 
 int
 ls(const char *path)
 {
-  int fd;
   struct stat st;
 
-  if((fd = open(path, O_RDONLY)) < 0){
-    fprintf(stderr, "ls: cannot open %s\n", path);
-    return 1;
-  }
-
-  if(fstat(fd, &st) < 0){
+  if(stat(path, &st) < 0){
     fprintf(stderr, "ls: cannot stat %s\n", path);
-    close(fd);
     return 1;
   }
 
@@ -83,10 +87,9 @@ ls(const char *path)
     break;
 
   case T_DIR:
-    lsdir(path, fd);
+    lsdir(path);
     break;
   }
-  close(fd);
   return 0;
 }
 

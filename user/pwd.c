@@ -13,7 +13,7 @@
 
 static int getcwd(char* resultPath);
 static char* goUp(int ino, char* ancestorPath, char* resultPath);
-static int dirlookup(int fd, int ino, char* p);
+static int dirlookup(DIR *dir, int ino, char* p);
 
 int main(int argc, char *argv[]) {
   char resultPath[512];
@@ -56,18 +56,18 @@ static char* goUp(int ino, char* ancestorPath, char* resultPath) {
   }
 
   char* foundPath = NULL;
-  int fd = open(ancestorPath, O_RDONLY);
-  if (fd >= 0) {
+  DIR *dir = opendir(ancestorPath);
+  if (dir != NULL) {
     char* p = goUp(st.ino, ancestorPath, resultPath);
     if (p != NULL) {
       strcpy(p, PATH_SEPARATOR);
       p += sizeof(PATH_SEPARATOR) - 1;
 
       // Find current directory.
-      if (dirlookup(fd, ino, p))
+      if (dirlookup(dir, ino, p))
         foundPath = p + strlen(p);
     }
-    close(fd);
+    closedir(dir);
   }
   return foundPath;
 }
@@ -75,13 +75,11 @@ static char* goUp(int ino, char* ancestorPath, char* resultPath) {
 // @param fd   file descriptor for a directory.
 // @param ino  target inode number.
 // @param p    [out] file name (part of absPath), overwritten by the file name of the ino.
-static int dirlookup(int fd, int ino, char* p) {
-  struct dirent de;
-  while (read(fd, &de, sizeof(de)) == sizeof(de)) {
-    if (de.inum == 0)
-      continue;
-    if (de.inum == ino) {
-      memmove(p, de.name, DIRSIZ);
+static int dirlookup(DIR *dir, int ino, char* p) {
+  struct dirent* de;
+  while ((de = readdir(dir)) != NULL) {
+    if (de->inum == ino) {
+      memmove(p, de->name, DIRSIZ);
       p[DIRSIZ] = '\0';
       return TRUE;
     }

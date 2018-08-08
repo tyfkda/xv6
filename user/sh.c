@@ -406,6 +406,22 @@ gettoken(char **ps, char *es, char **q, char **eq)
       s++;
     }
     break;
+  case '\'':
+    {
+      char term = *s++;
+      if(q)
+        *q = s;
+      for (;;) {
+        if (*s == term) {
+          *s = ' ';
+          ret = 'a';
+          break;
+        }
+        if (++s >= es)
+          panic("quote not closed");
+      }
+    }
+    break;
   default:
     ret = 'a';
     while(s < es && strchr(whitespace, *s) == NULL &&

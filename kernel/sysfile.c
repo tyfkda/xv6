@@ -315,7 +315,7 @@ sys_open(void)
     if(ip->type == T_DIR && omode != O_RDONLY){
       iunlockput(ip);
       end_op();
-      return -EINVAL;
+      return -EISDIR;
     }
   }
 
@@ -324,7 +324,7 @@ sys_open(void)
       fileclose(f);
     iunlockput(ip);
     end_op();
-    return -ENOMEM;
+    return -EMFILE;
   }
   iunlock(ip);
   end_op();

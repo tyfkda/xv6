@@ -15,5 +15,9 @@ extern int errno;
 #define EAGAIN          (11)      /* Try again */
 #define ENOMEM          (12)      /* Out of memory */
 
+#define ENOTDIR         (20)      /* Not a directory */
+#define EISDIR          (21)      /* Is a directory */
 #define EINVAL          (22)      /* Invalid argument */
+#define ENFILE          (23)      /* File table overflow */
+#define EMFILE          (24)      /* Too many open files */
 #define ENOTTY          (25)      /* Not a typewriter */

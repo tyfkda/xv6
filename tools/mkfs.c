@@ -1,20 +1,15 @@
 #include <assert.h>
-#include <dirent.h>
-#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 
-#define stat xv6_stat  // avoid clash with host struct stat
-#define dirent xv6_dirent  // avoid clash with host struct dirent
 #include "../include/stat.h"
 #include "../kernel/fs.h"
 #include "../kernel/param.h"
-#undef stat
-#undef dirent
+
+#include "./hostfsaux.h"
 
 #ifndef static_assert
 # define static_assert(a, b) do { switch (0) case 0: case (a): ; } while (0)
@@ -110,7 +105,7 @@ static void clear_all_sectors() {
 }
 
 static void putdirent(uint parent, uint inum, const char *name) {
-  struct xv6_dirent de;
+  struct dirent de;
   assert(strchr(name, DS) == NULL);
   bzero(&de, sizeof(de));
   de.inum = xshort(inum);
@@ -135,7 +130,7 @@ static void putfile(uint parent, const char *path) {
   uint inum;
   char buf[BSIZE];
 
-  fd = open(path, 0);
+  fd = host_readopen(path);
   if(fd < 0){
     perror(path);
     exit(1);
@@ -144,10 +139,10 @@ static void putfile(uint parent, const char *path) {
   inum = ialloc(T_FILE);
   putdirent(parent, inum, getbasename(path));
 
-  while((cc = read(fd, buf, sizeof(buf))) > 0)
+  while((cc = host_read(fd, buf, sizeof(buf))) > 0)
     iappend(inum, buf, cc);
 
-  close(fd);
+  host_close(fd);
 }
 
 // Is current directory?
@@ -175,34 +170,28 @@ static uint iallocdir(uint parent, const char *name) {
 // Put files in a given directory recursively.
 static void putdirentries(uint inum, const char *path) {
   // List up directory entries.
-  DIR* dir = opendir(path);
+  HOSTDIR *dir = host_opendir(path);
   if (dir == NULL) {
     perror(path);
     exit(1);
   }
 
-  struct dirent* dent;
-  while ((dent = readdir(dir)) != NULL) {
-    if (iscurdir(dent->d_name) || isparentdir(dent->d_name))
+  const char *entry;
+  while ((entry = host_readdir(dir)) != NULL) {
+    if (iscurdir(entry) || isparentdir(entry))
       continue;
 
     char child_path[128];
     // TODO: Avoid buffer overrun.
-    snprintf(child_path, sizeof(child_path), "%s%c%s", path, DS, dent->d_name);
+    snprintf(child_path, sizeof(child_path), "%s%c%s", path, DS, entry);
     put1(inum, child_path, TRUE);
   }
 
-  closedir(dir);
+  host_closedir(dir);
 }
 
 static void put1(uint inum, const char *path, int create_dir) {
-  struct stat st;
-  if (stat(path, &st) != 0) {
-    perror(path);
-    exit(1);
-  }
-
-  if ((st.st_mode & S_IFMT) == S_IFDIR) {
+  if (host_isdir(path)) {
     uint target = create_dir ? iallocdir(inum, getbasename(path)) : inum;
     putdirentries(target, path);
   } else {
@@ -227,12 +216,12 @@ main(int argc, char *argv[])
   }
 
   assert((BSIZE % sizeof(struct dinode)) == 0);
-  assert((BSIZE % sizeof(struct xv6_dirent)) == 0);
+  assert((BSIZE % sizeof(struct dirent)) == 0);
 
   //time(&mtime);
   mtime = 0;  // for test
 
-  fsfd = open(argv[1], O_RDWR|O_CREAT|O_TRUNC, 0666);
+  fsfd = host_createopen(argv[1]);
   if(fsfd < 0){
     perror(argv[1]);
     exit(1);
@@ -261,17 +250,19 @@ main(int argc, char *argv[])
 
   balloc(freeblock);
 
+  host_close(fsfd);
+
   return 0;
 }
 
 void
 wsect(uint sec, void *buf)
 {
-  if(lseek(fsfd, sec * BSIZE, 0) != sec * BSIZE){
+  if(host_lseek(fsfd, sec * BSIZE, 0) != sec * BSIZE){
     perror("lseek");
     exit(1);
   }
-  if(write(fsfd, buf, BSIZE) != BSIZE){
+  if(host_write(fsfd, buf, BSIZE) != BSIZE){
     perror("write");
     exit(1);
   }
@@ -311,7 +302,7 @@ rsect(uint sec, void *buf)
     perror("lseek");
     exit(1);
   }
-  if(read(fsfd, buf, BSIZE) != BSIZE){
+  if(host_read(fsfd, buf, BSIZE) != BSIZE){
     perror("read");
     exit(1);
   }

@@ -224,9 +224,9 @@ fs/bin/%: obj/user/%.o obj/ulib/ulib.a
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/$*.sym
 	strip $@
 
-out/mkfs: tools/mkfs.c kernel/fs.h
+out/mkfs: tools/mkfs.c tools/hostfsaux.c tools/hostfsaux.h kernel/fs.h
 	@mkdir -p out
-	gcc -Werror -Wall -o $@ tools/mkfs.c
+	gcc -Werror -Wall -o $@ tools/mkfs.c tools/hostfsaux.c
 
 # Prevent deletion of intermediate files, e.g. cat.o, after first build, so
 # that disk image changes after first build are persistent until clean.  More

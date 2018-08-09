@@ -69,10 +69,8 @@ strncpy(char *s, const char *t, size_t n)
   char *os;
 
   os = s;
-  while(n-- > 0 && (*s++ = *t++) != 0)
+  for (; n > 0 && (*s++ = *t++) != '\0'; --n)
     ;
-  while(n-- > 0)
-    *s++ = 0;
   return os;
 }
 

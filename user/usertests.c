@@ -861,10 +861,7 @@ concreate(void)
   char file[3];
   int i, pid, n, fd;
   char fa[40];
-  struct {
-    ushort inum;
-    char name[14];
-  } de;
+  struct dirent de;
 
   printf("concreate test\n");
   file[0] = 'C';

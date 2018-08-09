@@ -264,7 +264,7 @@ fs.img: out/mkfs fs/README $(UPROGS)
 	rm -f fs.img
 	out/mkfs $@ fs
 
--include */*.d
+-include obj/*/*.d
 
 clean:
 	rm -rf out fs obj

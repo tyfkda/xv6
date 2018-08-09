@@ -199,6 +199,7 @@ kernel/vectors.S: $(MKVECTORS)
 ULIBOBJS = \
 	obj/ulib/crt0.o\
 	obj/ulib/ctype.o\
+	obj/ulib/dirent.o\
 	obj/ulib/errno.o\
 	obj/ulib/exit.o\
 	obj/ulib/localtime.o\

@@ -82,6 +82,17 @@ sys_read(void)
 }
 
 int
+sys_readdir(void)
+{
+  struct file *f;
+  char *p;
+
+  if(argfd(0, 0, &f) < 0 || argptr(1, &p, sizeof(struct dirent)) < 0)
+    return -1;
+  return filereaddir(f, p);
+}
+
+int
 sys_write(void)
 {
   struct file *f;
@@ -315,7 +326,7 @@ sys_open(void)
     if(ip->type == T_DIR && omode != O_RDONLY){
       iunlockput(ip);
       end_op();
-      return -EINVAL;
+      return -EISDIR;
     }
   }
 
@@ -324,7 +335,7 @@ sys_open(void)
       fileclose(f);
     iunlockput(ip);
     end_op();
-    return -ENOMEM;
+    return -EMFILE;
   }
   iunlock(ip);
   end_op();

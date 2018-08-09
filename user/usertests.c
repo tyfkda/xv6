@@ -861,7 +861,7 @@ concreate(void)
   char file[3];
   int i, pid, n, fd;
   char fa[40];
-  struct dirent de;
+  struct dirent *de;
 
   printf("concreate test\n");
   file[0] = 'C';
@@ -889,26 +889,24 @@ concreate(void)
   }
 
   memset(fa, 0, sizeof(fa));
-  fd = open(".", 0);
+  DIR *dir = opendir(".");
   n = 0;
-  while(read(fd, &de, sizeof(de)) > 0){
-    if(de.inum == 0)
-      continue;
-    if(de.name[0] == 'C' && de.name[2] == '\0'){
-      i = de.name[1] - '0';
+  while((de = readdir(dir)) != 0){
+    if(de->name[0] == 'C' && de->name[2] == '\0'){
+      i = de->name[1] - '0';
       if(i < 0 || i >= sizeof(fa)){
-        printf("concreate weird file %s\n", de.name);
+        printf("concreate weird file %s\n", de->name);
         exit(1);
       }
       if(fa[i]){
-        printf("concreate duplicate file %s\n", de.name);
+        printf("concreate duplicate file %s\n", de->name);
         exit(1);
       }
       fa[i] = 1;
       n++;
     }
   }
-  close(fd);
+  closedir(dir);
 
   if(n != 40){
     printf("concreate not enough files in directory listing\n");

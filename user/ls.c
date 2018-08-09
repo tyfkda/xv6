@@ -23,10 +23,11 @@ fmtname(const char *path)
   p++;
 
   // Return blank-padded name.
-  if(strlen(p) >= DIRSIZ)
+  size_t len = strlen(p);
+  if(len >= DIRSIZ)
     return (char*)p;
-  memmove(buf, p, strlen(p));
-  memset(buf+strlen(p), ' ', DIRSIZ-strlen(p));
+  memmove(buf, p, len);
+  memset(buf+len, ' ', DIRSIZ-len);
   return buf;
 }
 
@@ -43,13 +44,15 @@ void lsdir(const char *path)
 {
   char buf[512], *p;
   struct stat st;
+  size_t pathlen;
 
-  if(strlen(path) + 1 + DIRSIZ + 1 > sizeof buf){
+  pathlen = strlen(path);
+  if(pathlen + 1 + DIRSIZ + 1 > sizeof buf){
     fprintf(stderr, "ls: path too long\n");
     return;
   }
   strcpy(buf, path);
-  p = buf+strlen(buf);
+  p = buf + pathlen;
   *p++ = '/';
 
   DIR *dir = opendir(path);
@@ -63,7 +66,7 @@ void lsdir(const char *path)
     if (de == NULL)
       break;
 
-    memmove(p, de->d_name, DIRSIZ);
+    strncpy(p, de->d_name, DIRSIZ);
     p[DIRSIZ] = 0;
     if(stat(buf, &st) < 0){
       fprintf(stderr, "ls: cannot stat %s\n", buf);

@@ -53,8 +53,7 @@ int closedir(DIR *dir) {
 
 struct dirent *readdir(DIR *dir) {
   for (;;) {
-    int size = _sysreaddir(dir->fd, &dir->dbuf);
-    if (size != sizeof(dir->dbuf))
+    if (_sysreaddir(dir->fd, &dir->dbuf) != 0)
       break;
     if (dir->dbuf.d_ino != 0)
       return &dir->dbuf;

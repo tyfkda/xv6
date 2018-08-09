@@ -2,12 +2,9 @@
 
 typedef struct __dirstream DIR;
 
-// Directory is a file containing a sequence of dirent structures.
-#define DIRSIZ 14
-
 struct dirent {
   unsigned short d_ino;
-  char d_name[DIRSIZ];
+  char d_name[16];
 };
 
 #ifdef __cplusplus

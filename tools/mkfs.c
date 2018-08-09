@@ -157,7 +157,7 @@ void open_fs_img(const char* imgFn) {
 }
 
 static void putdirent(uint parent, uint inum, const char *name) {
-  struct dirent de;
+  struct ddirent de;
   assert(strchr(name, DS) == NULL);
   bzero(&de, sizeof(de));
   de.d_ino = xshort(inum);
@@ -559,7 +559,7 @@ int
 dirlookup(struct dinode *din, const char *name, uint* poff)
 {
   uint off;
-  struct dirent de;
+  struct ddirent de;
 
   //if(dp->type != T_DIR)
   //  panic("dirlookup not DIR");
@@ -615,7 +615,7 @@ static int nameiparent(const char* path, char* name) {
 
 ////////////////////////////////////////////////
 
-int readdirent(const char* path, struct dirent* pde) {
+int readdirent(const char* path, struct ddirent* pde) {
   char name[DIRSIZ];
   int parent = nameiparent(path, name);
   if (parent == -1)
@@ -671,7 +671,7 @@ void doLs(const char* path) {
     dumpinfo(fmtname(path), &din);
   } else {
     uint off;
-    struct dirent de;
+    struct ddirent de;
 
     for(off = 0; off < din.size; off += sizeof(de)){
       if(readi(&din, (char*)&de, off, sizeof(de)) != sizeof(de))
@@ -811,7 +811,7 @@ main(int argc, char *argv[])
   }
 
   assert((BSIZE % sizeof(struct dinode)) == 0);
-  assert((BSIZE % sizeof(struct dirent)) == 0);
+  assert((BSIZE % sizeof(struct ddirent)) == 0);
 
   if (optind + 2 > argc) {
     showHelp();

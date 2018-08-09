@@ -79,8 +79,7 @@ static int dirlookup(DIR *dir, ino_t ino, char* p) {
   struct dirent* de;
   while ((de = readdir(dir)) != NULL) {
     if (de->d_ino == ino) {
-      memmove(p, de->d_name, DIRSIZ);
-      p[DIRSIZ] = '\0';
+      strcpy(p, de->d_name);
       return TRUE;
     }
   }

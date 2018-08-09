@@ -627,7 +627,7 @@ struct inode*
 dirlookup(struct inode *dp, const char *name, uint *poff)
 {
   uint off, inum;
-  struct dirent de;
+  struct ddirent de;
 
   if(dp->type != T_DIR)
     panic("dirlookup not DIR");
@@ -654,7 +654,7 @@ int
 dirlink(struct inode *dp, const char *name, uint inum)
 {
   int off;
-  struct dirent de;
+  struct ddirent de;
   struct inode *ip;
 
   // Check that name is not present.

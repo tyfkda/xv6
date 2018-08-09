@@ -142,7 +142,7 @@ filereaddir(struct file *f, void *addr)
   if(f->type == FD_INODE){
     ilock(f->ip);
     if (f->ip->type == T_DIR) {
-      if((r = readi(f->ip, addr, f->off, sizeof(struct dirent))) > 0)
+      if((r = readi(f->ip, addr, f->off, sizeof(struct ddirent))) > 0)
         f->off += r;
     } else {
       r = -1;

@@ -4,7 +4,15 @@
 // Both the kernel and user programs use this header file.
 
 #include "./types.h"
-#include "../include/dirent.h"
+
+// Directory is a file containing a sequence of dirent structures.
+#define DIRSIZ 14
+
+// Directory entry for disk: Not equal to `dirent`
+struct ddirent {
+  unsigned short d_ino;
+  char d_name[DIRSIZ];
+};
 
 #define ROOTINO 1  // root i-number
 #define BSIZE 512  // block size

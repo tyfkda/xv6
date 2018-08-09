@@ -18,6 +18,7 @@
 #include "date.h"
 #include "time.h"
 #include "errno.h"
+#include "dirent.h"
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -85,11 +86,20 @@ int
 sys_readdir(void)
 {
   struct file *f;
-  char *p;
+  struct dirent *p;
 
-  if(argfd(0, 0, &f) < 0 || argptr(1, &p, sizeof(struct dirent)) < 0)
+  if(argfd(0, 0, &f) < 0 || argptr(1, (char**)&p, sizeof(struct dirent)) < 0)
     return -1;
-  return filereaddir(f, p);
+
+  struct ddirent de;
+  int size = filereaddir(f, &de);
+  if (size != sizeof(de))
+    return -1;
+
+  memset(p, 0, sizeof(*p));
+  p->d_ino = de.d_ino;
+  strncpy(p->d_name, de.d_name, DIRSIZ);
+  return 0;
 }
 
 int
@@ -184,7 +194,7 @@ static int
 isdirempty(struct inode *dp)
 {
   int off;
-  struct dirent de;
+  struct ddirent de;
 
   for(off=2*sizeof(de); off<dp->size; off+=sizeof(de)){
     if(readi(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
@@ -200,7 +210,7 @@ int
 sys_unlink(void)
 {
   struct inode *ip, *dp;
-  struct dirent de;
+  struct ddirent de;
   char name[DIRSIZ];
   const char *path;
   uint off;

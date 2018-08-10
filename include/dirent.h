@@ -6,8 +6,8 @@ typedef struct __dirstream DIR;
 #define DIRSIZ 14
 
 struct dirent {
-  unsigned short inum;
-  char name[DIRSIZ];
+  unsigned short d_ino;
+  char d_name[DIRSIZ];
 };
 
 DIR* opendir(const char *path);

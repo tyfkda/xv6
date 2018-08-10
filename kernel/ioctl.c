@@ -1,7 +1,7 @@
 #include "defs.h"
 #include "file.h"
 #include "param.h"
-#include "stat.h"
+#include "sys/stat.h"
 
 int
 sys_ioctl(void)

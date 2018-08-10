@@ -12,7 +12,7 @@
 #include "types.h"
 #include "defs.h"
 #include "param.h"
-#include "stat.h"
+#include "sys/stat.h"
 #include "mmu.h"
 #include "proc.h"
 #include "spinlock.h"
@@ -442,12 +442,13 @@ itrunc(struct inode *ip)
 void
 stati(struct inode *ip, struct stat *st)
 {
-  st->dev = ip->dev;
-  st->ino = ip->inum;
-  st->type = ip->type;
-  st->nlink = ip->nlink;
-  st->size = ip->size;
-  st->mtime = ip->mtime;
+  st->st_dev = ip->dev;
+  st->st_ino = ip->inum;
+  st->st_mode = ip->type;
+  st->st_nlink = ip->nlink;
+  st->st_size = ip->size;
+  st->st_mtim.tv_sec = ip->mtime;
+  st->st_mtim.tv_nsec = 0;
 }
 
 //PAGEBREAK!
@@ -543,13 +544,13 @@ dirlookup(struct inode *dp, const char *name, uint *poff)
   for(off = 0; off < dp->size; off += sizeof(de)){
     if(readi(dp, &de, off, sizeof(de)) != sizeof(de))
       panic("dirlookup read");
-    if(de.inum == 0)
+    if(de.d_ino == 0)
       continue;
-    if(namecmp(name, de.name) == 0){
+    if(namecmp(name, de.d_name) == 0){
       // entry matches path element
       if(poff)
         *poff = off;
-      inum = de.inum;
+      inum = de.d_ino;
       return iget(dp->dev, inum);
     }
   }
@@ -575,13 +576,13 @@ dirlink(struct inode *dp, const char *name, uint inum)
   for(off = 0; off < dp->size; off += sizeof(de)){
     if(readi(dp, &de, off, sizeof(de)) != sizeof(de))
       panic("dirlink read");
-    if(de.inum == 0)
+    if(de.d_ino == 0)
       break;
   }
 
-  memset(de.name, 0, sizeof(de.name));
-  strncpy(de.name, name, DIRSIZ);
-  de.inum = inum;
+  memset(de.d_name, 0, sizeof(de.d_name));
+  strncpy(de.d_name, name, DIRSIZ);
+  de.d_ino = inum;
   if(writei(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
     panic("dirlink");
 

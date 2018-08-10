@@ -14,5 +14,10 @@ struct tm {
   int tm_isdst; // Summer time?
 };
 
+struct timespec {
+  time_t tv_sec;  // seconds
+  long tv_nsec;   // nanoseconds
+};
+
 time_t time(time_t *tloc);
 struct tm *localtime(time_t *tloc);

@@ -1,6 +1,6 @@
 #include "dirent.h"
 #include "fcntl.h"
-#include "stat.h"
+#include "sys/stat.h"
 #include "stdlib.h"
 #include "unistd.h"
 
@@ -24,7 +24,7 @@ DIR *fdopendir(int fd) {
   if (fstat(fd, &st) < 0) {
     return NULL;
   }
-  if (st.type != T_DIR) {
+  if (!S_ISDIR(st.st_mode)) {
     return NULL;
   }
 
@@ -56,7 +56,7 @@ struct dirent *readdir(DIR *dir) {
     int size = _sysreaddir(dir->fd, &dir->dbuf);
     if (size != sizeof(dir->dbuf))
       break;
-    if (dir->dbuf.inum != 0)
+    if (dir->dbuf.d_ino != 0)
       return &dir->dbuf;
   }
   return NULL;

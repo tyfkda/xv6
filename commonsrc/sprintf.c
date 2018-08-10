@@ -76,6 +76,30 @@ snprintulong(char *out, unsigned int n, unsigned long x,
 }
 
 static int
+snprintstr(char *out, unsigned int n, const char* s,
+           int order, int suborder, int leftalign)
+{
+  int o = 0;
+  if(s == NULL)
+    s = "(null)";
+  size_t len = strlen(s);
+  if (suborder > 0)
+    len = MIN(len, suborder);
+  if (order <= 0 || len >= order) {
+    o = putstr(out, o, MIN(n, o + len), s);
+  } else {
+    if (leftalign) {
+      o = putstr(out, o, MIN(n, o + len), s);
+      o = putpadding(out, o, n, order - len, ' ');
+    } else {
+      o = putpadding(out, o, n, order - len, ' ');
+      o = putstr(out, o, MIN(n, o + len), s);
+    }
+  }
+  return o;
+}
+
+static int
 sprintsign(char *out, int negative, int force, int *porder)
 {
   int o = 0;
@@ -157,8 +181,9 @@ vsnprintf(char *out, size_t n, const char *fmt_, va_list ap)
       o += snprintuint(out + o, n - o, va_arg(ap, int), 16, kUpperHexDigits,
                        order, padding);
     } else if(c == 'p') {
+      o += snprintstr(out + o, n - o, "0x", 0, 0, 0);
       o += snprintuint(out + o, n - o, (uintptr_t)va_arg(ap, void*), 16, kHexDigits,
-                       order, padding);
+                       order - 2, '0');
     } else if(c == 's'){
       // ("%5", "foo")         = "  foo"
       // ("%-5", "foo")        = "foo  "
@@ -168,22 +193,7 @@ vsnprintf(char *out, size_t n, const char *fmt_, va_list ap)
       // ("%5.3", "foobarbaz") = "  foo"
 
       const char *s = va_arg(ap, const char*);
-      if(s == NULL)
-        s = "(null)";
-      size_t len = strlen(s);
-      if (suborder > 0)
-        len = MIN(len, suborder);
-      if (order <= 0 || len >= order) {
-        o = putstr(out, o, MIN(n, o + len), s);
-      } else {
-        if (leftalign) {
-          o = putstr(out, o, MIN(n, o + len), s);
-          o = putpadding(out, o, n, order - len, ' ');
-        } else {
-          o = putpadding(out, o, n, order - len, ' ');
-          o = putstr(out, o, MIN(n, o + len), s);
-        }
-      }
+      o += snprintstr(out + o, n - o, s, order, suborder, leftalign);
     } else if(c == 'c'){
       out[o++] = va_arg(ap, unsigned int);
     } else if(c == '%'){

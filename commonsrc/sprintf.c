@@ -181,8 +181,9 @@ vsnprintf(char *out, size_t n, const char *fmt_, va_list ap)
       o += snprintuint(out + o, n - o, va_arg(ap, int), 16, kUpperHexDigits,
                        order, padding);
     } else if(c == 'p') {
+      o += snprintstr(out + o, n - o, "0x", 0, 0, 0);
       o += snprintuint(out + o, n - o, (uintptr_t)va_arg(ap, void*), 16, kHexDigits,
-                       order, padding);
+                       order - 2, '0');
     } else if(c == 's'){
       // ("%5", "foo")         = "  foo"
       // ("%-5", "foo")        = "foo  "

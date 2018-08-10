@@ -11,7 +11,7 @@ int isDirectory(const char* fn) {
     fprintf(stderr, "stat failed [%s]\n", fn);
     exit(1);
   }
-  return st.type == T_DIR;
+  return S_ISDIR(st.st_mode);
 }
 
 const char* getBasename(const char* fn) {

@@ -30,7 +30,7 @@ void dumpinfo(const char* name, const struct stat* st) {
   time_t mt = st->st_mtim;
   struct tm *t = localtime(&mt);
   printf("%s %d %3d %6d  %04d/%02d/%02d %02d:%02d\n",
-         name, st->type, st->st_ino, st->st_size,
+         name, st->st_mode, st->st_ino, st->st_size,
          t->tm_year + 1900, t->tm_mon + 1, t->tm_mday,
          t->tm_hour, t->tm_min);
 }
@@ -81,12 +81,12 @@ ls(const char *path)
     return 1;
   }
 
-  switch(st.type){
-  case T_FILE:
+  switch(st.st_mode & S_IFMT){
+  case S_IFREG:
     dumpinfo(fmtname(path), &st);
     break;
 
-  case T_DIR:
+  case S_IFDIR:
     lsdir(path);
     break;
   }

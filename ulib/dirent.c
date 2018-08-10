@@ -24,7 +24,7 @@ DIR *fdopendir(int fd) {
   if (fstat(fd, &st) < 0) {
     return NULL;
   }
-  if (st.type != T_DIR) {
+  if (!S_ISDIR(st.st_mode)) {
     return NULL;
   }
 

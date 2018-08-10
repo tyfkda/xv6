@@ -444,7 +444,7 @@ stati(struct inode *ip, struct stat *st)
 {
   st->st_dev = ip->dev;
   st->st_ino = ip->inum;
-  st->type = ip->type;
+  st->st_mode = ip->type;
   st->st_nlink = ip->nlink;
   st->st_size = ip->size;
   st->st_mtim = ip->mtime;

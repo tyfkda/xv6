@@ -5,7 +5,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "../include/sys/stat.h"
+#include "../include/sys/_ttype.h"
 #include "../kernel/fs.h"
 #include "../kernel/param.h"
 

@@ -5,20 +5,23 @@
 #include "string.h"
 #include "unistd.h"
 
-#define NULL   ((void*)0)
 #define FALSE  (0)
 #define TRUE   (1)
 
 #define PATH_SEPARATOR   "/"
 
-static int getcwd(char* resultPath);
-static char* goUp(int ino, char* ancestorPath, char* resultPath);
-static int dirlookup(DIR *dir, int ino, char* p);
+#ifndef DIRSIZ
+#define DIRSIZ  (16)
+#endif
+
+static int mygetcwd(char* resultPath);
+static char* goUp(ino_t ino, char* ancestorPath, char* resultPath);
+static int dirlookup(DIR *dir, ino_t ino, char* p);
 
 int main(int argc, char *argv[]) {
   char resultPath[512];
-  if (!getcwd(resultPath)) {
-    fprintf(stderr, "pwd failed");
+  if (!mygetcwd(resultPath)) {
+    fprintf(stderr, "pwd failed\n");
     return 1;
   }
 
@@ -26,7 +29,7 @@ int main(int argc, char *argv[]) {
   return 0;
 }
 
-static int getcwd(char* resultPath) {
+static int mygetcwd(char* resultPath) {
   resultPath[0] = '\0';
 
   char ancestorPath[512];
@@ -44,13 +47,10 @@ static int getcwd(char* resultPath) {
   return TRUE;
 }
 
-static char* goUp(int ino, char* ancestorPath, char* resultPath) {
+static char* goUp(ino_t ino, char* ancestorPath, char* resultPath) {
   strcpy(ancestorPath + strlen(ancestorPath), PATH_SEPARATOR "..");
   struct stat st;
-  if (stat(ancestorPath, &st) < 0)
-    return NULL;
-
-  if (st.st_ino == ino) {
+  if (stat(ancestorPath, &st) < 0 || st.st_ino == ino) {
     // No parent directory exists: must be the root.
     return resultPath;
   }
@@ -75,7 +75,7 @@ static char* goUp(int ino, char* ancestorPath, char* resultPath) {
 // @param fd   file descriptor for a directory.
 // @param ino  target inode number.
 // @param p    [out] file name (part of absPath), overwritten by the file name of the ino.
-static int dirlookup(DIR *dir, int ino, char* p) {
+static int dirlookup(DIR *dir, ino_t ino, char* p) {
   struct dirent* de;
   while ((de = readdir(dir)) != NULL) {
     if (de->d_ino == ino) {

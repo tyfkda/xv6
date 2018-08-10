@@ -7,6 +7,10 @@
 #include "time.h"
 #include "unistd.h"
 
+#ifndef DIRSIZ
+#define DIRSIZ  (16)
+#endif
+
 char*
 fmtname(const char *path)
 {
@@ -27,10 +31,10 @@ fmtname(const char *path)
 }
 
 void dumpinfo(const char* name, const struct stat* st) {
-  time_t mt = st->st_mtim;
+  time_t mt = st->st_mtim.tv_sec;
   struct tm *t = localtime(&mt);
-  printf("%s %d %3d %6d  %04d/%02d/%02d %02d:%02d\n",
-         name, st->st_mode, st->st_ino, st->st_size,
+  printf("%s %4x %5d %8d  %04d/%02d/%02d %02d:%02d\n",
+         name, st->st_mode, (int)st->st_ino, (int)st->st_size,
          t->tm_year + 1900, t->tm_mon + 1, t->tm_mday,
          t->tm_hour, t->tm_min);
 }

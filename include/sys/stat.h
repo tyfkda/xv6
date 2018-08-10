@@ -1,16 +1,17 @@
 #pragma once
 
-#define T_DIR  1   // Directory
-#define T_FILE 2   // File
-#define T_DEV  3   // Device
+#include "time.h"  // for struct timespec
+#include "_ttype.h"
+
+typedef unsigned int ino_t;
 
 struct stat {
   short st_mode;          // Type of file
   int st_dev;             // File system's disk device
-  unsigned int st_ino;    // Inode number
+  ino_t st_ino;           // Inode number
   short st_nlink;         // Number of links to file
   unsigned int st_size;   // Size of file in bytes
-  unsigned int st_mtim;   // Modified time
+  struct timespec st_mtim;   // Modified time
 };
 
 // Mock POSIX

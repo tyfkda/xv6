@@ -303,8 +303,8 @@ void truncatetest()
 
   struct stat st;
   stat(fileName, &st);
-  if (st.size != 5) {
-    fprintf(stderr, "truncate test: fileSize is not truncated: %d\n", st.size);
+  if (st.st_size != 5) {
+    fprintf(stderr, "truncate test: fileSize is not truncated: %d\n", st.st_size);
     exit(1);
   }
 
@@ -348,8 +348,8 @@ void appendtest()
 
   struct stat st;
   stat(fileName, &st);
-  if (st.size != 10) {
-    fprintf(stderr, "append test: fileSize is not truncated: %d\n", st.size);
+  if (st.st_size != 10) {
+    fprintf(stderr, "append test: fileSize is not truncated: %d\n", st.st_size);
     exit(1);
   }
 
@@ -892,14 +892,14 @@ concreate(void)
   DIR *dir = opendir(".");
   n = 0;
   while((de = readdir(dir)) != 0){
-    if(de->name[0] == 'C' && de->name[2] == '\0'){
-      i = de->name[1] - '0';
+    if(de->d_name[0] == 'C' && de->d_name[2] == '\0'){
+      i = de->d_name[1] - '0';
       if(i < 0 || i >= sizeof(fa)){
-        printf("concreate weird file %s\n", de->name);
+        printf("concreate weird file %s\n", de->d_name);
         exit(1);
       }
       if(fa[i]){
-        printf("concreate duplicate file %s\n", de->name);
+        printf("concreate duplicate file %s\n", de->d_name);
         exit(1);
       }
       fa[i] = 1;

@@ -36,7 +36,7 @@ static int getcwd(char* resultPath) {
   if (stat(ancestorPath, &st) < 0)
     return FALSE;
 
-  char* p = goUp(st.ino, ancestorPath, resultPath);
+  char* p = goUp(st.st_ino, ancestorPath, resultPath);
   if (p == NULL)
     return FALSE;
   if (resultPath[0] == '\0')
@@ -50,7 +50,7 @@ static char* goUp(int ino, char* ancestorPath, char* resultPath) {
   if (stat(ancestorPath, &st) < 0)
     return NULL;
 
-  if (st.ino == ino) {
+  if (st.st_ino == ino) {
     // No parent directory exists: must be the root.
     return resultPath;
   }
@@ -58,7 +58,7 @@ static char* goUp(int ino, char* ancestorPath, char* resultPath) {
   char* foundPath = NULL;
   DIR *dir = opendir(ancestorPath);
   if (dir != NULL) {
-    char* p = goUp(st.ino, ancestorPath, resultPath);
+    char* p = goUp(st.st_ino, ancestorPath, resultPath);
     if (p != NULL) {
       strcpy(p, PATH_SEPARATOR);
       p += sizeof(PATH_SEPARATOR) - 1;
@@ -78,8 +78,8 @@ static char* goUp(int ino, char* ancestorPath, char* resultPath) {
 static int dirlookup(DIR *dir, int ino, char* p) {
   struct dirent* de;
   while ((de = readdir(dir)) != NULL) {
-    if (de->inum == ino) {
-      memmove(p, de->name, DIRSIZ);
+    if (de->d_ino == ino) {
+      memmove(p, de->d_name, DIRSIZ);
       p[DIRSIZ] = '\0';
       return TRUE;
     }

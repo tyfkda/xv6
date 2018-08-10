@@ -108,8 +108,8 @@ static void putdirent(uint parent, uint inum, const char *name) {
   struct dirent de;
   assert(strchr(name, DS) == NULL);
   bzero(&de, sizeof(de));
-  de.inum = xshort(inum);
-  strncpy(de.name, name, DIRSIZ);
+  de.d_ino = xshort(inum);
+  strncpy(de.d_name, name, DIRSIZ);
   iappend(parent, &de, sizeof(de));
 }
 

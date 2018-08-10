@@ -27,10 +27,10 @@ fmtname(const char *path)
 }
 
 void dumpinfo(const char* name, const struct stat* st) {
-  time_t mt = st->mtime;
+  time_t mt = st->st_mtim;
   struct tm *t = localtime(&mt);
   printf("%s %d %3d %6d  %04d/%02d/%02d %02d:%02d\n",
-         name, st->type, st->ino, st->size,
+         name, st->type, st->st_ino, st->st_size,
          t->tm_year + 1900, t->tm_mon + 1, t->tm_mday,
          t->tm_hour, t->tm_min);
 }
@@ -59,7 +59,7 @@ void lsdir(const char *path)
     if (de == NULL)
       break;
 
-    memmove(p, de->name, DIRSIZ);
+    memmove(p, de->d_name, DIRSIZ);
     p[DIRSIZ] = 0;
     if(stat(buf, &st) < 0){
       fprintf(stderr, "ls: cannot stat %s\n", buf);

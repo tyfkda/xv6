@@ -5,10 +5,10 @@
 #define T_DEV  3   // Device
 
 struct stat {
-  short type;          // Type of file
-  int dev;             // File system's disk device
-  unsigned int ino;    // Inode number
-  short nlink;         // Number of links to file
-  unsigned int size;   // Size of file in bytes
-  unsigned int mtime;  // Modified time
+  short type;             // Type of file
+  int st_dev;             // File system's disk device
+  unsigned int st_ino;    // Inode number
+  short st_nlink;         // Number of links to file
+  unsigned int st_size;   // Size of file in bytes
+  unsigned int st_mtim;   // Modified time
 };

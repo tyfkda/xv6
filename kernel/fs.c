@@ -685,5 +685,6 @@ void
 isetsize(struct inode* ip, uint size)
 {
   ip->size = size;
+  ip->mtime = cmosepochtime();
   // TODO: Release unused blocks.
 }

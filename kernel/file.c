@@ -74,19 +74,8 @@ fileclose(struct file *f)
   if(ff.type == FD_PIPE)
     pipeclose(ff.pipe, ff.writable);
   else if(ff.type == FD_INODE){
-    int bUpdate = 0;
-    if (ff.writable) {
-      // Update mtime.
-      uint mtime = cmosepochtime();
-      ilock(ff.ip);
-      ff.ip->mtime = mtime;
-      iunlock(ff.ip);
-      bUpdate = 1;
-    }
 
     begin_op();
-    if (bUpdate)
-      iupdate(ff.ip);
     iput(ff.ip);
     end_op();
   }
@@ -180,8 +169,13 @@ filewrite(struct file *f, void *addr, int n)
 
       begin_op();
       ilock(f->ip);
-      if ((r = writei(f->ip, addr + i, f->off, n1)) > 0)
+      if ((r = writei(f->ip, addr + i, f->off, n1)) > 0) {
+
+        f->ip->mtime = cmosepochtime(); /* We need to update mtime in case of 
+                                           failure of short-writes */
         f->off += r;
+      }
+      iupdate(f->ip);
       iunlock(f->ip);
       end_op();
 

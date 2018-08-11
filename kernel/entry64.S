@@ -92,6 +92,7 @@ entry32mp:
 # Enable PAE - CR4.PAE=1
   mov %cr4, %eax
   bts $5, %eax
+  orl $0x600, %eax      # enable OSFXSR and OSXMMEXCPT for SSE instructions
   mov %eax, %cr4
 
 # enable long mode - EFER.LME=1

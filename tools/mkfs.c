@@ -4,6 +4,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <limits.h>
 
 #include "../include/sys/_ttype.h"
 #include "../kernel/fs.h"
@@ -32,7 +33,6 @@
 #define DIVROUNDUP(x, n)  (((x) + (n) - 1) / (n))
 
 const int nbitmap = DIVROUNDUP(FSSIZE, BSIZE * 8);
-const int ninodeblocks = DIVROUNDUP(NINODES, IPB);
 const int nlog = LOGSIZE;
 
 int fsfd;
@@ -73,24 +73,34 @@ xint(uint x)
   return y;
 }
 
-static void setup_superblock() {
+static void setup_superblock(int ninodes) {
   int nmeta;    // Number of meta blocks (boot, sb, nlog, inode, bitmap)
   int nblocks;  // Number of data blocks
+  int ninodeblocks;
+
+  ninodeblocks = DIVROUNDUP(ninodes, IPB);
 
   // 1 fs block = 1 disk sector
   nmeta = 2 + nlog + ninodeblocks + nbitmap;
+
+  if ( nmeta > FSSIZE ) {
+
+    fprintf(stderr, "nr-inodes: %u is too big.\n", ninodes);
+    exit(1);
+  }
+
   nblocks = FSSIZE - nmeta;
 
   sb.size = xint(FSSIZE);
   sb.nblocks = xint(nblocks);
-  sb.ninodes = xint(NINODES);
+  sb.ninodes = xint(ninodes);
   sb.nlog = xint(nlog);
   sb.logstart = xint(2);
   sb.inodestart = xint(2 + nlog);
   sb.bmapstart = xint(2 + nlog + ninodeblocks);
 
-  printf("nmeta %d (boot, super, log blocks %u inode blocks %u, bitmap blocks %u) blocks %d total %d\n",
-         nmeta, nlog, ninodeblocks, nbitmap, nblocks, FSSIZE);
+  printf("nmeta %d (boot, super, log blocks %u inode blocks %u(%u inodes), bitmap blocks %u) blocks %d total %d\n",
+         nmeta, nlog, ninodeblocks, ninodes, nbitmap, nblocks, FSSIZE);
 
   freeblock = nmeta;     // the first free block that we can allocate
 }
@@ -206,12 +216,31 @@ main(int argc, char *argv[])
   uint rootino, off;
   char buf[BSIZE];
   struct dinode din;
-
+  int opt;
+  long nr_inodes;
 
   static_assert(sizeof(int) == 4, "Integers must be 4 bytes!");
 
-  if(argc < 2){
-    fprintf(stderr, "Usage: mkfs fs.img files...\n");
+  nr_inodes = NINODES;
+
+  while ((opt = getopt(argc, argv, "i:")) != -1) {
+    switch (opt) {
+    case 'i':
+      nr_inodes = strtol(optarg, NULL, 0);
+      if ( ( nr_inodes == LONG_MAX ) || ( nr_inodes == LONG_MIN ) ) {
+        
+        fprintf(stderr, "Usage: mkfs [-i nr-inodes] fs.img files...\n");
+        exit(1);
+      }
+      break;
+    default: /* '?' */
+      fprintf(stderr, "Usage: mkfs [-i nr-inodes] fs.img files...\n");
+      exit(1);
+    }
+  }
+  
+  if ( argc <= optind ) {
+    fprintf(stderr, "Usage: mkfs [-i nr-inodes] fs.img files...\n");
     exit(1);
   }
 
@@ -221,13 +250,13 @@ main(int argc, char *argv[])
   //time(&mtime);
   mtime = 0;  // for test
 
-  fsfd = host_createopen(argv[1]);
+  fsfd = host_createopen(argv[optind]);
   if(fsfd < 0){
-    perror(argv[1]);
+    perror(argv[optind]);
     exit(1);
   }
 
-  setup_superblock();
+  setup_superblock(nr_inodes);
   clear_all_sectors();
 
   memset(buf, 0, sizeof(buf));
@@ -237,7 +266,7 @@ main(int argc, char *argv[])
   rootino = iallocdir(ROOTINO, NULL);
   assert(rootino == ROOTINO);
 
-  for(i = 2; i < argc; i++){
+  for(i = optind + 1; i < argc; i++){
     put1(rootino, argv[i], FALSE);
   }
 

@@ -8,8 +8,7 @@
 int isDirectory(const char* fn) {
   struct stat st;
   if (stat(fn, &st) < 0) {
-    fprintf(stderr, "stat failed [%s]\n", fn);
-    exit(1);
+    return 0;
   }
   return S_ISDIR(st.st_mode);
 }

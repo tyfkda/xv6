@@ -459,10 +459,11 @@ free_space_inode(struct inode *ip, uint new){
   if ( new > ip->size )
     panic("free space inode");
 
-  sblk = ip->size / BSIZE; 
-  soff = ip->size % BSIZE;
-  eblk = new / BSIZE; 
-  eoff = new % BSIZE;
+  sblk = new / BSIZE; 
+  soff = new % BSIZE;
+  eblk = ip->size / BSIZE; 
+  eoff = ip->size % BSIZE;
+
   if ( eoff > 0 )
     ++eblk;
 

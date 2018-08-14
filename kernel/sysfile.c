@@ -113,7 +113,7 @@ sys_close(void)
   if(argfd(0, &fd, &f) < 0)
     return -1;
   myproc()->ofile[fd] = 0;
-  fileclose(f);
+  fileclose(f, 0);
   return 0;
 }
 
@@ -332,7 +332,7 @@ sys_open(void)
 
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
     if(f)
-      fileclose(f);
+      fileclose(f, 1);
     iunlockput(ip);
     end_op();
     return -EMFILE;
@@ -456,8 +456,8 @@ sys_pipe(void)
   if((fd0 = fdalloc(rf)) < 0 || (fd1 = fdalloc(wf)) < 0){
     if(fd0 >= 0)
       myproc()->ofile[fd0] = 0;
-    fileclose(rf);
-    fileclose(wf);
+    fileclose(rf, 1);
+    fileclose(wf, 1);
     return -1;
   }
   fd[0] = fd0;

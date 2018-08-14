@@ -32,7 +32,7 @@ int             exec(const char*, char* const*);
 
 // file.c
 struct file*    filealloc(void);
-void            fileclose(struct file*);
+void            fileclose(struct file*, int error);
 struct file*    filedup(struct file*);
 void            fileinit(void);
 int             fileread(struct file*, void*, int n);
@@ -110,7 +110,7 @@ void            picinit(void);
 
 // pipe.c
 int             pipealloc(struct file**, struct file**);
-void            pipeclose(struct pipe*, int);
+void            pipeclose(struct pipe*, int writable, int error);
 int             piperead(struct pipe*, void*, int);
 int             pipewrite(struct pipe*, void*, int);
 

@@ -55,7 +55,7 @@ filedup(struct file *f)
 
 // Close file f.  (Decrement ref count, close when reaches 0.)
 void
-fileclose(struct file *f)
+fileclose(struct file *f, int error)
 {
   struct file ff;
 
@@ -72,7 +72,7 @@ fileclose(struct file *f)
   release(&ftable.lock);
 
   if(ff.type == FD_PIPE)
-    pipeclose(ff.pipe, ff.writable);
+    pipeclose(ff.pipe, ff.writable, error);
   else if(ff.type == FD_INODE){
     int bUpdate = 0;
     if (ff.writable) {

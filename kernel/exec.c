@@ -29,7 +29,7 @@ static struct inode *find_path(const char *path) {
 }
 
 int
-exec(const char *path, char* const *argv)
+exec(const char *path, const char* const *argv)
 {
   const char *s, *last;
   int i, off;

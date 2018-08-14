@@ -29,7 +29,8 @@ static struct inode *find_path(const char *path) {
 }
 
 int
-exec(const char *path, const char* const *argv)
+execelf(const char *path, const char* const *argv,
+        struct inode **pip, pde_t **ppgdir)
 {
   const char *s, *last;
   int i, off;
@@ -40,14 +41,7 @@ exec(const char *path, const char* const *argv)
   pde_t *pgdir, *oldpgdir;
   struct proc *curproc = myproc();
 
-  begin_op();
-
-  ip = find_path(path);
-  if(ip == 0){
-    end_op();
-    return -1;
-  }
-  ilock(ip);
+  ip = *pip;
   pgdir = 0;
 
   // Check ELF header
@@ -79,7 +73,7 @@ exec(const char *path, const char* const *argv)
   }
   iunlockput(ip);
   end_op();
-  ip = 0;
+  ip = *pip = 0;
 
   // Allocate two pages at the next page boundary.
   // Make the first inaccessible.  Use the second as the user stack.
@@ -127,14 +121,36 @@ exec(const char *path, const char* const *argv)
   curproc->tf->esp = sp;
   switchuvm(curproc);
   freevm(oldpgdir);
+  *ppgdir = 0;  // Clear pgdir to avoid to be free
   return 0;
 
- bad:
+bad:
+  *ppgdir = pgdir;
+  return -1;
+}
+
+int
+exec(const char *path, const char* const *argv)
+{
+  struct inode *ip;
+  pde_t *pgdir;
+
+  begin_op();
+
+  ip = find_path(path);
+  if(ip == 0){
+    end_op();
+    return -1;
+  }
+  ilock(ip);
+
+  int result = execelf(path, argv, &ip, &pgdir);
+
   if(pgdir)
     freevm(pgdir);
   if(ip){
     iunlockput(ip);
     end_op();
   }
-  return -1;
+  return result;
 }

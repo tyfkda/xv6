@@ -373,7 +373,7 @@ backcmd(struct cmd *subcmd)
 // Parsing
 
 static const char whitespace[] = " \t\r\n\v";
-static const char symbols[] = "<|>&;()";
+static const char symbols[] = "<|>&;()#";
 
 int
 gettoken(char **ps, char *es, char **q, char **eq)
@@ -396,6 +396,7 @@ gettoken(char **ps, char *es, char **q, char **eq)
   case ';':
   case '&':
   case '<':
+  case '#':
     s++;
     break;
   case '>':
@@ -465,6 +466,13 @@ parseline(char **ps, char *es)
     gettoken(ps, es, NULL, NULL);
     cmd = backcmd(cmd);
   }
+
+  if (peek(ps, es, "#")) {
+    gettoken(ps, es, NULL, NULL);
+    *ps = es;
+    return cmd;
+  }
+
   if(peek(ps, es, ";")){
     gettoken(ps, es, NULL, NULL);
     cmd = listcmd(cmd, parseline(ps, es));
@@ -542,7 +550,7 @@ parseexec(char **ps, char *es)
 
   argc = 0;
   ret = parseredirs(ret, ps, es);
-  while(!peek(ps, es, "|)&;")){
+  while(!peek(ps, es, "|)&;#")){
     if((tok=gettoken(ps, es, &q, &eq)) == 0)
       break;
     if(tok != 'a')

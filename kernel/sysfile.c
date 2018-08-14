@@ -418,7 +418,8 @@ sys_chdir(void)
 int
 sys_exec(void)
 {
-  char *path, *argv[MAXARG];
+  char *path;
+  const char *argv[MAXARG];
   int i;
   uintp uargv, uarg;
 
@@ -435,8 +436,10 @@ sys_exec(void)
       argv[i] = 0;
       break;
     }
-    if(fetchstr(uarg, &argv[i]) < 0)
+    char* v;
+    if(fetchstr(uarg, &v) < 0)
       return -1;
+    argv[i] = v;
   }
   return exec(path, argv);
 }

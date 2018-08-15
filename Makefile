@@ -237,7 +237,6 @@ out/mkfs: tools/mkfs.c tools/hostfsaux.c tools/hostfsaux.h kernel/fs.h
 
 UPROGS=\
 	fs/bin/cat\
-	fs/bin/clr\
 	fs/bin/cp\
 	fs/bin/date\
 	fs/bin/echo\
@@ -256,11 +255,11 @@ UPROGS=\
 	fs/bin/wc\
 	fs/bin/zombie\
 
-fs/README: README
+copyfsdata:
 	@mkdir -p fs
-	cp $< $@
+	cp -upr fsdata/* fs/
 
-fs.img: out/mkfs fs/README $(UPROGS)
+fs.img: out/mkfs $(UPROGS) copyfsdata
 	rm -f fs.img
 	out/mkfs $@ fs
 

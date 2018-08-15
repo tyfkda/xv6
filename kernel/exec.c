@@ -10,11 +10,13 @@
 #define FILE_SEPARATOR  '/'
 
 // Find exe path
-static struct inode *find_path(const char *path) {
+static struct inode *find_path(const char *path, char *resultPath, int bufsiz) {
   struct inode *ip;
 
   if (strchr(path, FILE_SEPARATOR) != 0) {
     ip = namei(path);
+    if (resultPath != 0)
+      safestrcpy(resultPath, path, bufsiz);
   } else {
     // Also find at root path. TODO: Search from $PATH
     const char PATH[] = "/bin/";
@@ -24,6 +26,8 @@ static struct inode *find_path(const char *path) {
     memmove(exepath, PATH, LEN);
     safestrcpy(exepath + LEN, path, BUFSIZ - LEN);
     ip = namei(exepath);
+    if (resultPath != 0)
+      safestrcpy(resultPath, exepath, bufsiz);
   }
   return ip;
 }
@@ -85,7 +89,7 @@ execelf(const char *progname, const char *path, const char* const *argv,
   sp = sz;
 
   // Push argument strings, prepare rest of stack in ustack.
-  for(argc = 0; argv[argc]; argc++) {
+  for(argc = 0; argv[argc] != 0; ++argc) {
     if(argc >= MAXARG)
       goto bad;
     sp = (sp - (strlen(argv[argc]) + 1)) & ~(sizeof(uintp)-1);
@@ -154,7 +158,7 @@ execshebang(const char *path, const char * const *argv,
   char* shebang = line + 2;
 
   begin_op();
-  struct inode *ip2 = find_path(shebang);
+  struct inode *ip2 = find_path(shebang, 0, 0);
   if(ip2 == 0){
     end_op();
     return -1;
@@ -167,8 +171,9 @@ execshebang(const char *path, const char * const *argv,
     goto bad;
 
   const char *argv2[MAXARG];
-  argv2[0] = path;
-  for (int i = 0; i < MAXARG - 1; ++i) {
+  argv2[0] = shebang;
+  argv2[1] = path;
+  for (int i = 1; i < MAXARG - 1; ++i) {
     argv2[i + 1] = argv[i];
     if (argv[i] == 0)
       break;
@@ -185,12 +190,13 @@ exec(const char *path, const char* const *argv)
   struct inode *ip;
   struct elfhdr elf;
   pde_t *pgdir;
+  char exepath[128];
 
   pgdir = 0;
 
   begin_op();
 
-  ip = find_path(path);
+  ip = find_path(path, exepath, sizeof(exepath));
   if(ip == 0){
     end_op();
     return -1;
@@ -201,7 +207,7 @@ exec(const char *path, const char* const *argv)
   if (readelfhdr(ip, &elf)) {
     result = execelf(path, path, argv, &elf, &ip, &pgdir);
   } else {
-    result = execshebang(path, argv, &ip, &pgdir);
+    result = execshebang(exepath, argv, &ip, &pgdir);
   }
 
   if(pgdir)

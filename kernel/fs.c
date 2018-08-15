@@ -498,7 +498,12 @@ free_space_inode(struct inode *ip, uint new){
     }
   }
 
-  if ( eblk < NDIRECT ) {
+  /* Release an indirect index block.
+   * Edge case: Eblk == NDIRECT always means an indirect index block is no longer used
+   *            because we've already increase sblk above if eoff > 0.
+   */
+  if ( ( eblk <= NDIRECT ) && ( ip->addrs[NDIRECT] != 0 ) ) {
+
     bfree(ip->dev, ip->addrs[NDIRECT]);
     ip->addrs[NDIRECT] = 0;
   }

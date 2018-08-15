@@ -105,20 +105,94 @@ putenv(const char *name, const char *value)
   p->value = strdup(value);
 }
 
-// Expand environment variables.
-void
-expandenv(char **src, char **dst)
-{
-  for(; *src != '\0'; ++src) {
-    if (**src != '$') {
-      *dst++ = *src;
-    } else {
-      char* var = getenv(*src + 1);
-      if (var)
-        *dst++ = var;  // TODO: Expand multi-values.
-    }
+static int readHex(const char* p, int order) {
+  int x = 0;
+  for (int i = 0; i < order; ++i) {
+    char c = *p++;
+    if ('0' <= c && c <= '9')
+      c -= '0';
+    else if ('A' <= c && c <= 'F')
+      c -= 'A' - 10;
+    else if ('a' <= c && c <= 'f')
+      c -= 'a' - 10;
+    else
+      break;
+    x = (x << 4) | c;
   }
-  *dst = NULL;
+  return x;
+}
+
+static char* strdup2(const char *start, const char *end) {
+  size_t len = end - start;
+  char *str = malloc(len + 1);
+  if (str != NULL) {
+    memcpy(str, start, len);
+    str[len] = '\0';
+  }
+  return str;
+}
+
+// Expand environment variables.
+char*
+expandarg(char *start, char *end)
+{
+  if (*start == '$') {
+    char buf[100];
+    size_t len = end - start - 1;
+    len = len > sizeof(buf) - 1 ? sizeof(buf) - 1 : len;
+    strncpy(buf, start + 1, len);
+    buf[len] = '\0';
+    char* var = getenv(buf);  // TODO: Expand multi-values.
+    if (var == NULL)
+      var = " ";
+    return strdup(var);
+  } else {
+    // Handle escape sequence: Inplace replacement.
+    char *p, *q;
+    for (p = q = start; p < end; ) {
+      char c = *p++;
+      if (c != '\\') {
+        *q++ = c;
+        continue;
+      }
+
+      // Escape
+      c = p < end ? *p++ : '\0';
+      switch (c) {
+        case 'n':
+          c = '\n';
+          break;
+        case 't':
+          c = '\t';
+          break;
+        case '\'':
+          c = '\'';
+          break;
+        case '"':
+          c = '"';
+          break;
+        case '$':
+          c = '$';
+          break;
+        case '\\':
+          c = '\\';
+          break;
+        case 'x':
+          if (p + 2 <= end) {
+            c = readHex(p, 2);
+            p += 2;
+          } else {
+            c = '?';
+            p = end;
+          }
+          break;
+        default:
+          break;
+      }
+      *q++ = c;
+    }
+    return strdup2(start, q);
+  }
 }
 
 static void
@@ -133,10 +207,7 @@ putLastExitCode(int exitcode)
 void
 runecmd(struct execcmd *ecmd)
 {
-  char *argv[MAXARGS];
-  expandenv(ecmd->argv, argv);
-
-  exec(argv[0], argv);
+  exec(ecmd->argv[0], ecmd->argv);
   fprintf(stderr, "sh: command not found: %s\n", ecmd->argv[0]);
   exit(1);
 }
@@ -378,7 +449,9 @@ gettoken(char **ps, char *es, char **q)
   char *s;
   char *start;
   int ret;
+  int singleQuote;
 
+  singleQuote = FALSE;
   s = *ps;
   while(s < es && strchr(whitespace, *s) != NULL)
     s++;
@@ -404,14 +477,22 @@ gettoken(char **ps, char *es, char **q)
     }
     break;
   case '\'':
+  case '"':
     {
       char term = *s++;
+      singleQuote = term == '\'';
       start = s;
       for (;;) {
         if (*s == term) {
           *s = ' ';
           ret = 'a';
           break;
+        }
+        if (*s == '\\') {
+          if (++s >= es) {
+            // TODO: Continue line.
+            panic("quote not closed");
+          }
         }
         if (++s >= es)
           panic("quote not closed");
@@ -426,18 +507,12 @@ gettoken(char **ps, char *es, char **q)
     break;
   }
   if (q != NULL) {
-    if (ret != 'a') {
+    if (ret != 'a')
       *q = NULL;
-    } else {
-      char *end = s;
-      size_t len = end - start;
-      char *str = malloc(len + 1);
-      if (str == NULL)
-        panic("malloc failed");
-      memcpy(str, start, len);
-      str[len] = '\0';
-      *q = str;
-    }
+    else if (singleQuote)
+      *q = strdup2(start, s);
+    else
+      *q = expandarg(start, s);
   }
 
   while(s < es && strchr(whitespace, *s) != NULL)

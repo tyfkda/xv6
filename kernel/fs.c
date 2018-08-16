@@ -402,6 +402,120 @@ bmap(struct inode *ip, uint bn)
   panic("bmap: out of range");
 }
 
+static void
+new_space_inode(struct inode *ip, uint new){
+  uint sblk, eblk;
+  uint soff, eoff;
+  uint cur, newblk;
+  struct buf *bp;
+
+  if ( ip->size > new )
+    panic("new space inode");
+
+  if ( ip->size == new )
+    return;
+
+  sblk = ip->size / BSIZE;
+  soff = ip->size % BSIZE;
+  eblk = new / BSIZE;
+  eoff = new % BSIZE;
+
+  if ( sblk == eblk )
+    goto out;
+
+  if ( eoff > 0 )
+    ++eblk;
+
+  if ( soff > 0 ) {
+
+    bp = bread(ip->dev, bmap(ip, sblk));
+    memset(bp->data + soff, 0, BSIZE-soff);
+    log_write(bp);
+    brelse(bp);
+    ++sblk;
+  }
+
+  for( cur = sblk; eblk >= cur; ++cur) {
+
+    newblk = bmap(ip, cur);
+    if ( newblk == 0 )
+      panic("new_space_inode");
+  }
+
+out:
+  ip->size = new;
+  ip->mtime = cmosepochtime();
+  iupdate(ip);
+}
+
+static void
+free_space_inode(struct inode *ip, uint new){
+  uint sblk, eblk;
+  uint soff, eoff;
+  uint cur, curidx;
+  struct buf *bp;
+  uint *a;
+
+  if ( new > ip->size )
+    panic("free space inode");
+
+  sblk = new / BSIZE;
+  soff = new % BSIZE;
+  eblk = ip->size / BSIZE;
+  eoff = ip->size % BSIZE;
+
+  if ( eoff > 0 )
+    ++eblk;
+
+  if ( soff > 0 ) {
+
+    bp = bread(ip->dev, bmap(ip, sblk));
+    memset(bp->data + soff, 0, BSIZE-soff);
+    log_write(bp);
+    brelse(bp);
+    ++sblk;
+  }
+  for( cur = sblk; eblk >= cur; ++cur) {
+    if ( cur < NDIRECT ) {
+
+      if(ip->addrs[cur]){
+        bfree(ip->dev, ip->addrs[cur]);
+        ip->addrs[cur] = 0;
+      }
+    }  else {
+
+      if(ip->addrs[NDIRECT] != 0) {
+
+        bp = bread(ip->dev, ip->addrs[NDIRECT]);
+        a = (uint*)bp->data;
+
+        curidx = cur - NDIRECT;
+        if(a[curidx] != 0) {
+
+          bfree(ip->dev, a[curidx]);
+          a[curidx] = 0;
+          log_write(bp);
+        }
+        brelse(bp);
+      }
+    }
+  }
+
+  /* Release an indirect index block.
+   * Edge case: sblk == NDIRECT always means an indirect index block is no longer used
+   *            because we've already increase sblk above if soff > 0.
+   */
+  if ( ( sblk <= NDIRECT ) && ( ip->addrs[NDIRECT] != 0 ) ) {
+
+    bfree(ip->dev, ip->addrs[NDIRECT]);
+    ip->addrs[NDIRECT] = 0;
+  }
+
+  ip->size = new;
+  ip->mtime = cmosepochtime();
+  iupdate(ip);
+}
+
 // Truncate inode (discard contents).
 // Only called when the inode has no links
 // to it (no directory entries referring to it)
@@ -410,31 +524,7 @@ bmap(struct inode *ip, uint bn)
 static void
 itrunc(struct inode *ip)
 {
-  int i, j;
-  struct buf *bp;
-  uint *a;
-
-  for(i = 0; i < NDIRECT; i++){
-    if(ip->addrs[i]){
-      bfree(ip->dev, ip->addrs[i]);
-      ip->addrs[i] = 0;
-    }
-  }
-
-  if(ip->addrs[NDIRECT]){
-    bp = bread(ip->dev, ip->addrs[NDIRECT]);
-    a = (uint*)bp->data;
-    for(j = 0; j < NINDIRECT; j++){
-      if(a[j])
-        bfree(ip->dev, a[j]);
-    }
-    brelse(bp);
-    bfree(ip->dev, ip->addrs[NDIRECT]);
-    ip->addrs[NDIRECT] = 0;
-  }
-
-  ip->size = 0;
-  iupdate(ip);
+  free_space_inode(ip, 0);
 }
 
 // Copy stat information from inode.
@@ -684,6 +774,8 @@ nameiparent(const char *path, char *name)
 void
 isetsize(struct inode* ip, uint size)
 {
-  ip->size = size;
-  // TODO: Release unused blocks.
+  if ( size > ip->size )
+    new_space_inode(ip, size);
+  else
+    free_space_inode(ip, size);
 }

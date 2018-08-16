@@ -84,7 +84,6 @@ static void setup_superblock(int ninodes) {
   nmeta = 2 + nlog + ninodeblocks + nbitmap;
 
   if ( nmeta > FSSIZE ) {
-
     fprintf(stderr, "nr-inodes: %u is too big.\n", ninodes);
     exit(1);
   }
@@ -209,6 +208,10 @@ static void put1(uint inum, const char *path, int create_dir) {
   }
 }
 
+static void usage(void) {
+  fprintf(stderr, "Usage: mkfs [-i nr-inodes] fs.img files...\n");
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -228,19 +231,18 @@ main(int argc, char *argv[])
     case 'i':
       nr_inodes = strtol(optarg, NULL, 0);
       if ( ( nr_inodes == LONG_MAX ) || ( nr_inodes == LONG_MIN ) ) {
-        
-        fprintf(stderr, "Usage: mkfs [-i nr-inodes] fs.img files...\n");
+        usage();
         exit(1);
       }
       break;
     default: /* '?' */
-      fprintf(stderr, "Usage: mkfs [-i nr-inodes] fs.img files...\n");
+      usage();
       exit(1);
     }
   }
-  
+
   if ( argc <= optind ) {
-    fprintf(stderr, "Usage: mkfs [-i nr-inodes] fs.img files...\n");
+    usage();
     exit(1);
   }
 

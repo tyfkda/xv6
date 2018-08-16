@@ -60,20 +60,20 @@ int fork1(void);  // Fork but panics on failure.
 void panic(char*);
 struct cmd *parsecmd(char*);
 
-// Environment variables.
-struct envvar {
-  struct envvar *next;
+// Shell variables.
+typedef struct ShellVarLink {
+  struct ShellVarLink *next;
   const char *name;
   char *value;
-};
+} ShellVarLink;
 
-static struct envvar *s_envvars;
+static ShellVarLink *s_shellvars;
 
-struct envvar*
-findenv(const char *name)
+static ShellVarLink*
+findsvar(const char *name)
 {
-  struct envvar *p;
-  for (p = s_envvars; p; p = p->next) {
+  ShellVarLink *p;
+  for (p = s_shellvars; p; p = p->next) {
     if (strcmp(p->name, name) == 0)
       return p;
   }
@@ -81,25 +81,25 @@ findenv(const char *name)
 }
 
 char*
-getenv(const char *name)
+getsvar(const char *name)
 {
-  struct envvar *p;
-  p = findenv(name);
+  ShellVarLink *p;
+  p = findsvar(name);
   return p ? p->value : NULL;
 }
 
 void
-putenv(const char *name, const char *value)
+setsvar(const char *name, const char *value)
 {
-  struct envvar *p;
+  ShellVarLink *p;
 
-  p = findenv(name);
+  p = findsvar(name);
   if (p != NULL) {
     free(p->value);
   } else {
     p = malloc(sizeof(*p));
-    p->next = s_envvars;
-    s_envvars = p;
+    p->next = s_shellvars;
+    s_shellvars = p;
     p->name = strdup(name);
   }
   p->value = strdup(value);
@@ -142,7 +142,7 @@ expandarg(char *start, char *end)
     len = len > sizeof(buf) - 1 ? sizeof(buf) - 1 : len;
     strncpy(buf, start + 1, len);
     buf[len] = '\0';
-    char* var = getenv(buf);  // TODO: Expand multi-values.
+    char* var = getsvar(buf);  // TODO: Expand multi-values.
     if (var == NULL)
       var = " ";
     return strdup(var);
@@ -200,7 +200,7 @@ putLastExitCode(int exitcode)
 {
   char buf[16];
   sprintf(buf, "%d", exitcode);
-  putenv("?", buf);
+  setsvar("?", buf);
 }
 
 // Execute execcmd.  Never returns.

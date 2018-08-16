@@ -7,6 +7,7 @@ char* safestrcpy(char*, const char*, int);
 char* strncpy(char*, const char*, size_t);
 char* strchr(const char*, char);
 char* strrchr(const char*, char);
+int strcmp(const char*, const char*);
 int strncmp(const char*, const char*, size_t);
 size_t strlen(const char*);
 

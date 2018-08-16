@@ -56,6 +56,14 @@ memcpy(void *dst, const void *src, size_t n)
 }
 
 int
+strcmp(const char *p, const char *q)
+{
+  while(*p != '\0' && *p == *q)
+    p++, q++;
+  return (unsigned char)*p - (unsigned char)*q;
+}
+
+int
 strncmp(const char *p, const char *q, size_t n)
 {
   while(n > 0 && *p == *q && *p != '\0')

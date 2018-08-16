@@ -12,14 +12,6 @@ strcpy(char *s, const char *t)
   return os;
 }
 
-int
-strcmp(const char *p, const char *q)
-{
-  while(*p && *p == *q)
-    p++, q++;
-  return (unsigned char)*p - (unsigned char)*q;
-}
-
 char*
 strstr(const char* p, const char* q)
 {

@@ -422,9 +422,10 @@ sys_exec(void)
 {
   const char *path;
   const char *argv[MAXARG];
+  const char *v;
   int i;
   uintp uargv, uarg;
-  char *envp[] = { "TERM=xv6", 0 };
+  const char *envp[] = { "TERM=xv6", 0 };
 
   if(argcstr(0, &path) < 0 || arguintp(1, &uargv) < 0){
     return -1;
@@ -439,7 +440,7 @@ sys_exec(void)
       argv[i] = 0;
       break;
     }
-    const char* v;
+
     if(fetchstr(uarg, &v) < 0)
       return -1;
     argv[i] = v;
@@ -450,12 +451,14 @@ sys_exec(void)
 int
 sys_execve(void)
 {
-  char *path, *argv[MAXARG], *envp[MAXENV];
+  const char *argv[MAXARG];
+  const char *envp[MAXENV];
+  const char *path;
   int i;
   uintp uargv, uarg;
   uintp uenvp, uenv;
 
-  if(argstr(0, &path) < 0 || arguintp(1, &uargv) < 0 || arguintp(2, &uenvp) < 0){
+  if(argcstr(0, &path) < 0 || arguintp(1, &uargv) < 0 || arguintp(2, &uenvp) < 0){
     return -1;
   }
 

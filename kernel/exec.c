@@ -223,7 +223,7 @@ exec(const char *path, const char* const *argv)
 }
 
 int
-execve(const char *path, char *const argv[], char *const envp[]){
+execve(const char *path, const char *argv[], const char *envp[]){
   const char *s, *last;
   int i, off;
   uintp sz, sp, ustack[EXECVE_USTK_ARGS_NR+MAXARG+1+MAXENV+1];
@@ -234,10 +234,11 @@ execve(const char *path, char *const argv[], char *const envp[]){
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
   struct proc *curproc = myproc();
+  char exepath[128];
 
   begin_op();
 
-  ip = find_path(path);
+  ip = find_path(path, exepath, sizeof(exepath));
   if( ip == 0 ){
 
     end_op();

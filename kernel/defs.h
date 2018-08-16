@@ -28,8 +28,8 @@ void            consoleintr(int(*)(void));
 void            panic(char*) __attribute__((noreturn));
 
 // exec.c
-int             exec(const char*, char* const*);
-int             execve(const char *, char* const*, char* const*);
+int             exec(const char *, const char* const *);
+int             execve(const char *, const char*[] , const char*[]);
 
 // file.c
 struct file*    filealloc(void);

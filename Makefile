@@ -3,7 +3,7 @@
 ifeq ("$(X32)","")
 BITS = 64
 XOBJS = obj/knl/vm64.o
-XFLAGS = -m64 -DX64 -mcmodel=kernel -mtls-direct-seg-refs -mno-red-zone
+XFLAGS =  -std=gnu99 -m64 -DX64 -mcmodel=kernel -mtls-direct-seg-refs -mno-red-zone
 LDFLAGS = -m elf_x86_64 -nodefaultlibs
 QEMUTARGET = qemu-system-x86_64
 else

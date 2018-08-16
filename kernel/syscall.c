@@ -38,17 +38,17 @@ fetchuintp(uintp addr, uintp *ip)
 // Doesn't actually copy the string - just sets *pp to point at it.
 // Returns length of string, not including nul.
 int
-fetchstr(uintp addr, char **pp)
+fetchstr(uintp addr, const char **pp)
 {
-  char *s, *ep;
+  const char *s, *ep;
   struct proc *curproc = myproc();
 
   if(addr >= curproc->sz)
     return -1;
-  *pp = (char*)addr;
-  ep = (char*)curproc->sz;
+  *pp = (const char*)addr;
+  ep = (const char*)curproc->sz;
   for(s = *pp; s < ep; s++){
-    if(*s == 0)
+    if(*s == '\0')
       return s - *pp;
   }
   return -1;
@@ -120,7 +120,7 @@ argptr(int n, char **pp, int size)
 // (There is no shared writable memory, so the string can't change
 // between this check and being used by the kernel.)
 int
-argstr(int n, char **pp)
+argcstr(int n, const char **pp)
 {
   uintp addr;
   if(arguintp(n, &addr) < 0)

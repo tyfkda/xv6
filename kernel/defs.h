@@ -156,10 +156,10 @@ void            initsleeplock(struct sleeplock*, char*);
 // syscall.c
 int             argint(int, int*);
 int             argptr(int, char**, int);
-int             argstr(int, char**);
+int             argcstr(int, const char**);
 int             arguintp(int, uintp*);
 int             fetchuintp(uintp, uintp*);
-int             fetchstr(uintp, char**);
+int             fetchstr(uintp, const char**);
 void            syscall(void);
 
 // sysfile.c

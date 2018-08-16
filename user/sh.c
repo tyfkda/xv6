@@ -1,5 +1,6 @@
 // Shell.
 
+#include "ctype.h"
 #include "fcntl.h"
 #include "stdio.h"
 #include "stdlib.h"
@@ -440,8 +441,13 @@ backcmd(struct cmd *subcmd)
 //PAGEBREAK!
 // Parsing
 
-static const char whitespace[] = " \t\r\n\v";
 static const char symbols[] = "<|>&;()#";
+
+char *skipws(char *s, char *es) {
+  while(s < es && isspace(*s))
+    s++;
+  return s;
+}
 
 int
 gettoken(char **ps, char *es, char **q)
@@ -452,9 +458,7 @@ gettoken(char **ps, char *es, char **q)
   int singleQuote;
 
   singleQuote = FALSE;
-  s = *ps;
-  while(s < es && strchr(whitespace, *s) != NULL)
-    s++;
+  s = skipws(*ps, es);
   start = s;
   ret = *s;
   switch(*s){
@@ -501,8 +505,7 @@ gettoken(char **ps, char *es, char **q)
     break;
   default:
     ret = 'a';
-    while(s < es && strchr(whitespace, *s) == NULL &&
-          strchr(symbols, *s) == NULL)
+    while(s < es && !isspace(*s) && strchr(symbols, *s) == NULL)
       s++;
     break;
   }
@@ -515,8 +518,6 @@ gettoken(char **ps, char *es, char **q)
       *q = expandarg(start, s);
   }
 
-  while(s < es && strchr(whitespace, *s) != NULL)
-    s++;
   *ps = s;
   return ret;
 }
@@ -526,10 +527,7 @@ peek(char **ps, char *es, char *toks)
 {
   char *s;
 
-  s = *ps;
-  while(s < es && strchr(whitespace, *s) != NULL)
-    s++;
-  *ps = s;
+  *ps = s = skipws(*ps, es);
   return *s != '\0' && strchr(toks, *s) != NULL;
 }
 

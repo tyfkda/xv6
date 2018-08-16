@@ -421,6 +421,7 @@ sys_exec(void)
   char *path, *argv[MAXARG];
   int i;
   uintp uargv, uarg;
+  char *envp[] = { "TERM=xv6", 0 };
 
   if(argstr(0, &path) < 0 || arguintp(1, &uargv) < 0){
     return -1;
@@ -438,7 +439,50 @@ sys_exec(void)
     if(fetchstr(uarg, &argv[i]) < 0)
       return -1;
   }
-  return exec(path, argv);
+  return execve(path, argv, envp);
+}
+
+int
+sys_execve(void)
+{
+  char *path, *argv[MAXARG], *envp[MAXENV];
+  int i;
+  uintp uargv, uarg;
+  uintp uenvp, uenv;
+
+  if(argstr(0, &path) < 0 || arguintp(1, &uargv) < 0 || arguintp(2, &uenvp) < 0){
+    return -1;
+  }
+
+  memset(argv, 0, sizeof(argv));
+  for(i=0;; i++){
+    if(i >= NELEM(argv))
+      return -1;
+    if(fetchuintp(uargv+sizeof(uintp)*i, &uarg) < 0)
+      return -1;
+    if(uarg == 0){
+      argv[i] = 0;
+      break;
+    }
+    if(fetchstr(uarg, &argv[i]) < 0)
+      return -1;
+  }
+
+  memset(envp, 0, sizeof(envp));
+  for(i=0;; i++){
+    if(i >= NELEM(envp))
+      return -1;
+    if(fetchuintp(uenvp+sizeof(uintp)*i, &uenv) < 0)
+      return -1;
+    if(uenv == 0){
+      envp[i] = 0;
+      break;
+    }
+    if(fetchstr(uenv, &envp[i]) < 0)
+      return -1;
+  }
+
+  return execve(path, argv, envp);
 }
 
 int

@@ -255,6 +255,8 @@ UPROGS=\
 	fs/bin/usertests\
 	fs/bin/wc\
 	fs/bin/zombie\
+	fs/bin/execvetest\
+	fs/bin/envtest\
 
 fs/README: README
 	@mkdir -p fs

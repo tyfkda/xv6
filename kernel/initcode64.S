@@ -9,7 +9,8 @@
 start:
   mov $init, %rdi
   mov $argv, %rsi
-  mov $SYS_exec, %rax
+  mov $envp, %rdx	
+  mov $SYS_execve, %rax
   int $T_SYSCALL
 
 # for(;;) exit();
@@ -22,8 +23,18 @@ exit:
 init:
   .string "init\0"
 
+# char init_env[] = "TERM=xv6\0";
+init_env:
+  .string "TERM=xv6\0"
+	
 # char *argv[] = { init, 0 };
 .p2align 2
 argv:
   .quad init
+  .quad 0
+
+# char *envp[] = { init_env, 0 };
+.p2align 2
+envp:
+  .quad init_env
   .quad 0

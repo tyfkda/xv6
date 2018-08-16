@@ -29,6 +29,7 @@ void            panic(char*) __attribute__((noreturn));
 
 // exec.c
 int             exec(const char*, char* const*);
+int             execve(const char *, char* const*, char* const*);
 
 // file.c
 struct file*    filealloc(void);

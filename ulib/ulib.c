@@ -2,6 +2,8 @@
 #include "sys/stat.h"
 #include "unistd.h"
 
+extern char **environ;
+
 int
 stat(const char *n, struct stat *st)
 {
@@ -15,3 +17,4 @@ stat(const char *n, struct stat *st)
   close(fd);
   return r;
 }
+

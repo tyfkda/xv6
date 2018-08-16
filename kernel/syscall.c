@@ -154,6 +154,7 @@ extern int sys_ioctl(void);
 extern int sys_isatty(void);
 extern int sys_ftruncate(void);
 extern int sys_readdir(void);
+extern int sys_execve(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -182,6 +183,7 @@ static int (*syscalls[])(void) = {
 [SYS_isatty]  sys_isatty,
 [SYS_ftruncate]  sys_ftruncate,
 [SYS_readdir]  sys_readdir,
+[SYS_execve]  sys_execve,
 };
 
 void

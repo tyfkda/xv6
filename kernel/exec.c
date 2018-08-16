@@ -7,31 +7,6 @@
 #include "x86.h"
 #include "elf.h"
 
-#define FILE_SEPARATOR  '/'
-
-// Find exe path
-static struct inode *find_path(const char *path, char *resultPath, int bufsiz) {
-  struct inode *ip;
-
-  if (strchr(path, FILE_SEPARATOR) != 0) {
-    ip = namei(path);
-    if (resultPath != 0)
-      safestrcpy(resultPath, path, bufsiz);
-  } else {
-    // Also find at root path. TODO: Search from $PATH
-    const char PATH[] = "/bin/";
-    const int LEN = sizeof(PATH) - 1;
-    const int BUFSIZ = 128;
-    char exepath[BUFSIZ];
-    memmove(exepath, PATH, LEN);
-    safestrcpy(exepath + LEN, path, BUFSIZ - LEN);
-    ip = namei(exepath);
-    if (resultPath != 0)
-      safestrcpy(resultPath, exepath, bufsiz);
-  }
-  return ip;
-}
-
 // Check ELF header
 int
 readelfhdr(struct inode *ip, struct elfhdr *elf)
@@ -42,11 +17,12 @@ readelfhdr(struct inode *ip, struct elfhdr *elf)
 
 int
 execelf(const char *progname, const char *path, const char* const *argv,
+        const char *envp[],
         const struct elfhdr *elf, struct inode **pip, pde_t **ppgdir)
 {
   const char *s, *last;
   int i, off;
-  uintp argc, sz, sp, ustack[3+MAXARG+1];
+  uintp argc, envc, sz, sp, ustack[4+MAXARG+1+MAXENV+1];
   struct inode *ip;
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
@@ -95,21 +71,34 @@ execelf(const char *progname, const char *path, const char* const *argv,
     sp = (sp - (strlen(argv[argc]) + 1)) & ~(sizeof(uintp)-1);
     if(copyout(pgdir, sp, argv[argc], strlen(argv[argc]) + 1) < 0)
       goto bad;
-    ustack[3+argc] = sp;
+    ustack[4+argc] = sp;
   }
-  ustack[3+argc] = 0;
+  ustack[4+argc] = 0;
+
+  for(envc = 0; envp[envc] != 0; ++envc) {
+    if(argc >= MAXENV)
+      goto bad;
+    sp = (sp - (strlen(envp[envc]) + 1)) & ~(sizeof(uintp)-1);
+    if (copyout(pgdir, sp, envp[envc], strlen(envp[envc]) + 1) < 0)
+       goto bad;
+
+    // store the address of a variable
+    ustack[4 + argc + 1 + envc] = sp;
+  }
+  ustack[4 + argc + 1 + envc] = 0;
 
   ustack[0] = 0xffffffff;  // fake return PC
   ustack[1] = argc;
-  ustack[2] = sp - (argc+1)*sizeof(uintp);  // argv pointer
-
+  ustack[2] = sp - (argc+1+envc+1)*sizeof(uintp);  // argv pointer
+  ustack[3] = sp - (envc+1)*sizeof(uintp);  // env pointer
 #if X64
   myproc()->tf->rdi = argc;
-  myproc()->tf->rsi = sp - (argc+1)*sizeof(uintp);
+  myproc()->tf->rsi = sp - (argc+1+envc+1)*sizeof(uintp);
+  myproc()->tf->rdx = sp - (envc+1)*sizeof(uintp);
 #endif
 
-  sp -= (3+argc+1) * sizeof(uintp);
-  if(copyout(pgdir, sp, ustack, (3+argc+1)*sizeof(uintp)) < 0)
+  sp -= (4+argc+1+envc+1) * sizeof(uintp);
+  if(copyout(pgdir, sp, ustack, (4+argc+1+envc+1)*sizeof(uintp)) < 0)
     goto bad;
 
   // Save program name for debugging.
@@ -135,7 +124,7 @@ bad:
 }
 
 int
-execshebang(const char *path, const char * const *argv,
+execshebang(const char *path, const char * const *argv, const char *envp[],
             struct inode **pip, pde_t **ppgdir)
 {
   struct inode *ip = *pip;
@@ -158,7 +147,7 @@ execshebang(const char *path, const char * const *argv,
   char* shebang = line + 2;
 
   begin_op();
-  struct inode *ip2 = find_path(shebang, 0, 0);
+  struct inode *ip2 = namei(shebang);
   if(ip2 == 0){
     end_op();
     return -1;
@@ -178,25 +167,24 @@ execshebang(const char *path, const char * const *argv,
     if (argv[i] == 0)
       break;
   }
-  return execelf(path, shebang, argv2, &elf, pip, ppgdir);
+  return execelf(path, shebang, argv2, envp, &elf, pip, ppgdir);
 
 bad:
   return -1;
 }
 
 int
-exec(const char *path, const char* const *argv)
+execve(const char *path, const char*argv[], const char *envp[])
 {
   struct inode *ip;
   struct elfhdr elf;
   pde_t *pgdir;
-  char exepath[128];
 
   pgdir = 0;
 
   begin_op();
 
-  ip = find_path(path, exepath, sizeof(exepath));
+  ip = namei(path);
   if(ip == 0){
     end_op();
     return -1;
@@ -205,9 +193,9 @@ exec(const char *path, const char* const *argv)
 
   int result;
   if (readelfhdr(ip, &elf)) {
-    result = execelf(path, path, argv, &elf, &ip, &pgdir);
+    result = execelf(path, path, argv, envp, &elf, &ip, &pgdir);
   } else {
-    result = execshebang(exepath, argv, &ip, &pgdir);
+    result = execshebang(path, argv, envp, &ip, &pgdir);
   }
 
   if(pgdir)

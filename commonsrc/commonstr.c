@@ -56,6 +56,14 @@ memcpy(void *dst, const void *src, size_t n)
 }
 
 int
+strcmp(const char *p, const char *q)
+{
+  while(*p != '\0' && *p == *q)
+    p++, q++;
+  return (unsigned char)*p - (unsigned char)*q;
+}
+
+int
 strncmp(const char *p, const char *q, size_t n)
 {
   while(n > 0 && *p == *q && *p != '\0')
@@ -89,14 +97,14 @@ safestrcpy(char *s, const char *t, int n)
   return os;
 }
 
-int
+size_t
 strlen(const char *s)
 {
-  int n;
+  const char *p;
 
-  for(n = 0; s[n]; n++)
+  for(p = s; *p != '\0'; ++p)
     ;
-  return n;
+  return p - s;
 }
 
 char*

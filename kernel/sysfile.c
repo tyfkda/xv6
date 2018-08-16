@@ -113,7 +113,7 @@ sys_close(void)
   if(argfd(0, &fd, &f) < 0)
     return -1;
   myproc()->ofile[fd] = 0;
-  fileclose(f);
+  fileclose(f, 0);
   return 0;
 }
 
@@ -132,10 +132,11 @@ sys_fstat(void)
 int
 sys_link(void)
 {
-  char name[DIRSIZ], *new, *old;
+  char name[DIRSIZ];
+  const char *new, *old;
   struct inode *dp, *ip;
 
-  if(argstr(0, &old) < 0 || argstr(1, &new) < 0)
+  if(argcstr(0, &old) < 0 || argcstr(1, &new) < 0)
     return -1;
 
   begin_op();
@@ -200,10 +201,11 @@ sys_unlink(void)
 {
   struct inode *ip, *dp;
   struct dirent de;
-  char name[DIRSIZ], *path;
+  char name[DIRSIZ];
+  const char *path;
   uint off;
 
-  if(argstr(0, &path) < 0)
+  if(argcstr(0, &path) < 0)
     return -1;
 
   begin_op();
@@ -253,7 +255,7 @@ bad:
 }
 
 static struct inode*
-create(char *path, short type, short major, short minor)
+create(const char *path, short type, short major, short minor)
 {
   uint off;
   struct inode *ip, *dp;
@@ -301,12 +303,12 @@ create(char *path, short type, short major, short minor)
 int
 sys_open(void)
 {
-  char *path;
+  const char *path;
   int fd, omode;
   struct file *f;
   struct inode *ip;
 
-  if(argstr(0, &path) < 0 || argint(1, &omode) < 0)
+  if(argcstr(0, &path) < 0 || argint(1, &omode) < 0)
     return -EINVAL;
 
   begin_op();
@@ -332,7 +334,7 @@ sys_open(void)
 
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
     if(f)
-      fileclose(f);
+      fileclose(f, 1);
     iunlockput(ip);
     end_op();
     return -EMFILE;
@@ -357,11 +359,11 @@ sys_open(void)
 int
 sys_mkdir(void)
 {
-  char *path;
+  const char *path;
   struct inode *ip;
 
   begin_op();
-  if(argstr(0, &path) < 0 || (ip = create(path, T_DIR, 0, 0)) == 0){
+  if(argcstr(0, &path) < 0 || (ip = create(path, T_DIR, 0, 0)) == 0){
     end_op();
     return -1;
   }
@@ -374,11 +376,11 @@ int
 sys_mknod(void)
 {
   struct inode *ip;
-  char *path;
+  const char *path;
   int major, minor;
 
   begin_op();
-  if((argstr(0, &path)) < 0 ||
+  if((argcstr(0, &path)) < 0 ||
      argint(1, &major) < 0 ||
      argint(2, &minor) < 0 ||
      (ip = create(path, T_DEV, major, minor)) == 0){
@@ -393,12 +395,12 @@ sys_mknod(void)
 int
 sys_chdir(void)
 {
-  char *path;
+  const char *path;
   struct inode *ip;
   struct proc *curproc = myproc();
 
   begin_op();
-  if(argstr(0, &path) < 0 || (ip = namei(path)) == 0){
+  if(argcstr(0, &path) < 0 || (ip = namei(path)) == 0){
     end_op();
     return -1;
   }
@@ -418,12 +420,13 @@ sys_chdir(void)
 int
 sys_exec(void)
 {
-  char *path, *argv[MAXARG];
+  const char *path;
+  const char *argv[MAXARG];
   int i;
   uintp uargv, uarg;
   char *envp[] = { "TERM=xv6", 0 };
 
-  if(argstr(0, &path) < 0 || arguintp(1, &uargv) < 0){
+  if(argcstr(0, &path) < 0 || arguintp(1, &uargv) < 0){
     return -1;
   }
   memset(argv, 0, sizeof(argv));
@@ -436,8 +439,10 @@ sys_exec(void)
       argv[i] = 0;
       break;
     }
-    if(fetchstr(uarg, &argv[i]) < 0)
+    const char* v;
+    if(fetchstr(uarg, &v) < 0)
       return -1;
+    argv[i] = v;
   }
   return execve(path, argv, envp);
 }
@@ -500,8 +505,8 @@ sys_pipe(void)
   if((fd0 = fdalloc(rf)) < 0 || (fd1 = fdalloc(wf)) < 0){
     if(fd0 >= 0)
       myproc()->ofile[fd0] = 0;
-    fileclose(rf);
-    fileclose(wf);
+    fileclose(rf, 1);
+    fileclose(wf, 1);
     return -1;
   }
   fd[0] = fd0;

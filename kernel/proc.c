@@ -240,7 +240,7 @@ exit(int code)
   // Close all open files.
   for(fd = 0; fd < NOFILE; fd++){
     if(curproc->ofile[fd]){
-      fileclose(curproc->ofile[fd]);
+      fileclose(curproc->ofile[fd], code != 0);
       curproc->ofile[fd] = 0;
     }
   }

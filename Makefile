@@ -17,6 +17,7 @@ OPT ?= -O2
 
 OBJS := \
 	obj/knl/bio.o\
+	obj/knl/commonstr.o\
 	obj/knl/console.o\
 	obj/knl/exec.o\
 	obj/knl/file.o\
@@ -38,7 +39,6 @@ OBJS := \
 	obj/knl/sleeplock.o\
 	obj/knl/spinlock.o\
 	obj/knl/sprintf.o\
-	obj/knl/string.o\
 	obj/knl/swtch$(BITS).o\
 	obj/knl/syscall.o\
 	obj/knl/sysfile.o\
@@ -197,6 +197,7 @@ kernel/vectors.S: $(MKVECTORS)
 	perl $(MKVECTORS) > $@
 
 ULIBOBJS = \
+	obj/ulib/commonstr.o\
 	obj/ulib/crt0.o\
 	obj/ulib/ctype.o\
 	obj/ulib/dirent.o\
@@ -208,7 +209,6 @@ ULIBOBJS = \
 	obj/ulib/sprintf.o\
 	obj/ulib/stdio.o\
 	obj/ulib/string.o\
-	obj/ulib/strlib.o\
 	obj/ulib/termios.o\
 	obj/ulib/time.o\
 	obj/ulib/ulib.o\
@@ -237,7 +237,6 @@ out/mkfs: tools/mkfs.c tools/hostfsaux.c tools/hostfsaux.h kernel/fs.h
 
 UPROGS=\
 	fs/bin/cat\
-	fs/bin/clr\
 	fs/bin/cp\
 	fs/bin/date\
 	fs/bin/echo\
@@ -258,11 +257,11 @@ UPROGS=\
 	fs/bin/execvetest\
 	fs/bin/envtest\
 
-fs/README: README
+copyfsdata:
 	@mkdir -p fs
-	cp $< $@
+	cp -upr fsdata/* fs/
 
-fs.img: out/mkfs fs/README $(UPROGS)
+fs.img: out/mkfs $(UPROGS) copyfsdata
 	rm -f fs.img
 	out/mkfs $@ fs
 

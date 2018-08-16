@@ -17,6 +17,7 @@ struct pipe {
   uint nwrite;    // number of bytes written
   int readopen;   // read fd is still open
   int writeopen;  // write fd is still open
+  int broken;     // broken?
 };
 
 int
@@ -34,6 +35,7 @@ pipealloc(struct file **f0, struct file **f1)
   p->writeopen = 1;
   p->nwrite = 0;
   p->nread = 0;
+  p->broken = 0;
   initlock(&p->lock, "pipe");
   (*f0)->type = FD_PIPE;
   (*f0)->readable = 1;
@@ -50,16 +52,18 @@ pipealloc(struct file **f0, struct file **f1)
   if(p)
     kfree((char*)p);
   if(*f0)
-    fileclose(*f0);
+    fileclose(*f0, 1);
   if(*f1)
-    fileclose(*f1);
+    fileclose(*f1, 1);
   return -1;
 }
 
 void
-pipeclose(struct pipe *p, int writable)
+pipeclose(struct pipe *p, int writable, int error)
 {
   acquire(&p->lock);
+  if (error)
+    p->broken = 1;
   if(writable){
     p->writeopen = 0;
     wakeup(&p->nread);
@@ -74,6 +78,18 @@ pipeclose(struct pipe *p, int writable)
     release(&p->lock);
 }
 
+// Check whether the pipe is broken
+void
+checkbroken(struct pipe *p)
+{
+  // Assume the lock is acquired.
+  if (p->broken) {
+    release(&p->lock);
+    // TODO: Send a signal.
+    exit(-128);
+  }
+}
+
 //PAGEBREAK: 40
 int
 pipewrite(struct pipe *p, void *addr, int n)
@@ -81,6 +97,7 @@ pipewrite(struct pipe *p, void *addr, int n)
   int i;
 
   acquire(&p->lock);
+  checkbroken(p);
   for(i = 0; i < n; i++){
     while(p->nwrite == p->nread + PIPESIZE){  //DOC: pipewrite-full
       if(p->readopen == 0 || myproc()->killed){
@@ -89,6 +106,7 @@ pipewrite(struct pipe *p, void *addr, int n)
       }
       wakeup(&p->nread);
       sleep(&p->nwrite, &p->lock);  //DOC: pipewrite-sleep
+      checkbroken(p);
     }
     p->data[p->nwrite++ % PIPESIZE] = ((uchar*)addr)[i];
   }
@@ -103,12 +121,14 @@ piperead(struct pipe *p, void *addr, int n)
   int i;
 
   acquire(&p->lock);
+  checkbroken(p);
   while(p->nread == p->nwrite && p->writeopen){  //DOC: pipe-empty
     if(myproc()->killed){
       release(&p->lock);
       return -1;
     }
     sleep(&p->nread, &p->lock); //DOC: piperead-sleep
+    checkbroken(p);
   }
   for(i = 0; i < n; i++){  //DOC: piperead-copy
     if(p->nread == p->nwrite)

@@ -29,14 +29,12 @@ struct cmd {
 struct execcmd {
   int type;
   char *argv[MAXARGS];
-  char *eargv[MAXARGS];
 };
 
 struct redircmd {
   int type;
   struct cmd *cmd;
   char *file;
-  char *efile;
   int mode;
   int fd;
 };
@@ -107,20 +105,94 @@ putenv(const char *name, const char *value)
   p->value = strdup(value);
 }
 
-// Expand environment variables.
-void
-expandenv(char **src, char **dst)
-{
-  for(; *src != '\0'; ++src) {
-    if (**src != '$') {
-      *dst++ = *src;
-    } else {
-      char* var = getenv(*src + 1);
-      if (var)
-        *dst++ = var;  // TODO: Expand multi-values.
-    }
+static int readHex(const char* p, int order) {
+  int x = 0;
+  for (int i = 0; i < order; ++i) {
+    char c = *p++;
+    if ('0' <= c && c <= '9')
+      c -= '0';
+    else if ('A' <= c && c <= 'F')
+      c -= 'A' - 10;
+    else if ('a' <= c && c <= 'f')
+      c -= 'a' - 10;
+    else
+      break;
+    x = (x << 4) | c;
   }
-  *dst = NULL;
+  return x;
+}
+
+static char* strdup2(const char *start, const char *end) {
+  size_t len = end - start;
+  char *str = malloc(len + 1);
+  if (str != NULL) {
+    memcpy(str, start, len);
+    str[len] = '\0';
+  }
+  return str;
+}
+
+// Expand environment variables.
+char*
+expandarg(char *start, char *end)
+{
+  if (*start == '$') {
+    char buf[100];
+    size_t len = end - start - 1;
+    len = len > sizeof(buf) - 1 ? sizeof(buf) - 1 : len;
+    strncpy(buf, start + 1, len);
+    buf[len] = '\0';
+    char* var = getenv(buf);  // TODO: Expand multi-values.
+    if (var == NULL)
+      var = " ";
+    return strdup(var);
+  } else {
+    // Handle escape sequence: Inplace replacement.
+    char *p, *q;
+    for (p = q = start; p < end; ) {
+      char c = *p++;
+      if (c != '\\') {
+        *q++ = c;
+        continue;
+      }
+
+      // Escape
+      c = p < end ? *p++ : '\0';
+      switch (c) {
+        case 'n':
+          c = '\n';
+          break;
+        case 't':
+          c = '\t';
+          break;
+        case '\'':
+          c = '\'';
+          break;
+        case '"':
+          c = '"';
+          break;
+        case '$':
+          c = '$';
+          break;
+        case '\\':
+          c = '\\';
+          break;
+        case 'x':
+          if (p + 2 <= end) {
+            c = readHex(p, 2);
+            p += 2;
+          } else {
+            c = '?';
+            p = end;
+          }
+          break;
+        default:
+          break;
+      }
+      *q++ = c;
+    }
+    return strdup2(start, q);
+  }
 }
 
 static void
@@ -135,10 +207,7 @@ putLastExitCode(int exitcode)
 void
 runecmd(struct execcmd *ecmd)
 {
-  char *argv[MAXARGS];
-  expandenv(ecmd->argv, argv);
-
-  exec(argv[0], argv);
+  exec(ecmd->argv[0], ecmd->argv);
   fprintf(stderr, "sh: command not found: %s\n", ecmd->argv[0]);
   exit(1);
 }
@@ -321,7 +390,7 @@ execcmd(void)
 }
 
 struct cmd*
-redircmd(struct cmd *subcmd, char *file, char *efile, int mode, int fd)
+redircmd(struct cmd *subcmd, char *file, int mode, int fd)
 {
   struct redircmd *cmd;
 
@@ -329,7 +398,6 @@ redircmd(struct cmd *subcmd, char *file, char *efile, int mode, int fd)
   cmd->type = REDIR;
   cmd->cmd = subcmd;
   cmd->file = file;
-  cmd->efile = efile;
   cmd->mode = mode;
   cmd->fd = fd;
   return (struct cmd*)cmd;
@@ -373,19 +441,21 @@ backcmd(struct cmd *subcmd)
 // Parsing
 
 static const char whitespace[] = " \t\r\n\v";
-static const char symbols[] = "<|>&;()";
+static const char symbols[] = "<|>&;()#";
 
 int
-gettoken(char **ps, char *es, char **q, char **eq)
+gettoken(char **ps, char *es, char **q)
 {
   char *s;
+  char *start;
   int ret;
+  int singleQuote;
 
+  singleQuote = FALSE;
   s = *ps;
   while(s < es && strchr(whitespace, *s) != NULL)
     s++;
-  if(q)
-    *q = s;
+  start = s;
   ret = *s;
   switch(*s){
   case '\0':
@@ -396,6 +466,7 @@ gettoken(char **ps, char *es, char **q, char **eq)
   case ';':
   case '&':
   case '<':
+  case '#':
     s++;
     break;
   case '>':
@@ -405,6 +476,29 @@ gettoken(char **ps, char *es, char **q, char **eq)
       s++;
     }
     break;
+  case '\'':
+  case '"':
+    {
+      char term = *s++;
+      singleQuote = term == '\'';
+      start = s;
+      for (;;) {
+        if (*s == term) {
+          *s = ' ';
+          ret = 'a';
+          break;
+        }
+        if (*s == '\\') {
+          if (++s >= es) {
+            // TODO: Continue line.
+            panic("quote not closed");
+          }
+        }
+        if (++s >= es)
+          panic("quote not closed");
+      }
+    }
+    break;
   default:
     ret = 'a';
     while(s < es && strchr(whitespace, *s) == NULL &&
@@ -412,8 +506,14 @@ gettoken(char **ps, char *es, char **q, char **eq)
       s++;
     break;
   }
-  if(eq)
-    *eq = s;
+  if (q != NULL) {
+    if (ret != 'a')
+      *q = NULL;
+    else if (singleQuote)
+      *q = strdup2(start, s);
+    else
+      *q = expandarg(start, s);
+  }
 
   while(s < es && strchr(whitespace, *s) != NULL)
     s++;
@@ -436,7 +536,6 @@ peek(char **ps, char *es, char *toks)
 struct cmd *parseline(char**, char*);
 struct cmd *parsepipe(char**, char*);
 struct cmd *parseexec(char**, char*);
-struct cmd *nulterminate(struct cmd*);
 
 struct cmd*
 parsecmd(char *s)
@@ -451,7 +550,6 @@ parsecmd(char *s)
     fprintf(stderr, "leftovers: %s\n", s);
     panic("syntax");
   }
-  nulterminate(cmd);
   return cmd;
 }
 
@@ -462,11 +560,18 @@ parseline(char **ps, char *es)
 
   cmd = parsepipe(ps, es);
   while(peek(ps, es, "&")){
-    gettoken(ps, es, NULL, NULL);
+    gettoken(ps, es, NULL);
     cmd = backcmd(cmd);
   }
+
+  if (peek(ps, es, "#")) {
+    gettoken(ps, es, NULL);
+    *ps = es;
+    return cmd;
+  }
+
   if(peek(ps, es, ";")){
-    gettoken(ps, es, NULL, NULL);
+    gettoken(ps, es, NULL);
     cmd = listcmd(cmd, parseline(ps, es));
   }
   return cmd;
@@ -479,7 +584,7 @@ parsepipe(char **ps, char *es)
 
   cmd = parseexec(ps, es);
   if(peek(ps, es, "|")){
-    gettoken(ps, es, NULL, NULL);
+    gettoken(ps, es, NULL);
     cmd = pipecmd(cmd, parsepipe(ps, es));
   }
   return cmd;
@@ -489,21 +594,21 @@ struct cmd*
 parseredirs(struct cmd *cmd, char **ps, char *es)
 {
   int tok;
-  char *q, *eq;
+  char *q;
 
   while(peek(ps, es, "<>")){
-    tok = gettoken(ps, es, NULL, NULL);
-    if(gettoken(ps, es, &q, &eq) != 'a')
+    tok = gettoken(ps, es, NULL);
+    if(gettoken(ps, es, &q) != 'a')
       panic("missing file for redirection");
     switch(tok){
     case '<':
-      cmd = redircmd(cmd, q, eq, O_RDONLY, 0);
+      cmd = redircmd(cmd, q, O_RDONLY, 0);
       break;
     case '>':
-      cmd = redircmd(cmd, q, eq, O_WRONLY | O_CREAT | O_TRUNC, 1);
+      cmd = redircmd(cmd, q, O_WRONLY | O_CREAT | O_TRUNC, 1);
       break;
     case '+':  // >>
-      cmd = redircmd(cmd, q, eq, O_WRONLY | O_CREAT| O_APPEND, 1);
+      cmd = redircmd(cmd, q, O_WRONLY | O_CREAT| O_APPEND, 1);
       break;
     }
   }
@@ -517,11 +622,11 @@ parseblock(char **ps, char *es)
 
   if(!peek(ps, es, "("))
     panic("parseblock");
-  gettoken(ps, es, NULL, NULL);
+  gettoken(ps, es, NULL);
   cmd = parseline(ps, es);
   if(!peek(ps, es, ")"))
     panic("syntax - missing )");
-  gettoken(ps, es, NULL, NULL);
+  gettoken(ps, es, NULL);
   cmd = parseredirs(cmd, ps, es);
   return cmd;
 }
@@ -529,7 +634,7 @@ parseblock(char **ps, char *es)
 struct cmd*
 parseexec(char **ps, char *es)
 {
-  char *q, *eq;
+  char *q;
   int tok, argc;
   struct execcmd *cmd;
   struct cmd *ret;
@@ -542,66 +647,17 @@ parseexec(char **ps, char *es)
 
   argc = 0;
   ret = parseredirs(ret, ps, es);
-  while(!peek(ps, es, "|)&;")){
-    if((tok=gettoken(ps, es, &q, &eq)) == 0)
+  while(!peek(ps, es, "|)&;#")){
+    if((tok=gettoken(ps, es, &q)) == 0)
       break;
     if(tok != 'a')
       panic("syntax");
     cmd->argv[argc] = q;
-    cmd->eargv[argc] = eq;
     argc++;
     if(argc >= MAXARGS)
       panic("too many args");
     ret = parseredirs(ret, ps, es);
   }
   cmd->argv[argc] = NULL;
-  cmd->eargv[argc] = NULL;
   return ret;
-}
-
-// NUL-terminate all the counted strings.
-struct cmd*
-nulterminate(struct cmd *cmd)
-{
-  int i;
-  struct backcmd *bcmd;
-  struct execcmd *ecmd;
-  struct listcmd *lcmd;
-  struct pipecmd *pcmd;
-  struct redircmd *rcmd;
-
-  if(cmd == 0)
-    return 0;
-
-  switch(cmd->type){
-  case EXEC:
-    ecmd = (struct execcmd*)cmd;
-    for(i=0; ecmd->argv[i]; i++)
-      *ecmd->eargv[i] = '\0';
-    break;
-
-  case REDIR:
-    rcmd = (struct redircmd*)cmd;
-    nulterminate(rcmd->cmd);
-    *rcmd->efile = '\0';
-    break;
-
-  case PIPE:
-    pcmd = (struct pipecmd*)cmd;
-    nulterminate(pcmd->left);
-    nulterminate(pcmd->right);
-    break;
-
-  case LIST:
-    lcmd = (struct listcmd*)cmd;
-    nulterminate(lcmd->left);
-    nulterminate(lcmd->right);
-    break;
-
-  case BACK:
-    bcmd = (struct backcmd*)cmd;
-    nulterminate(bcmd->cmd);
-    break;
-  }
-  return cmd;
 }

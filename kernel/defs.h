@@ -33,7 +33,7 @@ int             execve(const char *, char* const*, char* const*);
 
 // file.c
 struct file*    filealloc(void);
-void            fileclose(struct file*);
+void            fileclose(struct file*, int error);
 struct file*    filedup(struct file*);
 void            fileinit(void);
 int             fileread(struct file*, void*, int n);
@@ -111,7 +111,7 @@ void            picinit(void);
 
 // pipe.c
 int             pipealloc(struct file**, struct file**);
-void            pipeclose(struct pipe*, int);
+void            pipeclose(struct pipe*, int writable, int error);
 int             piperead(struct pipe*, void*, int);
 int             pipewrite(struct pipe*, void*, int);
 
@@ -157,10 +157,10 @@ void            initsleeplock(struct sleeplock*, char*);
 // syscall.c
 int             argint(int, int*);
 int             argptr(int, char**, int);
-int             argstr(int, char**);
+int             argcstr(int, const char**);
 int             arguintp(int, uintp*);
 int             fetchuintp(uintp, uintp*);
-int             fetchstr(uintp, char**);
+int             fetchstr(uintp, const char**);
 void            syscall(void);
 
 // sysfile.c

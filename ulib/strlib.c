@@ -23,7 +23,7 @@ strcmp(const char *p, const char *q)
 char*
 strstr(const char* p, const char* q)
 {
-  int len = strlen(q);
+  size_t len = strlen(q);
   for (; *p != '\0'; ++p) {
     if (strncmp(p, q, len) == 0)
       return (char*)p;
@@ -34,7 +34,7 @@ strstr(const char* p, const char* q)
 char*
 strdup(const char *s)
 {
-  int len;
+  size_t len;
   char *t;
 
   len = strlen(s);

@@ -89,14 +89,14 @@ safestrcpy(char *s, const char *t, int n)
   return os;
 }
 
-int
+size_t
 strlen(const char *s)
 {
-  int n;
+  const char *p;
 
-  for(n = 0; s[n]; n++)
+  for(p = s; *p != '\0'; ++p)
     ;
-  return n;
+  return p - s;
 }
 
 char*

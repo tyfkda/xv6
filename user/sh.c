@@ -450,18 +450,13 @@ char *skipws(char *s, char *es) {
 }
 
 int
-gettoken(char **ps, char *es, char **q)
+peektoken(char *s, char *es, char **ps)
 {
-  char *s;
-  char *start;
-  int ret;
-  int singleQuote;
+  int tok;
 
-  singleQuote = FALSE;
-  s = skipws(*ps, es);
-  start = s;
-  ret = *s;
-  switch(*s){
+  s = skipws(s, es);
+  tok = *s;
+  switch(tok){
   case '\0':
     break;
   case '|':
@@ -476,59 +471,84 @@ gettoken(char **ps, char *es, char **q)
   case '>':
     s++;
     if(*s == '>'){
-      ret = '+';
+      tok = '+';
       s++;
     }
     break;
   case '\'':
   case '"':
-    {
-      char term = *s++;
-      singleQuote = term == '\'';
-      start = s;
-      for (;;) {
-        if (*s == term) {
-          *s = ' ';
-          ret = 'a';
-          break;
-        }
-        if (*s == '\\') {
-          if (++s >= es) {
-            // TODO: Continue line.
-            panic("quote not closed");
-          }
-        }
-        if (++s >= es)
-          panic("quote not closed");
-      }
-    }
-    break;
   default:
-    ret = 'a';
-    while(s < es && !isspace(*s) && strchr(symbols, *s) == NULL)
-      s++;
+    tok = 'a';
     break;
   }
-  if (q != NULL) {
-    if (ret != 'a')
+
+  if (ps != NULL)
+    *ps = s;
+  return tok;
+}
+
+int
+gettoken(char **ps, char *es, char **q)
+{
+  char *s, *start;
+  int tok;
+
+  tok = peektoken(*ps, es, &s);
+  start = s;
+  if (tok != 'a') {
+    if (q != NULL)
       *q = NULL;
-    else if (singleQuote)
-      *q = strdup2(start, s);
-    else
-      *q = expandarg(start, s);
+  } else {
+    int singleQuote = FALSE;
+    switch(*s){
+    case '\'':
+    case '"':
+      {
+        char term = *s++;
+        singleQuote = term == '\'';
+        start = s;
+        for (;;) {
+          if (*s == term) {
+            *s = ' ';
+            break;
+          }
+          if (*s == '\\') {
+            if (++s >= es) {
+              // TODO: Continue line.
+              panic("quote not closed");
+            }
+          }
+          if (++s >= es)
+            panic("quote not closed");
+        }
+      }
+      break;
+    default:
+      while(s < es && !isspace(*s) && strchr(symbols, *s) == NULL)
+        s++;
+      break;
+    }
+    if (q != NULL) {
+      if (singleQuote)
+        *q = strdup2(start, s);
+      else
+        *q = expandarg(start, s);
+    }
   }
 
   *ps = s;
-  return ret;
+  return tok;
 }
 
 int
 peek(char **ps, char *es, char *toks)
 {
   char *s;
+  int tok;
 
   *ps = s = skipws(*ps, es);
-  return *s != '\0' && strchr(toks, *s) != NULL;
+  tok = peektoken(s, es, NULL);
+  return tok != '\0' && strchr(toks, tok) != NULL;
 }
 
 struct cmd *parseline(char**, char*);
@@ -594,7 +614,7 @@ parseredirs(struct cmd *cmd, char **ps, char *es)
   int tok;
   char *q;
 
-  while(peek(ps, es, "<>")){
+  while(peek(ps, es, "<>+")){
     tok = gettoken(ps, es, NULL);
     if(gettoken(ps, es, &q) != 'a')
       panic("missing file for redirection");

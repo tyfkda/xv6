@@ -625,22 +625,29 @@ parseredirs(struct cmd *cmd, char **ps, char *es)
 {
   int tok;
   char *q;
+  int mode;
+  int fd;
 
   while(peek(ps, es, "<>+")){
     tok = gettoken(ps, es, NULL);
     if(gettoken(ps, es, &q) != 'a')
       panic("missing file for redirection");
     switch(tok){
+    default:
     case '<':
-      cmd = redircmd(cmd, q, O_RDONLY, 0);
+      mode = O_RDONLY;
+      fd = STDIN_FILENO;
       break;
     case '>':
-      cmd = redircmd(cmd, q, O_WRONLY | O_CREAT | O_TRUNC, 1);
+      mode = O_WRONLY | O_CREAT | O_TRUNC;
+      fd = STDOUT_FILENO;
       break;
     case '+':  // >>
-      cmd = redircmd(cmd, q, O_WRONLY | O_CREAT| O_APPEND, 1);
+      mode = O_WRONLY | O_CREAT| O_APPEND;
+      fd = STDOUT_FILENO;
       break;
     }
+    cmd = redircmd(cmd, q, mode, fd);
   }
   return cmd;
 }

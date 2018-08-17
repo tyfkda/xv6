@@ -23,6 +23,8 @@
 #define TRUE   (1)
 #endif
 
+#define AND  ('^')
+
 struct cmd {
   int type;
 };
@@ -48,6 +50,7 @@ struct pipecmd {
 
 struct listcmd {
   int type;
+  int cond;
   struct cmd *left;
   struct cmd *right;
 };
@@ -255,6 +258,8 @@ runcmd(struct cmd *cmd)
       runcmd(lcmd->left);
     wait(&ec1);
     putLastExitCode(ec1);
+    if (lcmd->cond == AND && ec1 != EXIT_SUCCESS)
+      exit(ec1);
     runcmd(lcmd->right);
     break;
 
@@ -417,12 +422,13 @@ pipecmd(struct cmd *left, struct cmd *right)
 }
 
 struct cmd*
-listcmd(struct cmd *left, struct cmd *right)
+listcmd(int cond, struct cmd *left, struct cmd *right)
 {
   struct listcmd *cmd;
 
   cmd = calloc(sizeof(*cmd));
   cmd->type = LIST;
+  cmd->cond = cond;
   cmd->left = left;
   cmd->right = right;
   return (struct cmd*)cmd;
@@ -463,10 +469,16 @@ peektoken(char *s, char *es, char **ps)
   case '(':
   case ')':
   case ';':
-  case '&':
   case '<':
   case '#':
     s++;
+    break;
+  case '&':
+    s++;
+    if(*s == '&'){
+      tok = AND;
+      s++;
+    }
     break;
   case '>':
     s++;
@@ -588,9 +600,9 @@ parseline(char **ps, char *es)
     return cmd;
   }
 
-  if(peek(ps, es, ";")){
-    gettoken(ps, es, NULL);
-    cmd = listcmd(cmd, parseline(ps, es));
+  if(peek(ps, es, ";^")){
+    int tok = gettoken(ps, es, NULL);
+    cmd = listcmd(tok, cmd, parseline(ps, es));
   }
   return cmd;
 }
@@ -665,7 +677,7 @@ parseexec(char **ps, char *es)
 
   argc = 0;
   ret = parseredirs(ret, ps, es);
-  while(!peek(ps, es, "|)&;#")){
+  while(!peek(ps, es, "|)&;^#")){
     if((tok=gettoken(ps, es, &q)) == 0)
       break;
     if(tok != 'a')

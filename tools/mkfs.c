@@ -37,11 +37,9 @@ const int nlog = LOGSIZE;
 
 int fsfd;
 struct superblock sb;
-uint freeinode = ROOTINO;
-uint freeblock;
 time_t mtime;
 
-void balloc(int);
+void bfill(int);
 void allocsect(int);
 void wsect(uint, void*);
 void winode(uint, struct dinode*);
@@ -50,7 +48,14 @@ void rsect(uint sec, void *buf);
 uint ialloc(ushort type);
 uint iallocdir(uint parent, const char *name);
 void iappend(uint inum, void *p, int n);
-static void put1(uint inum, const char *path);
+void put1(uint inum, const char *path, const char *dstName);
+
+static uint balloc(void);
+
+static void panic(const char* msg) {
+  fprintf(stderr, "%s\n", msg);
+  exit(1);
+}
 
 // convert to intel byte order
 ushort
@@ -112,8 +117,6 @@ static void setup_superblock(int ninodes, int fssize) {
 
   printf("nmeta %d (boot, super, log blocks %u inode blocks %u(%u inodes), bitmap blocks %u) blocks %d total %d\n",
          nmeta, nlog, ninodeblocks, ninodes, nbitmap, nblocks, fssize);
-
-  freeblock = nmeta;     // the first free block that we can allocate
 }
 
 void create_fs_img(const char* imgFn, int ninodes, int fssize) {
@@ -136,13 +139,21 @@ void create_fs_img(const char* imgFn, int ninodes, int fssize) {
   const int ninodeblocks = DIVROUNDUP(ninodes, IPB);
   const int nbitmap = DIVROUNDUP(fssize, BSIZE * 8);
   int nmeta = xint(sb.logstart) + xint(sb.nlog) + xint(ninodeblocks) + nbitmap;
-  balloc(nmeta);
+  bfill(nmeta);
 
   int rootino = iallocdir(ROOTINO, NULL);
   assert(rootino == ROOTINO);
 
   host_close(fsfd);
   fsfd = -1;
+}
+
+void open_fs_img(const char* imgFn) {
+  fsfd = host_readwriteopen(imgFn);
+
+  char buf[BSIZE];
+  rsect(1, buf);
+  memmove(&sb, buf, sizeof(sb));
 }
 
 static void putdirent(uint parent, uint inum, const char *name) {
@@ -166,7 +177,8 @@ static const char* getbasename(const char *path) {
 }
 
 // Put a file into the root directory.
-static void putfile(uint parent, const char *path) {
+// Assumes given dstName doesn't exist in parent.
+static void putfile(uint parent, const char *path, const char *dstName) {
   int cc, fd;
   uint inum;
   char buf[BSIZE];
@@ -178,7 +190,7 @@ static void putfile(uint parent, const char *path) {
   }
 
   inum = ialloc(T_FILE);
-  putdirent(parent, inum, getbasename(path));
+  putdirent(parent, inum, getbasename(dstName));
 
   while((cc = host_read(fd, buf, sizeof(buf))) > 0)
     iappend(inum, buf, cc);
@@ -225,18 +237,18 @@ static void putdirentries(uint inum, const char *path) {
     char child_path[128];
     // TODO: Avoid buffer overrun.
     snprintf(child_path, sizeof(child_path), "%s%c%s", path, DS, entry);
-    put1(inum, child_path);
+    put1(inum, child_path, child_path);
   }
 
   host_closedir(dir);
 }
 
-static void put1(uint inum, const char *path) {
+void put1(uint inum, const char *path, const char *dstName) {
   if (host_isdir(path)) {
     uint target = iallocdir(inum, getbasename(path));
     putdirentries(target, path);
   } else {
-    putfile(inum, path);
+    putfile(inum, path, path);
   }
 }
 
@@ -296,31 +308,44 @@ rsect(uint sec, void *buf)
 uint
 ialloc(ushort type)
 {
-  uint inum = freeinode++;
-  struct dinode din;
+  int inum;
+  char buf[BSIZE];
+  struct dinode *dip;
 
-  bzero(&din, sizeof(din));
-  din.type = xshort(type);
-  din.nlink = xshort(1);
-  din.size = xint(0);
-  din.mtime = (uint)mtime;
-  winode(inum, &din);
-  return inum;
+  for (inum = ROOTINO; inum < sb.ninodes; ++inum) {
+    if (inum % IPB == 0 || inum == ROOTINO) {
+      rsect(IBLOCK(inum, sb), buf);
+    }
+    dip = (struct dinode*)buf + inum % IPB;
+    if(dip->type == 0){  // a free inode
+      struct dinode din;
+
+      bzero(&din, sizeof(din));
+      din.type = xshort(type);
+      din.nlink = xshort(1);
+      din.size = xint(0);
+      din.mtime = (uint)mtime;
+      winode(inum, &din);
+      return inum;
+    }
+  }
+  panic("inode full");
+  return 0;
 }
 
 void
-balloc(int used)
+bfill(int used)
 {
   uchar buf[BSIZE];
   int i;
 
-  printf("balloc: first %d blocks have been allocated\n", used);
+  printf("bfill: first %d blocks have been allocated\n", used);
   assert(used < BSIZE*8);
   bzero(buf, BSIZE);
   for(i = 0; i < used; i++){
     buf[i/8] = buf[i/8] | (0x1 << (i%8));
   }
-  printf("balloc: write bitmap block at sector %d\n", sb.bmapstart);
+  printf("bfill: write bitmap block at sector %d\n", sb.bmapstart);
   wsect(sb.bmapstart, buf);
 }
 
@@ -337,12 +362,6 @@ allocsect(int sec)
 }
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
-
-int blkalloc(void) {
-  int ib = freeblock++;
-  allocsect(ib);
-  return ib;
-}
 
 void
 iappend(uint inum, void *xp, int n)
@@ -362,16 +381,16 @@ iappend(uint inum, void *xp, int n)
     assert(fbn < MAXFILE);
     if(fbn < NDIRECT){
       if(xint(din.addrs[fbn]) == 0){
-        din.addrs[fbn] = xint(blkalloc());
+        din.addrs[fbn] = xint(balloc());
       }
       x = xint(din.addrs[fbn]);
     } else {
       if(xint(din.addrs[NDIRECT]) == 0){
-        din.addrs[NDIRECT] = xint(blkalloc());
+        din.addrs[NDIRECT] = xint(balloc());
       }
       rsect(xint(din.addrs[NDIRECT]), (char*)indirect);
       if(indirect[fbn - NDIRECT] == 0){
-        indirect[fbn - NDIRECT] = xint(blkalloc());
+        indirect[fbn - NDIRECT] = xint(balloc());
         wsect(xint(din.addrs[NDIRECT]), (char*)indirect);
       }
       x = xint(indirect[fbn-NDIRECT]);
@@ -387,6 +406,214 @@ iappend(uint inum, void *xp, int n)
   din.size = xint(off);
   winode(inum, &din);
 }
+
+////////////////////////////////////////////////
+// Taken from fs.c
+
+// Inode content
+//
+// The content (data) associated with each inode is stored
+// in blocks on the disk. The first NDIRECT block numbers
+// are listed in ip->addrs[].  The next NINDIRECT blocks are
+// listed in block ip->addrs[NDIRECT].
+
+// Allocate a zeroed disk block.
+static uint
+balloc(void)
+{
+  int b, bi, m;
+  uchar buf[BSIZE];
+
+  // TODO: Consider the case that block has multiple pages.
+  for(b = 0; b < sb.size; b += BPB){
+    rsect(BBLOCK(b, sb), buf);
+    for(bi = 0; bi < BPB && b + bi < sb.size; bi++){
+      m = 1 << (bi % 8);
+      if((buf[bi/8] & m) == 0){  // Is block free?
+        int sec = b + bi;
+        allocsect(sec);
+        return sec;
+      }
+    }
+  }
+  panic("Block full");
+  return -1;
+}
+
+// Return a locked buf with the contents of the indicated block.
+static void
+bread(uint blockno, char* out)
+{
+  rsect(blockno, out);
+}
+
+// Return the disk block address of the nth block in inode ip.
+// If there is no such block, bmap allocates one.
+static uint
+bmap(struct dinode *ip, uint bn)
+{
+  uint addr;
+
+  if(bn < NDIRECT){
+    if((addr = ip->addrs[bn]) == 0)
+      ip->addrs[bn] = addr = balloc();
+    return addr;
+  }
+  bn -= NDIRECT;
+
+  if(bn < NINDIRECT){
+    // Load indirect block, allocating if necessary.
+    if((addr = ip->addrs[NDIRECT]) == 0)
+      ip->addrs[NDIRECT] = addr = balloc();
+    char buf[BSIZE];
+    bread(addr, buf);
+    uint *a = (uint*)buf;
+    if((addr = a[bn]) == 0){
+      a[bn] = addr = balloc();
+      //log_write(bp);
+      wsect(addr, buf);
+    }
+    //brelse(bp);
+    return addr;
+  }
+
+  panic("bmap: out of range");
+  return -1;
+}
+
+// Read data from inode.
+// Caller must hold ip->lock.
+int
+readi(struct dinode *ip, char *dst, uint off, uint n)
+{
+  uint tot, m;
+  //struct buf *bp;
+
+  //if(ip->type == T_DEV){
+  //  if(ip->major < 0 || ip->major >= NDEV || !devsw[ip->major].read)
+  //    return -1;
+  //  return devsw[ip->major].read(ip, dst, n);
+  //}
+
+  if(off > ip->size || off + n < off)
+    return -1;
+  if(off + n > ip->size)
+    n = ip->size - off;
+
+  for(tot=0; tot<n; tot+=m, off+=m, dst+=m){
+    char buf[BSIZE];
+    bread(bmap(ip, off/BSIZE), buf);
+    m = min(n - tot, BSIZE - off%BSIZE);
+    memmove(dst, buf + off%BSIZE, m);
+    //brelse(bp);
+  }
+  return n;
+}
+
+// Copy the next path element from path into name.
+// Return a pointer to the element following the copied one.
+// The returned path has no leading slashes,
+// so the caller can check *path=='\0' to see if the name is the last one.
+// If no name to remove, return 0.
+//
+// Examples:
+//   skipelem("a/bb/c", name) = "bb/c", setting name = "a"
+//   skipelem("///a//bb", name) = "bb", setting name = "a"
+//   skipelem("a", name) = "", setting name = "a"
+//   skipelem("", name) = skipelem("////", name) = 0
+//
+static const char*
+skipelem(const char *path, char *name)
+{
+  const char *s;
+  int len;
+
+  while(*path == '/')
+    path++;
+  if(*path == 0)
+    return 0;
+  s = path;
+  while(*path != '/' && *path != 0)
+    path++;
+  len = path - s;
+  if(len >= DIRSIZ)
+    memmove(name, s, DIRSIZ);
+  else {
+    memmove(name, s, len);
+    name[len] = 0;
+  }
+  while(*path == '/')
+    path++;
+  return path;
+}
+
+int
+namecmp(const char *s, const char *t)
+{
+  return strncmp(s, t, DIRSIZ);
+}
+
+// Look for a directory entry in a directory.
+// If found, set *poff to byte offset of entry.
+int
+dirlookup(struct dinode *din, const char *name, uint* poff)
+{
+  uint off;
+  struct dirent de;
+
+  //if(dp->type != T_DIR)
+  //  panic("dirlookup not DIR");
+
+  for(off = 0; off < din->size; off += sizeof(de)){
+    if(readi(din, (char*)&de, off, sizeof(de)) != sizeof(de))
+      panic("dirlookup read");
+    if(de.d_ino == 0)
+      continue;
+    if(namecmp(name, de.d_name) == 0){
+      // entry matches path element
+      if(poff != NULL)
+        *poff = off;
+      return de.d_ino;
+    }
+  }
+  return -1;
+}
+
+static int namex(const char* path, int nameiparent, char* name) {
+  int inum = ROOTINO;
+  *name = '\0';
+  while((path = skipelem(path, name)) != 0){
+    struct dinode din;
+    rinode(inum, &din);
+
+    if (din.type != T_DIR) {
+      return -1;
+    }
+
+    if(nameiparent && *path == '\0'){
+      return inum;
+    }
+
+    int next = dirlookup(&din, name, NULL);
+    if (next  == -1) {
+      inum = -1;
+      break;
+    }
+    inum = next;
+  }
+  return inum;
+}
+
+static int namei(const char* path) {
+  char name[DIRSIZ];
+  return namex(path, FALSE, name);
+}
+
+static int nameiparent(const char* path, char* name) {
+  return namex(path, TRUE, name);
+}
+
+////////////////////////////////////////////////
 
 static void usage(void) {
   fprintf(stderr, "Usage: mkfs [-i nr-inodes] fs.img files...\n");
@@ -442,11 +669,11 @@ oldmain(int argc, char *argv[])
 
   create_fs_img(argv[optind], nr_inodes, fssize);
 
-  fsfd = host_readwriteopen(argv[optind]);
+  open_fs_img(argv[optind]);
   rootino = ROOTINO;
 
   for(i = optind + 1; i < argc; i++){
-    put1(rootino, argv[i]);
+    put1(rootino, argv[i], argv[i]);
   }
 
   // fix size of root inode dir
@@ -456,8 +683,6 @@ oldmain(int argc, char *argv[])
   din.size = xint(off);
   winode(rootino, &din);
 
-  balloc(freeblock);
-
   host_close(fsfd);
 
   return 0;
@@ -465,13 +690,47 @@ oldmain(int argc, char *argv[])
 
 ////////////////////////////////////////////////
 
+void doPut(const char* src, const char* dst) {
+  char name[DIRSIZ];
+  int parent = nameiparent(dst, name);
+  if (parent == -1) {
+    fprintf(stderr, "Cannot find dst: %s\n", dst);
+    exit(1);
+  }
+  if (*name != '\0') {
+    struct dinode din;
+    rinode(parent, &din);
+    int ino = dirlookup(&din, name, NULL);
+    if (ino != -1) {
+      struct dinode din;
+      rinode(ino, &din);
+      if (din.type == T_DIR) {
+        parent = namei(dst);
+        assert(parent != -1);
+        *name = '\0';
+      } else {
+        // TODO: overwrite
+        fprintf(stderr, "File already exists: %s\n", name);
+        exit(1);
+      }
+    }
+  }
+  if (*name == '\0') {
+    strncpy(name, getbasename(src), sizeof(name));
+  }
+
+  put1(parent, src, name);
+}
+
 typedef enum {
   UNKNOWN = -1,
   INIT,
+  PUT,
 } SUBCMD;
 
 static const char* kSubCommands[] = {
   "init",
+  "put",
   NULL,
 };
 
@@ -490,6 +749,7 @@ static void showHelp(void) {
           "\n"
           "Subcommands:\n"
           "\tinit                 Create initialized image\n"
+          "\tput <source> [dest]  Put a file from local to image (default: to root)\n"
           );
 }
 
@@ -504,17 +764,38 @@ newmain(int argc, char *argv[])
   }
 
   const char* imgFn = argv[1];
-  const char* subcmd = argv[2];
+  const char* subcmdStr = argv[2];
 
-  switch (getSubcommand(subcmd)) {
-  case INIT:
+  SUBCMD subcmd = getSubcommand(subcmdStr);
+  if (subcmd == INIT) {
     create_fs_img(imgFn, NINODES, FSSIZE);
-    break;
-  case UNKNOWN:
-  default:
-    fprintf(stderr, "Unknown command: %s\n", subcmd);
-    showHelp();
-    return 1;
+  } else {
+    open_fs_img(imgFn);
+
+    switch (subcmd) {
+    case INIT:
+      break;
+    case PUT:
+      {
+        if (argc < 4) {
+          fprintf(stderr, "put: <src path (in local)> [dst path (in image)]\n");
+          exit(1);
+        }
+
+        int srcMax = argc > 4 ? argc - 1 : argc;
+        const char* dst = argc > 4 ? argv[argc - 1] : "/";
+
+        for (int i = 3; i < srcMax; ++i) {
+          doPut(argv[i], dst);
+        }
+      }
+      break;
+    case UNKNOWN:
+    default:
+      fprintf(stderr, "Unknown subcommand: %s\n", subcmdStr);
+      showHelp();
+      return 1;
+    }
   }
 
   return 0;

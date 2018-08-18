@@ -615,81 +615,6 @@ static int nameiparent(const char* path, char* name) {
 
 ////////////////////////////////////////////////
 
-static void usage(void) {
-  fprintf(stderr, "Usage: mkfs [-i nr-inodes] fs.img files...\n");
-}
-
-int
-oldmain(int argc, char *argv[])
-{
-  int i;
-  uint rootino, off;
-  struct dinode din;
-  int opt;
-  long nr_inodes;
-  long fssize;
-
-  static_assert(sizeof(int) == 4, "Integers must be 4 bytes!");
-
-  nr_inodes = NINODES;
-  fssize = FSSIZE;
-
-  while ((opt = getopt(argc, argv, "i:s:")) != -1) {
-    switch (opt) {
-    case 'i':
-      nr_inodes = strtol(optarg, NULL, 0);
-      if (nr_inodes == LONG_MAX || nr_inodes == LONG_MIN) {
-        fprintf(stderr, "Illegal inode count\n");
-        exit(1);
-      }
-      break;
-    case 's':
-      fssize = strtol(optarg, NULL, 0);
-      if (fssize == LONG_MAX || fssize == LONG_MIN) {
-        fprintf(stderr, "Illegal fssize\n");
-        exit(1);
-      }
-      break;
-    default: /* '?' */
-      usage();
-      exit(1);
-    }
-  }
-
-  if ( argc <= optind ) {
-    usage();
-    exit(1);
-  }
-
-  assert((BSIZE % sizeof(struct dinode)) == 0);
-  assert((BSIZE % sizeof(struct dirent)) == 0);
-
-  //time(&mtime);
-  mtime = 0;  // for test
-
-  create_fs_img(argv[optind], nr_inodes, fssize);
-
-  open_fs_img(argv[optind]);
-  rootino = ROOTINO;
-
-  for(i = optind + 1; i < argc; i++){
-    put1(rootino, argv[i], argv[i]);
-  }
-
-  // fix size of root inode dir
-  rinode(rootino, &din);
-  off = xint(din.size);
-  off = ((off / BSIZE) + 1) * BSIZE;
-  din.size = xint(off);
-  winode(rootino, &din);
-
-  host_close(fsfd);
-
-  return 0;
-}
-
-////////////////////////////////////////////////
-
 void doPut(const char* src, const char* dst) {
   char name[DIRSIZ];
   int parent = nameiparent(dst, name);
@@ -766,8 +691,11 @@ static SUBCMD getSubcommand(const char* str) {
 static void showHelp(void) {
   FILE* fp = stderr;
   fprintf(fp,
-          "Usage: fs <img> <subcommand>\n"
+          "Usage: mkfs [options] <img> <subcommand> ...\n"
           "\n"
+          "options:\n"
+          "\t-i <nr-inodes>\n"
+          "\t-s <fssize>\n"
           "Subcommands:\n"
           "\tinit                 Create initialized image\n"
           "\tput <source> [dest]  Put a file from local to image (default: to root)\n"
@@ -776,11 +704,43 @@ static void showHelp(void) {
 }
 
 int
-newmain(int argc, char *argv[])
+main(int argc, char *argv[])
 {
+  long nr_inodes;
+  long fssize;
+
   static_assert(sizeof(int) == 4, "Integers must be 4 bytes!");
 
-  if (argc < 3) {
+  nr_inodes = NINODES;
+  fssize = FSSIZE;
+
+  int opt;
+  while ((opt = getopt(argc, argv, "i:s:")) != -1) {
+    switch (opt) {
+    case 'i':
+      nr_inodes = strtol(optarg, NULL, 0);
+      if (nr_inodes == LONG_MAX || nr_inodes == LONG_MIN) {
+        fprintf(stderr, "Illegal inode count\n");
+        exit(1);
+      }
+      break;
+    case 's':
+      fssize = strtol(optarg, NULL, 0);
+      if (fssize == LONG_MAX || fssize == LONG_MIN) {
+        fprintf(stderr, "Illegal fssize\n");
+        exit(1);
+      }
+      break;
+    default: /* '?' */
+      showHelp();
+      exit(1);
+    }
+  }
+
+  assert((BSIZE % sizeof(struct dinode)) == 0);
+  assert((BSIZE % sizeof(struct dirent)) == 0);
+
+  if (optind + 2 > argc) {
     showHelp();
     return 1;
   }
@@ -790,13 +750,11 @@ newmain(int argc, char *argv[])
 
   SUBCMD subcmd = getSubcommand(subcmdStr);
   if (subcmd == INIT) {
-    create_fs_img(imgFn, NINODES, FSSIZE);
+    create_fs_img(imgFn, nr_inodes, fssize);
   } else {
     open_fs_img(imgFn);
 
     switch (subcmd) {
-    case INIT:
-      break;
     case PUT:
       {
         if (argc < 4) {
@@ -833,11 +791,4 @@ newmain(int argc, char *argv[])
   }
 
   return 0;
-}
-
-int
-main(int argc, char *argv[])
-{
-  return oldmain(argc, argv);
-  //return newmain(argc, argv);
 }

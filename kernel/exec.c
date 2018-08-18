@@ -41,13 +41,7 @@ static struct inode *find_path(const char *path, char *resultPath, int bufsiz) {
   return ip;
 }
 
-int
-exec(const char *path, const char* const *argv)
-{
-  return -1;  /* No longer supported */
-}
-
-int
+static int
 load_elf(const char *path, const char *argv[], const char *envp[]){
   const char *s, *last;
   int i, off;
@@ -205,7 +199,7 @@ load_elf(const char *path, const char *argv[], const char *envp[]){
   return -1;
 }
 
-int
+static int
 load_shebang(const char *path, const char *argv[], const char *envp[])
 {
   struct inode          *ip;
@@ -250,6 +244,7 @@ load_shebang(const char *path, const char *argv[], const char *envp[])
   argv2[0] = shebang;
   argv2[1] = path;
   for (i = 1; i < MAXARG - 1; ++i) {
+
     argv2[i + 1] = argv[i];
     if (argv[i] == 0)
       break;
@@ -268,7 +263,7 @@ load_shebang(const char *path, const char *argv[], const char *envp[])
 
   /*
    * Note: Invoking execve is desirable
-   * but we do not have enough kernel memory at this moment.
+   * but it seems kernel memory is not enough at this moment.
    */
   return load_elf(argv2[0], argv2, envp);
 }

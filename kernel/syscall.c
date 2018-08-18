@@ -131,7 +131,7 @@ argcstr(int n, const char **pp)
 extern int sys_chdir(void);
 extern int sys_close(void);
 extern int sys_dup(void);
-extern int sys_exec(void);
+extern int sys_execve(void);
 extern int sys_exit(void);
 extern int sys_fork(void);
 extern int sys_fstat(void);
@@ -154,7 +154,7 @@ extern int sys_ioctl(void);
 extern int sys_isatty(void);
 extern int sys_ftruncate(void);
 extern int sys_readdir(void);
-extern int sys_execve(void);
+
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -163,7 +163,7 @@ static int (*syscalls[])(void) = {
 [SYS_pipe]    sys_pipe,
 [SYS_read]    sys_read,
 [SYS_kill]    sys_kill,
-[SYS_exec]    sys_exec,
+[SYS_execve]  sys_execve,
 [SYS_fstat]   sys_fstat,
 [SYS_chdir]   sys_chdir,
 [SYS_dup]     sys_dup,
@@ -183,7 +183,6 @@ static int (*syscalls[])(void) = {
 [SYS_isatty]  sys_isatty,
 [SYS_ftruncate]  sys_ftruncate,
 [SYS_readdir]  sys_readdir,
-[SYS_execve]  sys_execve,
 };
 
 void

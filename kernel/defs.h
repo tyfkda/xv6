@@ -28,7 +28,6 @@ void            consoleintr(int(*)(void));
 void            panic(char*) __attribute__((noreturn));
 
 // exec.c
-int             exec(const char *, const char* const *);
 int             execve(const char *, const char*[] , const char*[]);
 
 // file.c

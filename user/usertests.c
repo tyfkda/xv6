@@ -1706,6 +1706,7 @@ void
 bigargtest(void)
 {
   int pid, fd;
+  char *env[]={"TERM=xv6", "PATH=/bin:/sbin",0};
 
   unlink("bigarg-ok");
   pid = fork();
@@ -1716,7 +1717,7 @@ bigargtest(void)
       args[i] = "bigargs test: failed\n                                                                                                                                                                                                       ";
     args[MAXARG-1] = 0;
     printf("bigarg test\n");
-    exec("echo", args);
+    execve("echo", args, env);
     printf("bigarg test ok\n");
     fd = open("bigarg-ok", O_CREAT);
     close(fd);

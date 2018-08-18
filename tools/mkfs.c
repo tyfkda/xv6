@@ -209,93 +209,6 @@ static void put1(uint inum, const char *path) {
   }
 }
 
-static void usage(void) {
-  fprintf(stderr, "Usage: mkfs [-i nr-inodes] fs.img files...\n");
-}
-
-int
-main(int argc, char *argv[])
-{
-  int i;
-  uint rootino, off;
-  char buf[BSIZE];
-  struct dinode din;
-  int opt;
-  long nr_inodes;
-  long fssize;
-
-  static_assert(sizeof(int) == 4, "Integers must be 4 bytes!");
-
-  nr_inodes = NINODES;
-  fssize = FSSIZE;
-
-  while ((opt = getopt(argc, argv, "i:s:")) != -1) {
-    switch (opt) {
-    case 'i':
-      nr_inodes = strtol(optarg, NULL, 0);
-      if (nr_inodes == LONG_MAX || nr_inodes == LONG_MIN) {
-        fprintf(stderr, "Illegal inode count\n");
-        exit(1);
-      }
-      break;
-    case 's':
-      fssize = strtol(optarg, NULL, 0);
-      if (fssize == LONG_MAX || fssize == LONG_MIN) {
-        fprintf(stderr, "Illegal fssize\n");
-        exit(1);
-      }
-      break;
-    default: /* '?' */
-      usage();
-      exit(1);
-    }
-  }
-
-  if ( argc <= optind ) {
-    usage();
-    exit(1);
-  }
-
-  assert((BSIZE % sizeof(struct dinode)) == 0);
-  assert((BSIZE % sizeof(struct dirent)) == 0);
-
-  //time(&mtime);
-  mtime = 0;  // for test
-
-  fsfd = host_createopen(argv[optind]);
-  if(fsfd < 0){
-    perror(argv[optind]);
-    exit(1);
-  }
-
-  setup_superblock(nr_inodes, fssize);
-  clear_all_sectors(fssize);
-
-  memset(buf, 0, sizeof(buf));
-  memmove(buf, &sb, sizeof(sb));
-  wsect(1, buf);
-
-  rootino = iallocdir(ROOTINO, NULL);
-  assert(rootino == ROOTINO);
-
-  for(i = optind + 1; i < argc; i++){
-    put1(rootino, argv[i]);
-  }
-
-  // fix size of root inode dir
-  rinode(rootino, &din);
-  off = xint(din.size);
-  off = ((off / BSIZE) + 1) * BSIZE;
-  din.size = xint(off);
-  winode(rootino, &din);
-
-  balloc(freeblock);
-
-  host_close(fsfd);
-
-  return 0;
-}
-
 void
 wsect(uint sec, void *buf)
 {
@@ -424,4 +337,91 @@ iappend(uint inum, void *xp, int n)
   }
   din.size = xint(off);
   winode(inum, &din);
+}
+
+static void usage(void) {
+  fprintf(stderr, "Usage: mkfs [-i nr-inodes] fs.img files...\n");
+}
+
+int
+main(int argc, char *argv[])
+{
+  int i;
+  uint rootino, off;
+  char buf[BSIZE];
+  struct dinode din;
+  int opt;
+  long nr_inodes;
+  long fssize;
+
+  static_assert(sizeof(int) == 4, "Integers must be 4 bytes!");
+
+  nr_inodes = NINODES;
+  fssize = FSSIZE;
+
+  while ((opt = getopt(argc, argv, "i:s:")) != -1) {
+    switch (opt) {
+    case 'i':
+      nr_inodes = strtol(optarg, NULL, 0);
+      if (nr_inodes == LONG_MAX || nr_inodes == LONG_MIN) {
+        fprintf(stderr, "Illegal inode count\n");
+        exit(1);
+      }
+      break;
+    case 's':
+      fssize = strtol(optarg, NULL, 0);
+      if (fssize == LONG_MAX || fssize == LONG_MIN) {
+        fprintf(stderr, "Illegal fssize\n");
+        exit(1);
+      }
+      break;
+    default: /* '?' */
+      usage();
+      exit(1);
+    }
+  }
+
+  if ( argc <= optind ) {
+    usage();
+    exit(1);
+  }
+
+  assert((BSIZE % sizeof(struct dinode)) == 0);
+  assert((BSIZE % sizeof(struct dirent)) == 0);
+
+  //time(&mtime);
+  mtime = 0;  // for test
+
+  fsfd = host_createopen(argv[optind]);
+  if(fsfd < 0){
+    perror(argv[optind]);
+    exit(1);
+  }
+
+  setup_superblock(nr_inodes, fssize);
+  clear_all_sectors(fssize);
+
+  memset(buf, 0, sizeof(buf));
+  memmove(buf, &sb, sizeof(sb));
+  wsect(1, buf);
+
+  rootino = iallocdir(ROOTINO, NULL);
+  assert(rootino == ROOTINO);
+
+  for(i = optind + 1; i < argc; i++){
+    put1(rootino, argv[i]);
+  }
+
+  // fix size of root inode dir
+  rinode(rootino, &din);
+  off = xint(din.size);
+  off = ((off / BSIZE) + 1) * BSIZE;
+  din.size = xint(off);
+  winode(rootino, &din);
+
+  balloc(freeblock);
+
+  host_close(fsfd);
+
+  return 0;
 }

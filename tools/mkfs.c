@@ -722,15 +722,36 @@ void doPut(const char* src, const char* dst) {
   put1(parent, src, name);
 }
 
+void doMkdir(const char* path) {
+  char name[DIRSIZ];
+  int parent = nameiparent(path, name);
+  if (parent == -1) {
+    fprintf(stderr, "mkdir: unavailable path: %s\n", path);
+    exit(1);
+  }
+
+  struct dinode din;
+  rinode(parent, &din);
+  int ino = dirlookup(&din, name, NULL);
+  if (ino != -1) {
+    fprintf(stderr, "mkdir: file already exists: %s\n", name);
+    exit(1);
+  }
+
+  iallocdir(parent, name);
+}
+
 typedef enum {
   UNKNOWN = -1,
   INIT,
   PUT,
+  MKDIR,
 } SUBCMD;
 
 static const char* kSubCommands[] = {
   "init",
   "put",
+  "mkdir",
   NULL,
 };
 
@@ -750,6 +771,7 @@ static void showHelp(void) {
           "Subcommands:\n"
           "\tinit                 Create initialized image\n"
           "\tput <source> [dest]  Put a file from local to image (default: to root)\n"
+          "\tmkdir path...        Create a directory(s) in image\n"
           );
 }
 
@@ -787,6 +809,18 @@ newmain(int argc, char *argv[])
 
         for (int i = 3; i < srcMax; ++i) {
           doPut(argv[i], dst);
+        }
+      }
+      break;
+    case MKDIR:
+      {
+        if (argc < 4) {
+          fprintf(stderr, "mkdir: path\n");
+          exit(1);
+        }
+
+        for (int i = 3; i < argc; ++i) {
+          doMkdir(argv[i]);
         }
       }
       break;

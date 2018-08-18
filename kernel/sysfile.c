@@ -255,14 +255,16 @@ bad:
 }
 
 static struct inode*
-create(const char *path, short type, short major, short minor)
+create(const char *path, short type, short major, short minor, int* perr)
 {
   uint off;
   struct inode *ip, *dp;
   char name[DIRSIZ];
 
-  if((dp = nameiparent(path, name)) == 0)
+  if((dp = nameiparent(path, name)) == 0) {
+    *perr = -ENOENT;
     return 0;
+  }
   ilock(dp);
 
   if((ip = dirlookup(dp, name, &off)) != 0){
@@ -271,6 +273,7 @@ create(const char *path, short type, short major, short minor)
     if(type == T_FILE && ip->type == T_FILE)
       return ip;
     iunlockput(ip);
+    *perr = -EEXIST;
     return 0;
   }
 
@@ -304,7 +307,7 @@ int
 sys_open(void)
 {
   const char *path;
-  int fd, omode;
+  int fd, omode, errno;
   struct file *f;
   struct inode *ip;
 
@@ -314,10 +317,10 @@ sys_open(void)
   begin_op();
 
   if(omode & O_CREAT){
-    ip = create(path, T_FILE, 0, 0);
+    ip = create(path, T_FILE, 0, 0, &errno);
     if(ip == 0){
       end_op();
-      return -EIO;
+      return errno;
     }
   } else {
     if((ip = namei(path)) == 0){
@@ -361,11 +364,12 @@ sys_mkdir(void)
 {
   const char *path;
   struct inode *ip;
+  int errno;
 
   begin_op();
-  if(argcstr(0, &path) < 0 || (ip = create(path, T_DIR, 0, 0)) == 0){
+  if(argcstr(0, &path) < 0 || (ip = create(path, T_DIR, 0, 0, &errno)) == 0){
     end_op();
-    return -1;
+    return errno;
   }
   iunlockput(ip);
   end_op();
@@ -377,15 +381,15 @@ sys_mknod(void)
 {
   struct inode *ip;
   const char *path;
-  int major, minor;
+  int major, minor, errno;
 
   begin_op();
   if((argcstr(0, &path)) < 0 ||
      argint(1, &major) < 0 ||
      argint(2, &minor) < 0 ||
-     (ip = create(path, T_DEV, major, minor)) == 0){
+     (ip = create(path, T_DEV, major, minor, &errno)) == 0){
     end_op();
-    return -1;
+    return errno;
   }
   iunlockput(ip);
   end_op();

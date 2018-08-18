@@ -33,7 +33,6 @@
 
 #define DIVROUNDUP(x, n)  (((x) + (n) - 1) / (n))
 
-const int nbitmap = DIVROUNDUP(FSSIZE, BSIZE * 8);
 const int nlog = LOGSIZE;
 
 int fsfd;
@@ -74,7 +73,8 @@ xint(uint x)
   return y;
 }
 
-static void setup_superblock(int ninodes) {
+static void setup_superblock(int ninodes, int fssize) {
+  const int nbitmap = DIVROUNDUP(fssize, BSIZE * 8);
   int nmeta;    // Number of meta blocks (boot, sb, nlog, inode, bitmap)
   int nblocks;  // Number of data blocks
   int ninodeblocks;
@@ -84,14 +84,14 @@ static void setup_superblock(int ninodes) {
   // 1 fs block = 1 disk sector
   nmeta = 2 + nlog + ninodeblocks + nbitmap;
 
-  if ( nmeta > FSSIZE ) {
+  if ( nmeta > fssize ) {
     fprintf(stderr, "nr-inodes: %u is too big.\n", ninodes);
     exit(1);
   }
 
-  nblocks = FSSIZE - nmeta;
+  nblocks = fssize - nmeta;
 
-  sb.size = xint(FSSIZE);
+  sb.size = xint(fssize);
   sb.nblocks = xint(nblocks);
   sb.ninodes = xint(ninodes);
   sb.nlog = xint(nlog);
@@ -100,17 +100,17 @@ static void setup_superblock(int ninodes) {
   sb.bmapstart = xint(2 + nlog + ninodeblocks);
 
   printf("nmeta %d (boot, super, log blocks %u inode blocks %u(%u inodes), bitmap blocks %u) blocks %d total %d\n",
-         nmeta, nlog, ninodeblocks, ninodes, nbitmap, nblocks, FSSIZE);
+         nmeta, nlog, ninodeblocks, ninodes, nbitmap, nblocks, fssize);
 
   freeblock = nmeta;     // the first free block that we can allocate
 }
 
-static void clear_all_sectors() {
+static void clear_all_sectors(int fssize) {
   char zeroes[BSIZE];
   int i;
 
   memset(zeroes, 0, sizeof(zeroes));
-  for(i = 0; i < FSSIZE; i++)
+  for(i = 0; i < fssize; i++)
     wsect(i, zeroes);
 }
 
@@ -222,17 +222,26 @@ main(int argc, char *argv[])
   struct dinode din;
   int opt;
   long nr_inodes;
+  long fssize;
 
   static_assert(sizeof(int) == 4, "Integers must be 4 bytes!");
 
   nr_inodes = NINODES;
+  fssize = FSSIZE;
 
-  while ((opt = getopt(argc, argv, "i:")) != -1) {
+  while ((opt = getopt(argc, argv, "i:s:")) != -1) {
     switch (opt) {
     case 'i':
       nr_inodes = strtol(optarg, NULL, 0);
-      if ( ( nr_inodes == LONG_MAX ) || ( nr_inodes == LONG_MIN ) ) {
-        usage();
+      if (nr_inodes == LONG_MAX || nr_inodes == LONG_MIN) {
+        fprintf(stderr, "Illegal inode count\n");
+        exit(1);
+      }
+      break;
+    case 's':
+      fssize = strtol(optarg, NULL, 0);
+      if (fssize == LONG_MAX || fssize == LONG_MIN) {
+        fprintf(stderr, "Illegal fssize\n");
         exit(1);
       }
       break;
@@ -259,8 +268,8 @@ main(int argc, char *argv[])
     exit(1);
   }
 
-  setup_superblock(nr_inodes);
-  clear_all_sectors();
+  setup_superblock(nr_inodes, fssize);
+  clear_all_sectors(fssize);
 
   memset(buf, 0, sizeof(buf));
   memmove(buf, &sb, sizeof(sb));

@@ -260,8 +260,8 @@ copyfsdata:
 	cp -upr fsdata/* fs/
 
 fs.img: out/mkfs $(UPROGS) copyfsdata
-	rm -f fs.img
-	out/mkfs $@ fs/*
+	out/mkfs $@ init
+	out/mkfs $@ put fs/* /
 
 -include obj/*/*.d
 

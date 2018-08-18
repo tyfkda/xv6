@@ -6,6 +6,7 @@
 typedef void *HOSTDIR;
 
 int host_readopen(const char *path);
+int host_readwriteopen(const char *path);
 int host_createopen(const char *path);
 size_t host_read(int fd, void *buf, size_t size);
 size_t host_write(int fd, const void *buf, size_t size);

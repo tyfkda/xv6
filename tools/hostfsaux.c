@@ -4,11 +4,15 @@
 #include <sys/stat.h>
 
 int host_readopen(const char *path) {
-  return open(path, 0);
+  return open(path, O_RDONLY);
+}
+
+int host_readwriteopen(const char *path) {
+  return open(path, O_RDWR);
 }
 
 int host_createopen(const char *path) {
-  return open(path, O_RDWR|O_CREAT|O_TRUNC, 0666);
+  return open(path, O_RDWR|O_CREAT, 0666);
 }
 
 size_t host_read(int fd, void *buf, size_t size) {

@@ -387,8 +387,10 @@ void dirtest(void)
 void
 exectest(void)
 {
+  char *env[]={"TERM=xv6", "PATH=/bin:/sbin",0};
+
   printf("exec test\n");
-  if(exec("echo", echoargv) < 0){
+  if(execve("echo", echoargv,env) < 0){
     printf("exec echo failed\n");
     exit(1);
   }

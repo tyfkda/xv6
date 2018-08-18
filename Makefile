@@ -224,6 +224,9 @@ fs/bin/%: obj/user/%.o obj/ulib/ulib.a
 	$(OBJDUMP) -S $@ > out/$*.asm
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/$*.sym
 	strip $@
+fs/bin/test.sh: user/test.sh
+	@mkdir -p fs/bin
+	cp user/test.sh fs/bin/test.sh
 
 out/mkfs: tools/mkfs.c tools/hostfsaux.c tools/hostfsaux.h kernel/fs.h
 	@mkdir -p out
@@ -256,6 +259,7 @@ UPROGS=\
 	fs/bin/zombie\
 	fs/bin/execvetest\
 	fs/bin/envtest\
+	fs/bin/test.sh\
 
 copyfsdata:
 	@mkdir -p fs

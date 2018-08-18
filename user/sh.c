@@ -207,7 +207,9 @@ putLastExitCode(int exitcode)
 void
 runecmd(struct execcmd *ecmd)
 {
-  exec(ecmd->argv[0], ecmd->argv);
+  char *env[]={"TERM=xv6", "PATH=/bin:/sbin",0};
+
+  execve(ecmd->argv[0], ecmd->argv, env);
   fprintf(stderr, "sh: command not found: %s\n", ecmd->argv[0]);
   exit(1);
 }

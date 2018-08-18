@@ -261,7 +261,7 @@ copyfsdata:
 
 fs.img: out/mkfs $(UPROGS) copyfsdata
 	rm -f fs.img
-	out/mkfs $@ fs
+	out/mkfs $@ fs/*
 
 -include obj/*/*.d
 

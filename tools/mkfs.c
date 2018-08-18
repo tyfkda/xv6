@@ -48,7 +48,7 @@ void rinode(uint inum, struct dinode *ip);
 void rsect(uint sec, void *buf);
 uint ialloc(ushort type);
 void iappend(uint inum, void *p, int n);
-static void put1(uint inum, const char *path, int create_dir);
+static void put1(uint inum, const char *path);
 
 // convert to intel byte order
 ushort
@@ -194,15 +194,15 @@ static void putdirentries(uint inum, const char *path) {
     char child_path[128];
     // TODO: Avoid buffer overrun.
     snprintf(child_path, sizeof(child_path), "%s%c%s", path, DS, entry);
-    put1(inum, child_path, TRUE);
+    put1(inum, child_path);
   }
 
   host_closedir(dir);
 }
 
-static void put1(uint inum, const char *path, int create_dir) {
+static void put1(uint inum, const char *path) {
   if (host_isdir(path)) {
-    uint target = create_dir ? iallocdir(inum, getbasename(path)) : inum;
+    uint target = iallocdir(inum, getbasename(path));
     putdirentries(target, path);
   } else {
     putfile(inum, path);
@@ -279,7 +279,7 @@ main(int argc, char *argv[])
   assert(rootino == ROOTINO);
 
   for(i = optind + 1; i < argc; i++){
-    put1(rootino, argv[i], FALSE);
+    put1(rootino, argv[i]);
   }
 
   // fix size of root inode dir

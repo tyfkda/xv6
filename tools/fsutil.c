@@ -34,6 +34,7 @@ void iupdate(struct dinode *ip, uint inum);
 typedef enum {
   UNKNOWN = -1,
   LS,
+  PUSH,
   PULL,
   MKDIR,
   RM,
@@ -41,6 +42,7 @@ typedef enum {
 
 static const char* kSubCommands[] = {
   "ls",
+  "push",
   "pull",
   "mkdir",
   "rm",
@@ -65,6 +67,7 @@ static void showHelp(void) {
           "\n"
           "Subcommands:\n"
           "\tls [path] ...         List files (default: /)\n"
+          "\tpush <source> [dest]  Push a file from local to image (default: to root)\n"
           "\tpull <source> [dest]  Pull a file from image to local (default: to current)\n"
           "\tmkdir [path] ...      Make directory.\n"
           "\trm [path] ...         Remove file(s).\n"
@@ -445,6 +448,27 @@ static uint iallocdir(uint parent, const char *name) {
     putdirent(parent, inum, name);
   }
   return inum;
+}
+
+// Put a file into the root directory.
+static void putfile(uint parent, const char *path) {
+  int cc, fd;
+  uint inum;
+  char buf[BSIZE];
+
+  fd = host_readopen(path);
+  if(fd < 0){
+    perror(path);
+    exit(1);
+  }
+
+  inum = ialloc(T_FILE);
+  putdirent(parent, inum, getBasename(path));
+
+  while((cc = host_read(fd, buf, sizeof(buf))) > 0)
+    iappend(inum, buf, cc);
+
+  host_close(fd);
 }
 
 // Truncate inode (discard contents).
@@ -836,6 +860,37 @@ void doRm(const char* path) {
   iupdate(&ip, inum);
 }
 
+void doPush(const char* srcPath, const char* dstPath) {
+  char dstPathBuf[128];
+
+  int ino = namei(dstPath);
+  if (ino != -1) {
+    struct dinode ip;
+    rinode(ino, &ip);
+    if (ip.type == T_DIR) {
+      snprintf(dstPathBuf, sizeof(dstPathBuf),
+               "%s/%s", dstPath, getBasename(srcPath));
+      dstPath = dstPathBuf;
+    }
+  }
+
+  char name[DIRSIZ];
+  int parent = nameiparent(dstPath, name);
+  if (parent == -1) {
+    fprintf(stderr, "push: dstPath not available: %s\n", dstPath);
+    exit(1);
+  }
+
+  struct dinode din;
+  rinode(parent, &din);
+  int inum = dirlookup(&din, name, NULL);
+  if (inum != -1) {
+    doRm(dstPath);
+  }
+
+  putfile(parent, srcPath);
+}
+
 int main(int argc, char *argv[]) {
   static_assert(sizeof(int) == 4, "Integers must be 4 bytes!");
 
@@ -855,6 +910,20 @@ int main(int argc, char *argv[]) {
     } else {
       for (int i = 3; i < argc; ++i)
         doLs(argv[i]);
+    }
+    break;
+  case PUSH:
+    {
+      if (argc < 4 || argc > 5) {
+        fprintf(stderr, "push: <src path (in local)> [dst path (in image)]\n");
+        exit(1);
+      }
+
+      const char* src = argv[3];
+      const char* dst = argc > 4 ? argv[4] : ".";
+
+      setupImgFs(imgFn, TRUE);
+      doPush(src, dst);
     }
     break;
   case PULL:

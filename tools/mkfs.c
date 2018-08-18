@@ -42,11 +42,13 @@ uint freeblock;
 time_t mtime;
 
 void balloc(int);
+void allocsect(int);
 void wsect(uint, void*);
 void winode(uint, struct dinode*);
 void rinode(uint inum, struct dinode *ip);
 void rsect(uint sec, void *buf);
 uint ialloc(ushort type);
+uint iallocdir(uint parent, const char *name);
 void iappend(uint inum, void *p, int n);
 static void put1(uint inum, const char *path);
 
@@ -71,6 +73,15 @@ xint(uint x)
   a[2] = x >> 16;
   a[3] = x >> 24;
   return y;
+}
+
+static void clear_all_sectors(int fssize) {
+  char zeroes[BSIZE];
+  int i;
+
+  memset(zeroes, 0, sizeof(zeroes));
+  for(i = 0; i < fssize; i++)
+    wsect(i, zeroes);
 }
 
 static void setup_superblock(int ninodes, int fssize) {
@@ -105,13 +116,33 @@ static void setup_superblock(int ninodes, int fssize) {
   freeblock = nmeta;     // the first free block that we can allocate
 }
 
-static void clear_all_sectors(int fssize) {
-  char zeroes[BSIZE];
-  int i;
+void create_fs_img(const char* imgFn, int ninodes, int fssize) {
+  fsfd = host_createopen(imgFn);
+  if(fsfd < 0){
+    perror(imgFn);
+    exit(1);
+  }
 
-  memset(zeroes, 0, sizeof(zeroes));
-  for(i = 0; i < fssize; i++)
-    wsect(i, zeroes);
+  setup_superblock(ninodes, fssize);
+
+  clear_all_sectors(fssize);
+
+  char buf[BSIZE];
+  memset(buf, 0, sizeof(buf));
+  memmove(buf, &sb, sizeof(sb));
+  wsect(1, buf);
+
+  // Fill meta blocks to be used
+  const int ninodeblocks = DIVROUNDUP(ninodes, IPB);
+  const int nbitmap = DIVROUNDUP(fssize, BSIZE * 8);
+  int nmeta = xint(sb.logstart) + xint(sb.nlog) + xint(ninodeblocks) + nbitmap;
+  balloc(nmeta);
+
+  int rootino = iallocdir(ROOTINO, NULL);
+  assert(rootino == ROOTINO);
+
+  host_close(fsfd);
+  fsfd = -1;
 }
 
 static void putdirent(uint parent, uint inum, const char *name) {
@@ -166,7 +197,7 @@ static int isparentdir(const char* name) {
 }
 
 // Allocate inode for directory, and put defaults ("." and "..")
-static uint iallocdir(uint parent, const char *name) {
+uint iallocdir(uint parent, const char *name) {
   uint inum = ialloc(T_DIR);
   putdirent(inum, inum, ".");
   putdirent(inum, parent, "..");
@@ -252,7 +283,7 @@ rinode(uint inum, struct dinode *ip)
 void
 rsect(uint sec, void *buf)
 {
-  if(lseek(fsfd, sec * BSIZE, 0) != sec * BSIZE){
+  if(lseek(fsfd, sec * BSIZE, SEEK_SET) != sec * BSIZE){
     perror("lseek");
     exit(1);
   }
@@ -293,7 +324,25 @@ balloc(int used)
   wsect(sb.bmapstart, buf);
 }
 
+void
+allocsect(int sec)
+{
+  uchar buf[BSIZE];
+
+  assert(sec < sb.size);
+  rsect(sb.bmapstart, buf);
+  assert((buf[sec / 8] & (0x1 << (sec % 8))) == 0);
+  buf[sec / 8] = buf[sec / 8] | (0x1 << (sec % 8));
+  wsect(sb.bmapstart, buf);
+}
+
 #define min(a, b) ((a) < (b) ? (a) : (b))
+
+int blkalloc(void) {
+  int ib = freeblock++;
+  allocsect(ib);
+  return ib;
+}
 
 void
 iappend(uint inum, void *xp, int n)
@@ -313,16 +362,16 @@ iappend(uint inum, void *xp, int n)
     assert(fbn < MAXFILE);
     if(fbn < NDIRECT){
       if(xint(din.addrs[fbn]) == 0){
-        din.addrs[fbn] = xint(freeblock++);
+        din.addrs[fbn] = xint(blkalloc());
       }
       x = xint(din.addrs[fbn]);
     } else {
       if(xint(din.addrs[NDIRECT]) == 0){
-        din.addrs[NDIRECT] = xint(freeblock++);
+        din.addrs[NDIRECT] = xint(blkalloc());
       }
       rsect(xint(din.addrs[NDIRECT]), (char*)indirect);
       if(indirect[fbn - NDIRECT] == 0){
-        indirect[fbn - NDIRECT] = xint(freeblock++);
+        indirect[fbn - NDIRECT] = xint(blkalloc());
         wsect(xint(din.addrs[NDIRECT]), (char*)indirect);
       }
       x = xint(indirect[fbn-NDIRECT]);
@@ -344,11 +393,10 @@ static void usage(void) {
 }
 
 int
-main(int argc, char *argv[])
+oldmain(int argc, char *argv[])
 {
   int i;
   uint rootino, off;
-  char buf[BSIZE];
   struct dinode din;
   int opt;
   long nr_inodes;
@@ -392,21 +440,10 @@ main(int argc, char *argv[])
   //time(&mtime);
   mtime = 0;  // for test
 
-  fsfd = host_createopen(argv[optind]);
-  if(fsfd < 0){
-    perror(argv[optind]);
-    exit(1);
-  }
+  create_fs_img(argv[optind], nr_inodes, fssize);
 
-  setup_superblock(nr_inodes, fssize);
-  clear_all_sectors(fssize);
-
-  memset(buf, 0, sizeof(buf));
-  memmove(buf, &sb, sizeof(sb));
-  wsect(1, buf);
-
-  rootino = iallocdir(ROOTINO, NULL);
-  assert(rootino == ROOTINO);
+  fsfd = host_readwriteopen(argv[optind]);
+  rootino = ROOTINO;
 
   for(i = optind + 1; i < argc; i++){
     put1(rootino, argv[i]);
@@ -424,4 +461,68 @@ main(int argc, char *argv[])
   host_close(fsfd);
 
   return 0;
+}
+
+////////////////////////////////////////////////
+
+typedef enum {
+  UNKNOWN = -1,
+  INIT,
+} SUBCMD;
+
+static const char* kSubCommands[] = {
+  "init",
+  NULL,
+};
+
+static SUBCMD getSubcommand(const char* str) {
+  for (int i = 0; kSubCommands[i] != NULL; ++i) {
+    if (strcmp(kSubCommands[i], str) == 0)
+      return (SUBCMD)i;
+  }
+  return UNKNOWN;
+}
+
+static void showHelp(void) {
+  FILE* fp = stderr;
+  fprintf(fp,
+          "Usage: fs <img> <subcommand>\n"
+          "\n"
+          "Subcommands:\n"
+          "\tinit                 Create initialized image\n"
+          );
+}
+
+int
+newmain(int argc, char *argv[])
+{
+  static_assert(sizeof(int) == 4, "Integers must be 4 bytes!");
+
+  if (argc < 3) {
+    showHelp();
+    return 1;
+  }
+
+  const char* imgFn = argv[1];
+  const char* subcmd = argv[2];
+
+  switch (getSubcommand(subcmd)) {
+  case INIT:
+    create_fs_img(imgFn, NINODES, FSSIZE);
+    break;
+  case UNKNOWN:
+  default:
+    fprintf(stderr, "Unknown command: %s\n", subcmd);
+    showHelp();
+    return 1;
+  }
+
+  return 0;
+}
+
+int
+main(int argc, char *argv[])
+{
+  return oldmain(argc, argv);
+  //return newmain(argc, argv);
 }

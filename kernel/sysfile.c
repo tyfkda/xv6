@@ -426,46 +426,40 @@ int
 sys_execve(void)
 {
   const char *path;
-  const char *argv[MAXARG];
   int i;
   uintp uargv, uarg;
-  const char *envp[MAXENV];
   uintp uenvp, uenv;
 
   if(argcstr(0, &path) < 0 || arguintp(1, &uargv) < 0 || arguintp(2, &uenvp) < 0){
     return -1;
   }
-  memset(argv, 0, sizeof(argv));
   for(i=0;; i++){
-    if(i >= NELEM(argv))
+    if(i >= MAXARG)
       return -1;
     if(fetchuintp(uargv+sizeof(uintp)*i, &uarg) < 0)
       return -1;
     if(uarg == 0){
-      argv[i] = 0;
       break;
     }
     const char* v;
     if(fetchstr(uarg, &v) < 0)
       return -1;
-    argv[i] = v;
   }
 
-  memset(envp, 0, sizeof(envp));
   for(i=0;; i++){
-    if(i >= NELEM(envp))
+    if(i >= MAXENV)
       return -1;
     if(fetchuintp(uenvp+sizeof(uintp)*i, &uenv) < 0)
       return -1;
     if(uenv == 0){
-      envp[i] = 0;
       break;
     }
-    if(fetchstr(uenv, &envp[i]) < 0)
+    const char* v;
+    if(fetchstr(uenv, &v) < 0)
        return -1;
   }
 
-  return execve(path, argv, envp);
+  return execve(path, (const char**)uargv, (const char**)uenvp);
 }
 
 int

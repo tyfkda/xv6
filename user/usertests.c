@@ -387,10 +387,9 @@ void dirtest(void)
 void
 exectest(void)
 {
-  char *env[]={"TERM=xv6", "PATH=/bin:/sbin",0};
 
   printf("exec test\n");
-  if(execve("echo", echoargv,env) < 0){
+  if(exec("echo", echoargv) < 0){
     printf("exec echo failed\n");
     exit(1);
   }
@@ -1706,7 +1705,6 @@ void
 bigargtest(void)
 {
   int pid, fd;
-  char *env[]={"TERM=xv6", "PATH=/bin:/sbin",0};
 
   unlink("bigarg-ok");
   pid = fork();
@@ -1717,7 +1715,7 @@ bigargtest(void)
       args[i] = "bigargs test: failed\n                                                                                                                                                                                                       ";
     args[MAXARG-1] = 0;
     printf("bigarg test\n");
-    execve("echo", args, env);
+    exec("echo", args);
     printf("bigarg test ok\n");
     fd = open("bigarg-ok", O_CREAT);
     close(fd);

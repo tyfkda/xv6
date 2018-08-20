@@ -14,3 +14,7 @@ void free(void*);
 void* realloc(void*, size_t);
 
 int atoi(const char*);
+
+char *getenv(const char *);
+int setenv(const char *, const char *, int );
+

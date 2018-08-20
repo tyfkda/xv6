@@ -60,51 +60,6 @@ int fork1(void);  // Fork but panics on failure.
 void panic(char*);
 struct cmd *parsecmd(char*);
 
-// Environment variables.
-struct envvar {
-  struct envvar *next;
-  const char *name;
-  char *value;
-};
-
-static struct envvar *s_envvars;
-
-struct envvar*
-findenv(const char *name)
-{
-  struct envvar *p;
-  for (p = s_envvars; p; p = p->next) {
-    if (strcmp(p->name, name) == 0)
-      return p;
-  }
-  return NULL;
-}
-
-char*
-getenv(const char *name)
-{
-  struct envvar *p;
-  p = findenv(name);
-  return p ? p->value : NULL;
-}
-
-void
-putenv(const char *name, const char *value)
-{
-  struct envvar *p;
-
-  p = findenv(name);
-  if (p != NULL) {
-    free(p->value);
-  } else {
-    p = malloc(sizeof(*p));
-    p->next = s_envvars;
-    s_envvars = p;
-    p->name = strdup(name);
-  }
-  p->value = strdup(value);
-}
-
 static int readHex(const char* p, int order) {
   int x = 0;
   for (int i = 0; i < order; ++i) {
@@ -200,16 +155,15 @@ putLastExitCode(int exitcode)
 {
   char buf[16];
   sprintf(buf, "%d", exitcode);
-  putenv("?", buf);
+  setenv("?", buf,1);
 }
 
 // Execute execcmd.  Never returns.
 void
 runecmd(struct execcmd *ecmd)
 {
-  char *env[]={"TERM=xv6", "PATH=/bin:/sbin",0};
 
-  execve(ecmd->argv[0], ecmd->argv, env);
+  exec(ecmd->argv[0], ecmd->argv);
   fprintf(stderr, "sh: command not found: %s\n", ecmd->argv[0]);
   exit(1);
 }

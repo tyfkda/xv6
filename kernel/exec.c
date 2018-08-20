@@ -147,7 +147,6 @@ load_elf(const char *path, const char *argv[], const char *envp[]){
             uenvp, i, envp[i]);
 #endif 
 
-
   // Save program name for debugging.
   for(last=s=path; *s; s++)
     if(*s == '/')
@@ -172,6 +171,7 @@ load_elf(const char *path, const char *argv[], const char *envp[]){
     iunlockput(ip);
     end_op();
   }
+
   return -1;
 }
 
@@ -238,10 +238,12 @@ load_shebang(const char *path, const char *argv[], const char *envp[])
 #endif  /*  DEBUG_SHOW_SHEBANG  */
 
   /*
-   * Note: Invoking execve is desirable
-   * but it seems kernel memory is not enough at this moment.
+   * Invoking execve to handle user program again.
+   * It is needed to invoke shebang using shell command
+   * like #!/bin/script.sh
+   * Note that script.sh might contain shebang(#!).
    */
-  return load_elf(argv2[0], argv2, envp);
+  return execve(argv2[0], argv2, envp);
 }
 
 int

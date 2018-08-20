@@ -21,4 +21,4 @@ int memcmp(const void*, const void*, size_t);
 
 long strtol(const char *p, char **pp, int base);
 
-char *strerror(int errnum);
+const char *strerror(int errnum);

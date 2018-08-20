@@ -1,5 +1,6 @@
 // Shell.
 
+#include "ctype.h"
 #include "fcntl.h"
 #include "stdio.h"
 #include "stdlib.h"
@@ -21,6 +22,8 @@
 #ifndef TRUE
 #define TRUE   (1)
 #endif
+
+#define AND  ('^')
 
 struct cmd {
   int type;
@@ -47,6 +50,7 @@ struct pipecmd {
 
 struct listcmd {
   int type;
+  int cond;
   struct cmd *left;
   struct cmd *right;
 };
@@ -59,6 +63,51 @@ struct backcmd {
 int fork1(void);  // Fork but panics on failure.
 void panic(char*);
 struct cmd *parsecmd(char*);
+
+// Shell variables.
+typedef struct ShellVarLink {
+  struct ShellVarLink *next;
+  const char *name;
+  char *value;
+} ShellVarLink;
+
+static ShellVarLink *s_shellvars;
+
+static ShellVarLink*
+findsvar(const char *name)
+{
+  ShellVarLink *p;
+  for (p = s_shellvars; p; p = p->next) {
+    if (strcmp(p->name, name) == 0)
+      return p;
+  }
+  return NULL;
+}
+
+char*
+getsvar(const char *name)
+{
+  ShellVarLink *p;
+  p = findsvar(name);
+  return p ? p->value : NULL;
+}
+
+void
+setsvar(const char *name, const char *value)
+{
+  ShellVarLink *p;
+
+  p = findsvar(name);
+  if (p != NULL) {
+    free(p->value);
+  } else {
+    p = malloc(sizeof(*p));
+    p->next = s_shellvars;
+    s_shellvars = p;
+    p->name = strdup(name);
+  }
+  p->value = strdup(value);
+}
 
 static int readHex(const char* p, int order) {
   int x = 0;
@@ -97,7 +146,7 @@ expandarg(char *start, char *end)
     len = len > sizeof(buf) - 1 ? sizeof(buf) - 1 : len;
     strncpy(buf, start + 1, len);
     buf[len] = '\0';
-    char* var = getenv(buf);  // TODO: Expand multi-values.
+    char* var = getsvar(buf);  // TODO: Expand multi-values.
     if (var == NULL)
       var = " ";
     return strdup(var);
@@ -155,7 +204,7 @@ putLastExitCode(int exitcode)
 {
   char buf[16];
   sprintf(buf, "%d", exitcode);
-  setenv("?", buf,1);
+  setsvar("?", buf);
 }
 
 // Execute execcmd.  Never returns.
@@ -210,6 +259,8 @@ runcmd(struct cmd *cmd)
       runcmd(lcmd->left);
     wait(&ec1);
     putLastExitCode(ec1);
+    if (lcmd->cond == AND && ec1 != EXIT_SUCCESS)
+      exit(ec1);
     runcmd(lcmd->right);
     break;
 
@@ -372,12 +423,13 @@ pipecmd(struct cmd *left, struct cmd *right)
 }
 
 struct cmd*
-listcmd(struct cmd *left, struct cmd *right)
+listcmd(int cond, struct cmd *left, struct cmd *right)
 {
   struct listcmd *cmd;
 
   cmd = calloc(sizeof(*cmd));
   cmd->type = LIST;
+  cmd->cond = cond;
   cmd->left = left;
   cmd->right = right;
   return (struct cmd*)cmd;
@@ -396,97 +448,120 @@ backcmd(struct cmd *subcmd)
 //PAGEBREAK!
 // Parsing
 
-static const char whitespace[] = " \t\r\n\v";
 static const char symbols[] = "<|>&;()#";
 
-int
-gettoken(char **ps, char *es, char **q)
-{
-  char *s;
-  char *start;
-  int ret;
-  int singleQuote;
-
-  singleQuote = FALSE;
-  s = *ps;
-  while(s < es && strchr(whitespace, *s) != NULL)
+char *skipws(char *s, char *es) {
+  while(s < es && isspace(*s))
     s++;
-  start = s;
-  ret = *s;
-  switch(*s){
+  return s;
+}
+
+int
+peektoken(char *s, char *es, char **ps)
+{
+  int tok;
+
+  s = skipws(s, es);
+  tok = *s;
+  switch(tok){
   case '\0':
     break;
   case '|':
   case '(':
   case ')':
   case ';':
-  case '&':
   case '<':
   case '#':
     s++;
     break;
+  case '&':
+    s++;
+    if(*s == '&'){
+      tok = AND;
+      s++;
+    }
+    break;
   case '>':
     s++;
     if(*s == '>'){
-      ret = '+';
+      tok = '+';
       s++;
     }
     break;
   case '\'':
   case '"':
-    {
-      char term = *s++;
-      singleQuote = term == '\'';
-      start = s;
-      for (;;) {
-        if (*s == term) {
-          *s = ' ';
-          ret = 'a';
-          break;
-        }
-        if (*s == '\\') {
-          if (++s >= es) {
-            // TODO: Continue line.
-            panic("quote not closed");
-          }
-        }
-        if (++s >= es)
-          panic("quote not closed");
-      }
-    }
-    break;
   default:
-    ret = 'a';
-    while(s < es && strchr(whitespace, *s) == NULL &&
-          strchr(symbols, *s) == NULL)
-      s++;
+    tok = 'a';
     break;
-  }
-  if (q != NULL) {
-    if (ret != 'a')
-      *q = NULL;
-    else if (singleQuote)
-      *q = strdup2(start, s);
-    else
-      *q = expandarg(start, s);
   }
 
-  while(s < es && strchr(whitespace, *s) != NULL)
-    s++;
+  if (ps != NULL)
+    *ps = s;
+  return tok;
+}
+
+int
+gettoken(char **ps, char *es, char **q)
+{
+  char *s, *start;
+  int tok;
+
+  tok = peektoken(*ps, es, &s);
+  start = s;
+  if (tok != 'a') {
+    if (q != NULL)
+      *q = NULL;
+  } else {
+    int singleQuote = FALSE;
+    switch(*s){
+    case '\'':
+    case '"':
+      {
+        char term = *s++;
+        singleQuote = term == '\'';
+        start = s;
+        for (;;) {
+          if (*s == term) {
+            *s = ' ';
+            break;
+          }
+          if (*s == '\\') {
+            if (++s >= es) {
+              // TODO: Continue line.
+              panic("quote not closed");
+            }
+          }
+          if (++s >= es)
+            panic("quote not closed");
+        }
+      }
+      break;
+    default:
+      while(s < es && !isspace(*s) && strchr(symbols, *s) == NULL)
+        s++;
+      break;
+    }
+    if (q != NULL) {
+      if (singleQuote)
+        *q = strdup2(start, s);
+      else
+        *q = expandarg(start, s);
+    }
+  }
+
   *ps = s;
-  return ret;
+  return tok;
 }
 
 int
 peek(char **ps, char *es, char *toks)
 {
   char *s;
+  int tok;
 
-  s = *ps;
-  while(s < es && strchr(whitespace, *s) != NULL)
-    s++;
-  *ps = s;
-  return *s != '\0' && strchr(toks, *s) != NULL;
+  *ps = s = skipws(*ps, es);
+  tok = peektoken(s, es, NULL);
+  return tok != '\0' && strchr(toks, tok) != NULL;
 }
 
 struct cmd *parseline(char**, char*);
@@ -526,9 +601,9 @@ parseline(char **ps, char *es)
     return cmd;
   }
 
-  if(peek(ps, es, ";")){
-    gettoken(ps, es, NULL);
-    cmd = listcmd(cmd, parseline(ps, es));
+  if(peek(ps, es, ";^")){
+    int tok = gettoken(ps, es, NULL);
+    cmd = listcmd(tok, cmd, parseline(ps, es));
   }
   return cmd;
 }
@@ -551,22 +626,29 @@ parseredirs(struct cmd *cmd, char **ps, char *es)
 {
   int tok;
   char *q;
+  int mode;
+  int fd;
 
-  while(peek(ps, es, "<>")){
+  while(peek(ps, es, "<>+")){
     tok = gettoken(ps, es, NULL);
     if(gettoken(ps, es, &q) != 'a')
       panic("missing file for redirection");
     switch(tok){
+    default:
     case '<':
-      cmd = redircmd(cmd, q, O_RDONLY, 0);
+      mode = O_RDONLY;
+      fd = STDIN_FILENO;
       break;
     case '>':
-      cmd = redircmd(cmd, q, O_WRONLY | O_CREAT | O_TRUNC, 1);
+      mode = O_WRONLY | O_CREAT | O_TRUNC;
+      fd = STDOUT_FILENO;
       break;
     case '+':  // >>
-      cmd = redircmd(cmd, q, O_WRONLY | O_CREAT| O_APPEND, 1);
+      mode = O_WRONLY | O_CREAT| O_APPEND;
+      fd = STDOUT_FILENO;
       break;
     }
+    cmd = redircmd(cmd, q, mode, fd);
   }
   return cmd;
 }
@@ -603,7 +685,7 @@ parseexec(char **ps, char *es)
 
   argc = 0;
   ret = parseredirs(ret, ps, es);
-  while(!peek(ps, es, "|)&;#")){
+  while(!peek(ps, es, "|)&;^#")){
     if((tok=gettoken(ps, es, &q)) == 0)
       break;
     if(tok != 'a')

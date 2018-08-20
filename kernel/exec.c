@@ -18,29 +18,6 @@
 //#define DEBUG_SHOW_EXECVE_ENVS
 //#define DEBUG_SHOW_SHEBANG
 
-// Find exe path
-static struct inode *find_path(const char *path, char *resultPath, int bufsiz) {
-  struct inode *ip;
-
-  if (strchr(path, FILE_SEPARATOR) != 0) {
-    ip = namei(path);
-    if (resultPath != 0)
-      safestrcpy(resultPath, path, bufsiz);
-  } else {
-    // Also find at root path. TODO: Search from $PATH
-    const char PATH[] = "/bin/";
-    const int LEN = sizeof(PATH) - 1;
-    const int BUFSIZ = 128;
-    char exepath[BUFSIZ];
-    memmove(exepath, PATH, LEN);
-    safestrcpy(exepath + LEN, path, BUFSIZ - LEN);
-    ip = namei(exepath);
-    if (resultPath != 0)
-      safestrcpy(resultPath, exepath, bufsiz);
-  }
-  return ip;
-}
-
 static int
 load_elf(const char *path, const char *argv[], const char *envp[]){
   const char *s, *last;
@@ -53,11 +30,10 @@ load_elf(const char *path, const char *argv[], const char *envp[]){
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
   struct proc *curproc = myproc();
-  char exepath[128];
 
   begin_op();
 
-  ip = find_path(path, exepath, sizeof(exepath));
+  ip = namei(path);
   if( ip == 0 ){
 
     end_op();
@@ -214,7 +190,7 @@ load_shebang(const char *path, const char *argv[], const char *envp[])
    */
   begin_op();
 
-  ip = find_path(path, 0, 0);
+  ip = namei(path);
   if(ip == 0){
     end_op();
     return -1;
@@ -272,14 +248,13 @@ int
 execve(const char *path, const char *argv[], const char *envp[])
 {
   struct inode     *ip;
-  char    exepath[128];
   char   exeblk[BSIZE];
   int          rd_size;
   int               rc;
 
   begin_op();
 
-  ip = find_path(path, exepath, sizeof(exepath));
+  ip = namei(path);
   if( ip == 0 ){
 
     end_op();
@@ -298,15 +273,13 @@ execve(const char *path, const char *argv[], const char *envp[])
   if ( ( rd_size >= sizeof(struct elfhdr) ) &&
        ( ((struct elfhdr *)&exeblk[0])->magic == ELF_MAGIC ) ) {  // Check ELF header
 
-//    cprintf("Load ELF:%s\n", path);
     rc = load_elf(path, argv, envp);
     if ( rc != 0 )
       goto error_out;
   } else if ( ( rd_size >= EXECVE_SHEBANG_STRLEN ) &&
               ( memcmp((void *)&exeblk[0], EXECVE_SHEBANG_STR , 2) == 0 ) ) {
 
-//    cprintf("Load Shebang:%s\n", path);
-    rc = load_shebang(exepath, argv,envp);
+    rc = load_shebang(path, argv,envp);
     if ( rc != 0 )
       goto error_out;
   }

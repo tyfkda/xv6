@@ -19,9 +19,9 @@ exit:
   int $T_SYSCALL
   jmp exit
 
-# char init[] = "init\0";
+# char init[] = "/bin/init\0";
 init:
-  .string "init\0"
+  .string "/bin/init\0"
 
 # char init_env[] = "TERM=xv6\0";
 init_env_term:

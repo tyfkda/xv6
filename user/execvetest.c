@@ -21,7 +21,7 @@ execvetest(void)
 {
   printf("execve test\n");
 
-  if(execve("envtest", envargv, envenvp) < 0){
+  if(execve("/bin/envtest", envargv, envenvp) < 0){
     printf("execve envtest failed\n");
     exit(1);
   }

@@ -220,55 +220,14 @@ execshebang(const char *path, const char *argv[], const char *envp[])
 int
 execve(const char *path, const char *argv[], const char *envp[])
 {
-  struct inode     *ip;
-  char   exeblk[BSIZE];
-  int          rd_size;
   int               rc;
 
-  begin_op();
+  rc = execelf(path, argv, envp);
+  if ( rc == 0 )
+    return 0;
+  rc = execshebang(path, argv,envp);
+  if ( rc != 0 )
+    return 0;
 
-  ip = namei(path);
-  if( ip == 0 ){
-
-    end_op();
-    return -1;
-  }
-
-  ilock(ip);
-
-  rd_size = readi(ip, &exeblk[0], 0, BSIZE);
-  if ( rd_size < 0 )
-    goto iunlock_out;
-
-  iunlockput(ip);
-  end_op();
-
-  if ( ( rd_size >= sizeof(struct elfhdr) ) &&
-    ( ((struct elfhdr *)&exeblk[0])->magic == ELF_MAGIC ) ) {  // Check ELF header
-    
-    rc = execelf(path, argv, envp);
-    if ( rc != 0 )
-      goto error_out;
-  } else if ( ( rd_size >= EXECVE_SHEBANG_STRLEN ) &&
-    ( memcmp((void *)&exeblk[0], EXECVE_SHEBANG_STR , 2) == 0 ) ) {
-    
-    rc = execshebang(path, argv,envp);
-    if ( rc != 0 )
-      goto error_out;
-  }
-  else 
-    panic("execve: unknwon binary");
-
-  return 0;
-
- iunlock_out:
-  if( ip != 0 ){
-
-    iunlockput(ip);
-    end_op();
-  }
-
- error_out:
   return -1;
-
 }

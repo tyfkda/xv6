@@ -11,17 +11,13 @@
 #define FILE_SEPARATOR  '/'
 
 #define EXECVE_USTK_ARGS_NR       (4)
-#define EXECVE_SHEBANG_RESV_ARGS  (2)
 #define EXECVE_SHEBANG_STR       "#!"
 #define EXECVE_SHEBANG_STRLEN     (2)
 
-//#define DEBUG_SHOW_EXECVE_ENVS
-//#define DEBUG_SHOW_SHEBANG
-
 static int
-load_elf(const char *path, const char *argv[], const char *envp[]){
+execelf(const char *path, const char *argv[], const char *envp[]){
   const char *s, *last;
-  int i, off;
+  int   i, off;
   uintp sz, sp, ustack[EXECVE_USTK_ARGS_NR+MAXARG+1+MAXENV+1];
   uintp arg_idx, nr_args, env_idx, nr_envs;
   uintp uargvp, uenvp;
@@ -95,7 +91,7 @@ load_elf(const char *path, const char *argv[], const char *envp[]){
      */
     sp = (sp - (strlen(envp[nr_envs - env_idx - 1]) + 1)) & ~(sizeof(uintp)-1);
     if (copyout(pgdir, sp, envp[nr_envs - env_idx - 1], 
-                strlen(envp[nr_envs - env_idx - 1]) + 1) < 0)
+	strlen(envp[nr_envs - env_idx - 1]) + 1) < 0)
       goto bad;
     
     /* store the address of a variable */		
@@ -112,9 +108,8 @@ load_elf(const char *path, const char *argv[], const char *envp[]){
      * and we ensure each element is aligned to the word.
      */
     sp = (sp - (strlen(argv[nr_args - arg_idx - 1]) + 1)) & ~(sizeof(uintp)-1);
-    if(copyout(pgdir, sp, 
-               argv[nr_args - arg_idx - 1], 
-               strlen(argv[nr_args - arg_idx - 1]) + 1) < 0)
+    if(copyout(pgdir, sp, argv[nr_args - arg_idx - 1], 
+	strlen(argv[nr_args - arg_idx - 1]) + 1) < 0)
       goto bad;
     ustack[EXECVE_USTK_ARGS_NR + nr_args - arg_idx - 1] = sp;
   }
@@ -136,16 +131,6 @@ load_elf(const char *path, const char *argv[], const char *envp[]){
   sp -= (EXECVE_USTK_ARGS_NR + nr_args + 1 + nr_envs + 1) * sizeof(uintp);
   if(copyout(pgdir, sp, ustack, (EXECVE_USTK_ARGS_NR + nr_args + 1 + nr_envs + 1)*sizeof(uintp)) < 0)
     goto bad;
-
-#if defined(DEBUG_SHOW_EXECVE_ENVS)
-  cprintf("kernel execve: sp=%p\n", sp);
-  for(i = 0; argv[i] != 0; ++i)
-    cprintf("kernel execve: user argv addr=%p kernel argv[%d]=%s\n", 
-            uargvp, i, argv[i]);
-  for(i = 0; envp[i] != 0; ++i)
-    cprintf("kernel execve: user environment addr=%p kernel envp[%d]=%s\n", 
-            uenvp, i, envp[i]);
-#endif 
 
   // Save program name for debugging.
   for(last=s=path; *s; s++)
@@ -176,7 +161,7 @@ load_elf(const char *path, const char *argv[], const char *envp[]){
 }
 
 static int
-load_shebang(const char *path, const char *argv[], const char *envp[])
+execshebang(const char *path, const char *argv[], const char *envp[])
 {
   struct inode          *ip;
   char            line[512];
@@ -209,9 +194,6 @@ load_shebang(const char *path, const char *argv[], const char *envp[])
 
   line[sizeof(line) - 1] = '\n';
   *strchr(line, '\n') = '\0';
-#if defined(DEBUG_SHOW_SHEBANG)
-  cprintf("Shebang line:%s\n", line);
-#endif  /*  DEBUG_SHOW_SHEBANG  */
 
   /*
    * Setup argment
@@ -225,17 +207,6 @@ load_shebang(const char *path, const char *argv[], const char *envp[])
     if (argv[i] == 0)
       break;
   }
-
-#if defined(DEBUG_SHOW_SHEBANG)
-  for(i = 0; MAXARG > i; ++i) {
-    if ( argv2[i] != 0 )
-      cprintf("Shebang argv[%d]:%s\n", i, argv2[i]);
-    else {
-      cprintf("Shebang argv[%d]:NULL\n", i);
-      break;
-    }
-  }
-#endif  /*  DEBUG_SHOW_SHEBANG  */
 
   /*
    * Invoking execve to handle user program again.
@@ -273,15 +244,15 @@ execve(const char *path, const char *argv[], const char *envp[])
   end_op();
 
   if ( ( rd_size >= sizeof(struct elfhdr) ) &&
-       ( ((struct elfhdr *)&exeblk[0])->magic == ELF_MAGIC ) ) {  // Check ELF header
-
-    rc = load_elf(path, argv, envp);
+    ( ((struct elfhdr *)&exeblk[0])->magic == ELF_MAGIC ) ) {  // Check ELF header
+    
+    rc = execelf(path, argv, envp);
     if ( rc != 0 )
       goto error_out;
   } else if ( ( rd_size >= EXECVE_SHEBANG_STRLEN ) &&
-              ( memcmp((void *)&exeblk[0], EXECVE_SHEBANG_STR , 2) == 0 ) ) {
-
-    rc = load_shebang(path, argv,envp);
+    ( memcmp((void *)&exeblk[0], EXECVE_SHEBANG_STR , 2) == 0 ) ) {
+    
+    rc = execshebang(path, argv,envp);
     if ( rc != 0 )
       goto error_out;
   }
@@ -290,14 +261,14 @@ execve(const char *path, const char *argv[], const char *envp[])
 
   return 0;
 
-iunlock_out:
+ iunlock_out:
   if( ip != 0 ){
 
     iunlockput(ip);
     end_op();
   }
 
-error_out:
+ error_out:
   return -1;
 
 }

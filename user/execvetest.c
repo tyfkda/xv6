@@ -14,7 +14,7 @@
 #endif
 
 char *envargv[] = { "envtest", "ALL", "TESTS", "PASSED", 0 };
-char *envenvp[] = { "TERM=vt100", "NAME=envtest", "TESTS=OK", "RESULT=\"PASSED\"", 0 };
+char *envenvp[] = { "NAME=envtest", "TESTS=OK", "RESULT=\"PASSED\"", 0 };
 
 void
 execvetest(void)

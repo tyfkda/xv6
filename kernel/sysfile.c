@@ -422,37 +422,6 @@ sys_chdir(void)
 }
 
 int
-sys_exec(void)
-{
-  const char *path;
-  const char *argv[MAXARG];
-  const char *v;
-  int i;
-  uintp uargv, uarg;
-  const char *envp[] = { "TERM=xv6", 0 };
-
-  if(argcstr(0, &path) < 0 || arguintp(1, &uargv) < 0){
-    return -1;
-  }
-  memset(argv, 0, sizeof(argv));
-  for(i=0;; i++){
-    if(i >= NELEM(argv))
-      return -1;
-    if(fetchuintp(uargv+sizeof(uintp)*i, &uarg) < 0)
-      return -1;
-    if(uarg == 0){
-      argv[i] = 0;
-      break;
-    }
-
-    if(fetchstr(uarg, &v) < 0)
-      return -1;
-    argv[i] = v;
-  }
-  return execve(path, argv, envp);
-}
-
-int
 sys_execve(void)
 {
   const char *argv[MAXARG];

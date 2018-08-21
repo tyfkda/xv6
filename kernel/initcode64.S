@@ -23,11 +23,8 @@ exit:
 init:
   .string "/bin/init\0"
 
-# char init_env[] = "TERM=xv6\0";
-init_env_term:
-  .string "TERM=xv6\0"
-
-init_env_path:
+# char init_env[] = "PATH=/sbin:/bin:/usr/sbin:/usr/bin\0";
+init_env:
   .string "PATH=/sbin:/bin:/usr/sbin:/usr/bin\0"
 	
 # char *argv[] = { init, 0 };
@@ -39,6 +36,5 @@ argv:
 # char *envp[] = { init_env, 0 };
 .p2align 2
 envp:
-  .quad init_env_term
-  .quad init_env_path	
+  .quad init_env
   .quad 0

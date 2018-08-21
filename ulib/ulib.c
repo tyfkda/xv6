@@ -2,8 +2,6 @@
 #include "sys/stat.h"
 #include "unistd.h"
 
-extern char **environ;
-
 int
 stat(const char *n, struct stat *st)
 {

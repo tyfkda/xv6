@@ -83,7 +83,6 @@ _path_update(const char *path_val) {
     goto free_out;
   }
   
-  
   if ( g_path.path_str != 0 ) 
     free(g_path.path_str);
   for( i = 0; MAX_PATH_NR > i; ++i) 
@@ -117,7 +116,7 @@ exec(const char *path, char *const argv[]){
   const char         *dir;
   char        *name, *val;
   int               i, rc;
-  
+
   memset(&envs[0], 0, sizeof(envs));
   for(i = 0; ( MAXENV - 1 ) > i; ++i) {
     
@@ -130,6 +129,10 @@ exec(const char *path, char *const argv[]){
       goto free_env_out;
   }
   envs[i] = 0;
+
+  if ( ( *path == '.' ) || ( *path == '/' ) )
+    goto do_execve;
+
   dir = path_refer(i);
   for(i = 0; dir != 0; ++i) {
     
@@ -137,7 +140,8 @@ exec(const char *path, char *const argv[]){
     rc = execve(cmd, argv, envs);
     dir = path_refer(i);
   }
-  
+
+ do_execve:
   rc = execve(path, argv, envs);
   
  free_env_out:

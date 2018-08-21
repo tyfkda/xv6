@@ -11,8 +11,6 @@
 #define FILE_SEPARATOR  '/'
 
 #define EXECVE_USTK_ARGS_NR       (4)
-#define EXECVE_SHEBANG_STR       "#!"
-#define EXECVE_SHEBANG_STRLEN     (2)
 
 static int
 execelf(const char *path, const char *argv[], const char *envp[]){
@@ -226,7 +224,7 @@ execve(const char *path, const char *argv[], const char *envp[])
   if ( rc == 0 )
     return 0;
   rc = execshebang(path, argv,envp);
-  if ( rc != 0 )
+  if ( rc == 0 )
     return 0;
 
   return -1;

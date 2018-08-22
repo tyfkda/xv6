@@ -442,7 +442,6 @@ new_space_inode(struct inode *ip, uint new){
 
 out:
   ip->size = new;
-  ip->mtime = cmosepochtime();
   iupdate(ip);
 }
 
@@ -503,7 +502,6 @@ free_space_inode(struct inode *ip, uint new){
   }
 
   ip->size = new;
-  ip->mtime = cmosepochtime();
   iupdate(ip);
 }
 

@@ -769,10 +769,10 @@ static void showHelp(void) {
           "\t-i <nr-inodes>\n"
           "\t-s <fssize>\n"
           "Subcommands:\n"
-          "\tinit                 Create initialized image\n"
-          "\tls                   List directory contents\n"
-          "\tput <source> [dest]  Put a file from local to image (default: to root)\n"
-          "\tmkdir path...        Create a directory(s) in image\n"
+          "\tinit                    Create initialized image\n"
+          "\tls                      List directory contents\n"
+          "\tput <source...> [dest]  Put file(s) from local to image\n"
+          "\tmkdir path...           Create directory(s) in image\n"
           );
 }
 

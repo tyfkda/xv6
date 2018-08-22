@@ -471,36 +471,48 @@ free_space_inode(struct inode *ip, uint new){
     brelse(bp);
     ++sblk;
   }
-  for(cur = sblk; cur < eblk; ++cur) {
-    if (cur < NDIRECT) {
-      if(ip->addrs[cur]){
-        bfree(ip->dev, ip->addrs[cur]);
-        ip->addrs[cur] = 0;
-      }
-    } else {
-      if(ip->addrs[NDIRECT] != 0) {
-        bp = bread(ip->dev, ip->addrs[NDIRECT]);
-        a = (uint*)bp->data;
 
-        curidx = cur - NDIRECT;
-        if(a[curidx] != 0) {
-          bfree(ip->dev, a[curidx]);
-          a[curidx] = 0;
-          log_write(bp);
-        }
-        brelse(bp);
+  if (sblk == eblk)
+    goto out;
+
+  if (eblk > NDIRECT) {  // Indirect block is used.
+    uint indirect = ip->addrs[NDIRECT];
+    if (indirect == 0)
+      panic("indirect is 0");
+
+    // Indirect block needs modification.
+    bp = bread(ip->dev, indirect);
+    a = (uint*)bp->data;
+    for(cur = NDIRECT; cur < eblk; ++cur) {
+      curidx = cur - NDIRECT;
+      if(a[curidx] != 0) {
+        bfree(ip->dev, a[curidx]);
+        a[curidx] = 0;
       }
+    }
+    if (sblk > NDIRECT) {
+      // New size still uses indirect block: Need to write back.
+      log_write(bp);
+      brelse(bp);
+    } else {
+      brelse(bp);
+      // New size no longer uses indirect block: Release it.
+      bfree(ip->dev, indirect);
+      ip->addrs[NDIRECT] = 0;
+    }
+
+    eblk = NDIRECT;
+  }
+
+  // Now, only handles direct blocks.
+  for(cur = sblk; cur < eblk; ++cur) {
+    if(ip->addrs[cur]){
+      bfree(ip->dev, ip->addrs[cur]);
+      ip->addrs[cur] = 0;
     }
   }
 
-  // Release an indirect index block.
-  // Edge case: sblk == NDIRECT means an indirect index block is no longer used
-  //            because we've already increase sblk above if soff > 0.
-  if (sblk <= NDIRECT && ip->addrs[NDIRECT] != 0) {
-    bfree(ip->dev, ip->addrs[NDIRECT]);
-    ip->addrs[NDIRECT] = 0;
-  }
-
+out:
   ip->size = new;
   iupdate(ip);
 }

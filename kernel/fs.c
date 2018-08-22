@@ -409,10 +409,10 @@ new_space_inode(struct inode *ip, uint new){
   uint cur, newblk;
   struct buf *bp;
 
-  if ( ip->size > new )
+  if (ip->size > new)
     panic("new space inode");
 
-  if ( ip->size == new )
+  if (ip->size == new)
     return;
 
   sblk = ip->size / BSIZE;
@@ -420,14 +420,13 @@ new_space_inode(struct inode *ip, uint new){
   eblk = new / BSIZE;
   eoff = new % BSIZE;
 
-  if ( sblk == eblk )
+  if (sblk == eblk)
     goto out;
 
-  if ( eoff > 0 )
+  if (eoff > 0)
     ++eblk;
 
-  if ( soff > 0 ) {
-
+  if (soff > 0) {
     bp = bread(ip->dev, bmap(ip, sblk));
     memset(bp->data + soff, 0, BSIZE-soff);
     log_write(bp);
@@ -435,10 +434,9 @@ new_space_inode(struct inode *ip, uint new){
     ++sblk;
   }
 
-  for( cur = sblk; eblk >= cur; ++cur) {
-
+  for(cur = sblk; eblk >= cur; ++cur) {
     newblk = bmap(ip, cur);
-    if ( newblk == 0 )
+    if (newblk == 0)
       panic("new_space_inode");
   }
 
@@ -456,7 +454,7 @@ free_space_inode(struct inode *ip, uint new){
   struct buf *bp;
   uint *a;
 
-  if ( new > ip->size )
+  if (new > ip->size)
     panic("free space inode");
 
   sblk = new / BSIZE;
@@ -464,34 +462,29 @@ free_space_inode(struct inode *ip, uint new){
   eblk = ip->size / BSIZE;
   eoff = ip->size % BSIZE;
 
-  if ( eoff > 0 )
+  if (eoff > 0)
     ++eblk;
 
-  if ( soff > 0 ) {
-
+  if (soff > 0) {
     bp = bread(ip->dev, bmap(ip, sblk));
     memset(bp->data + soff, 0, BSIZE-soff);
     log_write(bp);
     brelse(bp);
     ++sblk;
   }
-  for( cur = sblk; eblk >= cur; ++cur) {
-    if ( cur < NDIRECT ) {
-
+  for(cur = sblk; eblk >= cur; ++cur) {
+    if (cur < NDIRECT) {
       if(ip->addrs[cur]){
         bfree(ip->dev, ip->addrs[cur]);
         ip->addrs[cur] = 0;
       }
-    }  else {
-
+    } else {
       if(ip->addrs[NDIRECT] != 0) {
-
         bp = bread(ip->dev, ip->addrs[NDIRECT]);
         a = (uint*)bp->data;
 
         curidx = cur - NDIRECT;
         if(a[curidx] != 0) {
-
           bfree(ip->dev, a[curidx]);
           a[curidx] = 0;
           log_write(bp);
@@ -501,12 +494,10 @@ free_space_inode(struct inode *ip, uint new){
     }
   }
 
-  /* Release an indirect index block.
-   * Edge case: sblk == NDIRECT always means an indirect index block is no longer used
-   *            because we've already increase sblk above if soff > 0.
-   */
-  if ( ( sblk <= NDIRECT ) && ( ip->addrs[NDIRECT] != 0 ) ) {
-
+  // Release an indirect index block.
+  // Edge case: sblk == NDIRECT means an indirect index block is no longer used
+  //            because we've already increase sblk above if soff > 0.
+  if (sblk <= NDIRECT && ip->addrs[NDIRECT] != 0) {
     bfree(ip->dev, ip->addrs[NDIRECT]);
     ip->addrs[NDIRECT] = 0;
   }
@@ -774,7 +765,7 @@ nameiparent(const char *path, char *name)
 void
 isetsize(struct inode* ip, uint size)
 {
-  if ( size > ip->size )
+  if (size > ip->size)
     new_space_inode(ip, size);
   else
     free_space_inode(ip, size);

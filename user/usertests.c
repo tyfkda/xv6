@@ -1854,7 +1854,6 @@ main(int argc, char *argv[])
   fourfiles();
   sharedfd();
 
-  bigargtest();
   bigwrite();
   bigargtest();
   bsstest();

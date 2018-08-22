@@ -434,7 +434,7 @@ new_space_inode(struct inode *ip, uint new){
     ++sblk;
   }
 
-  for(cur = sblk; eblk >= cur; ++cur) {
+  for(cur = sblk; cur < eblk; ++cur) {
     newblk = bmap(ip, cur);
     if (newblk == 0)
       panic("new_space_inode");
@@ -471,7 +471,7 @@ free_space_inode(struct inode *ip, uint new){
     brelse(bp);
     ++sblk;
   }
-  for(cur = sblk; eblk >= cur; ++cur) {
+  for(cur = sblk; cur < eblk; ++cur) {
     if (cur < NDIRECT) {
       if(ip->addrs[cur]){
         bfree(ip->dev, ip->addrs[cur]);

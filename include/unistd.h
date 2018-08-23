@@ -4,14 +4,23 @@
 #define STDOUT_FILENO  (1)
 #define STDERR_FILENO  (2)
 
+enum {
+  SEEK_SET,  // 0
+  SEEK_CUR,  // 1
+  SEEK_END,  // 2
+};
+
 struct stat;
 struct rtcdate;
+
+typedef long off_t;
 
 // system calls
 int fork(void);
 int pipe(int*);
 int write(int, const void*, int);
 int read(int, void*, int);
+off_t lseek(int fd, off_t offset, int whence);
 int close(int);
 int exec(const char *, char *const []);
 int execve(const char*, char *const[], char *const []);

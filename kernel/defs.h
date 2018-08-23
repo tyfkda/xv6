@@ -39,6 +39,7 @@ int             fileread(struct file*, void*, int n);
 int             filereaddir(struct file *f, void *addr);
 int             filestat(struct file*, struct stat*);
 int             filewrite(struct file*, void*, int n);
+long            filelseek(struct file*, long, int);
 int             filetruncate(struct file*, uint);
 int             fileisatty(struct file*);
 
@@ -155,6 +156,7 @@ void            initsleeplock(struct sleeplock*, char*);
 
 // syscall.c
 int             argint(int, int*);
+int             arglong(int, long*);
 int             argptr(int, char**, int);
 int             argcstr(int, const char**);
 int             arguintp(int, uintp*);

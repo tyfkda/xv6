@@ -523,3 +523,16 @@ sys_isatty(void)
     return 0;
   return fileisatty(f);
 }
+
+long
+sys_lseek(void)
+{
+  struct file *f;
+  long offset;
+  int whence;
+
+  if(argfd(0, 0, &f) < 0 || arglong(1, &offset) < 0 || argint(2, &whence) < 0 ||
+     !(0 <= whence && whence <= 2))
+    return -1;
+  return filelseek(f, offset, whence);
+}

@@ -196,6 +196,33 @@ filewrite(struct file *f, void *addr, int n)
   panic("filewrite");
 }
 
+long
+filelseek(struct file *f, long offset, int whence)
+{
+  long pos = -1;
+  if(f->type == FD_INODE){
+    ilock(f->ip);
+    if (f->ip->type == T_FILE) {
+      uint size = f->ip->size;
+      switch (whence) {
+      case 0:  // SEEK_SET
+        pos = offset;
+        break;
+      case 1:  // SEEK_CUR
+        pos = f->off + offset;
+        break;
+      case 2:  // SEEK_END
+        pos = size + offset;
+        break;
+      }
+      pos = pos < 0 ? 0 : pos > size ? size : pos;
+      f->off = pos;
+    }
+    iunlock(f->ip);
+  }
+  return pos;
+}
+
 int
 filetruncate(struct file* f, uint length)
 {

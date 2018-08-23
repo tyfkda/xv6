@@ -275,6 +275,60 @@ createtest(void)
   printf("many creates, followed by unlink; ok\n");
 }
 
+void lseektest()
+{
+  const char fileName[] = "lseektest";
+  int fd = open(fileName, O_WRONLY | O_CREAT | O_TRUNC);
+  if (fd < 0) {
+    fprintf(stderr, "lseektest test: Create open failed\n");
+    exit(1);
+  }
+
+  char buf[256];
+  for (int i = 0; i < 256; ++i) {
+    buf[i] = i;
+  }
+  if (write(fd, buf, 256) != 256) {
+    fprintf(stderr, "lseektest test: Write failed\n");
+    exit(1);
+  }
+  if (close(fd) < 0) {
+    fprintf(stderr, "lseektest test: Close failed\n");
+    exit(1);
+  }
+
+  fd = open(fileName, O_RDONLY);
+  if (fd < 0) {
+    fprintf(stderr, "lseektest test: Read open failed\n");
+    exit(1);
+  }
+
+  // lseek from set
+  off_t pos = lseek(fd, 10, SEEK_SET);
+  if (pos != 10) {
+    fprintf(stderr, "lseektest test: lseek not 10, %d\n", (int)pos);
+    exit(1);
+  }
+  // lseek for cur
+  pos = lseek(fd, 100, SEEK_CUR);
+  if (pos != 110) {
+    fprintf(stderr, "lseektest test: lseek not 110, %d\n", (int)pos);
+    exit(1);
+  }
+  // lseek for end
+  pos = lseek(fd, -100, SEEK_END);
+  if (pos != 256 - 100) {
+    fprintf(stderr, "lseektest test: lseek not 156, %d\n", (int)pos);
+    exit(1);
+  }
+  if (read(fd, buf, 1) != 1 && buf[0] != 156) {
+    fprintf(stderr, "lseektest test: Read failed\n");
+    exit(1);
+  }
+
+  close(fd);
+}
+
 void truncatetest()
 {
   const static char fileName[] = "trunc.txt";
@@ -1930,6 +1984,7 @@ main(int argc, char *argv[])
   writetest();
   writetest1();
   createtest();
+  lseektest();
   truncatetest();
   appendtest();
 

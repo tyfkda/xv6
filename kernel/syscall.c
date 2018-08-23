@@ -25,6 +25,18 @@ fetchint(uintp addr, int *ip)
   return 0;
 }
 
+// Fetch the int at addr from the current process.
+int
+fetchlong(uintp addr, long *ip)
+{
+  struct proc *curproc = myproc();
+
+  if(addr >= curproc->sz || addr+sizeof(long) > curproc->sz)
+    return -1;
+  *ip = *(long*)(addr);
+  return 0;
+}
+
 int
 fetchuintp(uintp addr, uintp *ip)
 {
@@ -78,6 +90,13 @@ argint(int n, int *ip)
 }
 
 int
+arglong(int n, long *ip)
+{
+  *ip = fetcharg(n);
+  return 0;
+}
+
+int
 arguintp(int n, uintp *ip)
 {
   *ip = fetcharg(n);
@@ -89,6 +108,13 @@ int
 argint(int n, int *ip)
 {
   return fetchint((myproc()->tf->esp) + 4 + 4*n, ip);
+}
+
+// Fetch the nth 32-bit system call argument.
+int
+arglong(int n, long *ip)
+{
+  return fetchlong((myproc()->tf->esp) + 4 + 4*n, ip);
 }
 
 int
@@ -154,6 +180,7 @@ extern int sys_ioctl(void);
 extern int sys_isatty(void);
 extern int sys_ftruncate(void);
 extern int sys_readdir(void);
+extern int sys_lseek(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -182,6 +209,7 @@ static int (*syscalls[])(void) = {
 [SYS_isatty]  sys_isatty,
 [SYS_ftruncate]  sys_ftruncate,
 [SYS_readdir]  sys_readdir,
+[SYS_lseek]   sys_lseek,
 };
 
 void

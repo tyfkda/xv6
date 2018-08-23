@@ -25,3 +25,4 @@
 #define SYS_isatty 24
 #define SYS_ftruncate 25
 #define SYS_readdir 26
+#define SYS_lseek 27

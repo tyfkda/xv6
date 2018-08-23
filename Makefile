@@ -197,6 +197,7 @@ kernel/vectors.S: $(MKVECTORS)
 	perl $(MKVECTORS) > $@
 
 ULIBOBJS = \
+	obj/ulib/atexit.o\
 	obj/ulib/commonstr.o\
 	obj/ulib/crt0.o\
 	obj/ulib/ctype.o\

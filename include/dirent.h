@@ -1,24 +1,16 @@
-#pragma once
-
-typedef struct __dirstream DIR;
-
-// Directory is a file containing a sequence of dirent structures.
-#define DIRSIZ 14
-
-struct dirent {
-  unsigned short d_ino;
-  char d_name[DIRSIZ];
-};
-
+#ifndef _DIRENT_H_
+#define _DIRENT_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
+#include <sys/cdefs.h>
+#include <sys/dirent.h>
 
-DIR* opendir(const char *path);
-DIR* fdopendir(int fd);
-int closedir(DIR*);
-struct dirent *readdir(DIR*);
+#if !defined(MAXNAMLEN) && __BSD_VISIBLE
+#define MAXNAMLEN 1024
+#endif
 
 #ifdef __cplusplus
-}  // extern "C"
+}
 #endif
+#endif /*_DIRENT_H_*/

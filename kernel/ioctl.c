@@ -2,6 +2,7 @@
 #include "file.h"
 #include "param.h"
 #include "sys/stat.h"
+#include "sys/_ttype.h"
 
 int
 sys_ioctl(void)

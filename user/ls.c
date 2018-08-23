@@ -31,7 +31,7 @@ fmtname(const char *path)
 }
 
 void dumpinfo(const char* name, const struct stat* st) {
-  time_t mt = st->st_mtim.tv_sec;
+  time_t mt = st->st_mtime;  //.tv_sec;
   struct tm *t = localtime(&mt);
   printf("%s %4x %5d %8d  %04d/%02d/%02d %02d:%02d\n",
          name, st->st_mode, (int)st->st_ino, (int)st->st_size,

@@ -455,7 +455,7 @@ backcmd(struct cmd *subcmd)
 static const char symbols[] = "<|>&;()#";
 
 char *skipws(char *s, char *es) {
-  while(s < es && isspace(*s))
+  while(s < es && isspace((int)*s))
     s++;
   return s;
 }
@@ -541,7 +541,7 @@ gettoken(char **ps, char *es, char **q)
       }
       break;
     default:
-      while(s < es && !isspace(*s) && strchr(symbols, *s) == NULL)
+      while(s < es && !isspace((int)*s) && strchr(symbols, *s) == NULL)
         s++;
       break;
     }

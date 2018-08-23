@@ -215,52 +215,54 @@ kernel/vectors.S: $(MKVECTORS)
 	$(MKVECTORS) > $@
 
 ULIBOBJS = \
-	obj/ulib/atexit.o\
-	obj/ulib/commonstr.o\
 	obj/ulib/cppaux.o\
 	obj/ulib/crt0.o\
-	obj/ulib/ctype.o\
 	obj/ulib/dirent.o\
 	obj/ulib/environ.o\
-	obj/ulib/errno.o\
 	obj/ulib/exec.o\
-	obj/ulib/exit.o\
-	obj/ulib/localtime.o\
-	obj/ulib/perror.o\
-	obj/ulib/printf.o\
-	obj/ulib/setjmp$(BITS).o\
-	obj/ulib/sprintf.o\
-	obj/ulib/stdio.o\
-	obj/ulib/string.o\
-	obj/ulib/termios.o\
-	obj/ulib/time.o\
 	obj/ulib/ulib.o\
-	obj/ulib/umalloc.o\
-	obj/ulib/usys.o\
 	obj/ulib/wait.o\
+
+#	obj/ulib/atexit.o\
+#	obj/ulib/commonstr.o\
+#	obj/ulib/ctype.o\
+#	obj/ulib/errno.o\
+#	obj/ulib/exit.o\
+#	obj/ulib/localtime.o\
+#	obj/ulib/perror.o\
+#	obj/ulib/printf.o\
+#	obj/ulib/setjmp$(BITS).o\
+#	obj/ulib/sprintf.o\
+#	obj/ulib/stdio.o\
+#	obj/ulib/string.o\
+#	obj/ulib/termios.o\
+#	obj/ulib/time.o\
+#	obj/ulib/umalloc.o\
+#	obj/ulib/usys.o\
 
 obj/ulib/ulib.a:	$(ULIBOBJS)
 	ar rcs $@ $^
 
 APPLS = ulib/xv6app.ls
 
-fs/bin/cpptest:	obj/user/cpptest.o obj/ulib/ulib.a
+fs/bin/cpptest:	obj/user/cpptest.o obj/ulib/ulib.a libc.a obj/ulib/exit.o obj/ulib/gettimeofday.o obj/ulib/usys.o
 	@mkdir -p fs/bin out
 	$(LD) -nodefaultlibs -N -T $(APPLS) -Ttext 0 -o $@ $^
 	$(OBJDUMP) -S $@ > out/cpptest.asm
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/cpptest.sym
 	strip $@
 
-fs/bin/%: obj/user/%.o obj/ulib/ulib.a
+fs/bin/%: obj/user/%.o obj/ulib/ulib.a libc.a obj/ulib/exit.o obj/ulib/gettimeofday.o obj/ulib/usys.o
 	@mkdir -p fs/bin out
 	$(LD) $(LDFLAGS) -N -e _start -Ttext 0 -o $@ $^
 	$(OBJDUMP) -S $@ > out/$*.asm
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/$*.sym
 	strip $@
 
-out/mkfs: tools/mkfs.c tools/hostfsaux.c tools/hostfsaux.h kernel/fs.h
-	@mkdir -p out
-	gcc -Werror -Wall -o $@ tools/mkfs.c tools/hostfsaux.c
+#tools/mkfs: tools/mkfs.c tools/hostfsaux.c tools/hostfsaux.h kernel/fs.h
+#	@mkdir -p out
+#	gcc -Werror -Wall -c -o obj/hostfsaux.o tools/hostfsaux.c
+#	gcc -Iinclude -Werror -Wall -o $@ tools/mkfs.c obj/hostfsaux.o
 
 # Prevent deletion of intermediate files, e.g. cat.o, after first build, so
 # that disk image changes after first build are persistent until clean.  More
@@ -270,9 +272,7 @@ out/mkfs: tools/mkfs.c tools/hostfsaux.c tools/hostfsaux.h kernel/fs.h
 
 UPROGS=\
 	fs/bin/cat\
-	fs/bin/cp\
 	fs/bin/cpptest\
-	fs/bin/date\
 	fs/bin/echo\
 	fs/bin/forktest\
 	fs/bin/grep\
@@ -285,17 +285,20 @@ UPROGS=\
 	fs/bin/rm\
 	fs/bin/sh\
 	fs/bin/stressfs\
-	fs/bin/usertests\
 	fs/bin/wc\
 	fs/bin/zombie\
+
+#	fs/bin/cp\
+#	fs/bin/date\
+#	fs/bin/usertests\
 
 copyfsdata:
 	@mkdir -p fs
 	cp -upr fsdata/* fs/
 
-fs.img: out/mkfs $(UPROGS) copyfsdata
-	out/mkfs $@ init
-	out/mkfs $@ put fs/* /
+fs.img: $(UPROGS) copyfsdata # tools/mkfs
+	tools/mkfs -s 2000 $@ init
+	tools/mkfs $@ put fs/* /
 
 -include obj/*/*.d
 

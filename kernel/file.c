@@ -10,6 +10,7 @@
 #include "spinlock.h"
 #include "sleeplock.h"
 #include "sys/stat.h"
+#include "sys/_ttype.h"
 
 struct devsw devsw[NDEV];
 struct {

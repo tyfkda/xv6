@@ -20,6 +20,7 @@
 #include "fs.h"
 #include "buf.h"
 #include "file.h"
+#include "sys/_ttype.h"
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 static void itrunc(struct inode*);
@@ -533,13 +534,28 @@ itrunc(struct inode *ip)
 void
 stati(struct inode *ip, struct stat *st)
 {
+  mode_t mode = 0;
+
+  switch (ip->type) {
+  case T_DIR:
+    mode = S_IFDIR;
+    break;
+  case T_FILE:
+    mode = S_IFREG;
+    break;
+  case T_DEV:
+    mode = S_IFBLK;
+    break;
+  }
+
   st->st_dev = ip->dev;
   st->st_ino = ip->inum;
-  st->st_mode = ip->type;
+  st->st_mode = mode;
   st->st_nlink = ip->nlink;
   st->st_size = ip->size;
-  st->st_mtim.tv_sec = ip->mtime;
-  st->st_mtim.tv_nsec = 0;
+  //st->st_mtime.tv_sec = ip->mtime;
+  //st->st_mtime.tv_nsec = 0;
+  st->st_mtime = ip->mtime;
 }
 
 //PAGEBREAK!

@@ -364,7 +364,7 @@ void truncatetest()
   struct stat st;
   stat(fileName, &st);
   if (st.st_size != 5) {
-    fprintf(stderr, "truncate test: fileSize is not truncated: %d\n", st.st_size);
+    fprintf(stderr, "truncate test: fileSize is not truncated: %d\n", (int)st.st_size);
     exit(1);
   }
 
@@ -409,7 +409,7 @@ void appendtest()
   struct stat st;
   stat(fileName, &st);
   if (st.st_size != 10) {
-    fprintf(stderr, "append test: fileSize is not truncated: %d\n", st.st_size);
+    fprintf(stderr, "append test: fileSize is not truncated: %d\n", (int)st.st_size);
     exit(1);
   }
 
@@ -1894,7 +1894,11 @@ bigargtest(void)
       args[i] = "bigargs test: failed\n                                                                                                                                                                                                       ";
     args[MAXARG-1] = 0;
     printf("bigarg test\n");
+<<<<<<< HEAD
     execvp("echo", args);
+=======
+    execv("echo", args);
+>>>>>>> 【作業中】ユーザライブラリにNewlibを使用してみる
     printf("bigarg test ok\n");
     fd = open("bigarg-ok", O_CREAT);
     close(fd);

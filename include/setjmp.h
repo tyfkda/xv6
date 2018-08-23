@@ -1,18 +1,24 @@
-#pragma once
+/*
+	setjmp.h
+	stubs for future use.
+*/
 
-#ifdef X64
-typedef long jmp_buf[9];
+#ifndef _SETJMP_H_
+#define _SETJMP_H_
+
+#include "_ansi.h"
+#include <machine/setjmp.h>
+
+_BEGIN_STD_C
+
+#ifdef __GNUC__
+void	longjmp (jmp_buf __jmpb, int __retval)
+			__attribute__ ((__noreturn__));
 #else
-typedef int jmp_buf[6];
+void	longjmp (jmp_buf __jmpb, int __retval);
 #endif
+int	setjmp (jmp_buf __jmpb);
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+_END_STD_C
 
-int setjmp(jmp_buf);
-void longjmp(jmp_buf, int);
-
-#ifdef __cplusplus
-}  // extern "C"
-#endif
+#endif /* _SETJMP_H_ */

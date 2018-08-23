@@ -8,6 +8,8 @@
 #define FDPUTS(fd, str)  write(fd, (str), sizeof(str) - 1)
 #define exit     _sysexit
 
+int	mknod (const char *__path, mode_t __mode, dev_t __dev );
+
 extern void _sysexit(int);
 
 char *argv[] = { "/bin/sh", 0 };

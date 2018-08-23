@@ -18,6 +18,9 @@
 #include "date.h"
 #include "time.h"
 #include "errno.h"
+#include "sys/_ttype.h"
+
+#undef errno
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.

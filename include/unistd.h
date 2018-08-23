@@ -29,7 +29,7 @@ int mkdir(const char*);
 int chdir(const char*);
 int dup(int);
 int getpid(void);
-char* sbrk(int);
+void* sbrk(int);
 int sleep(int);
 int uptime(void);
 int date(struct rtcdate *);

@@ -391,7 +391,7 @@ execcmd(void)
 {
   struct execcmd *cmd;
 
-  cmd = calloc(sizeof(*cmd));
+  cmd = calloc(1, sizeof(*cmd));
   cmd->type = EXEC;
   return (struct cmd*)cmd;
 }
@@ -401,7 +401,7 @@ redircmd(struct cmd *subcmd, char *file, int mode, int fd)
 {
   struct redircmd *cmd;
 
-  cmd = calloc(sizeof(*cmd));
+  cmd = calloc(1, sizeof(*cmd));
   cmd->type = REDIR;
   cmd->cmd = subcmd;
   cmd->file = file;
@@ -415,7 +415,7 @@ pipecmd(struct cmd *left, struct cmd *right)
 {
   struct pipecmd *cmd;
 
-  cmd = calloc(sizeof(*cmd));
+  cmd = calloc(1, sizeof(*cmd));
   cmd->type = PIPE;
   cmd->left = left;
   cmd->right = right;
@@ -427,7 +427,7 @@ listcmd(int cond, struct cmd *left, struct cmd *right)
 {
   struct listcmd *cmd;
 
-  cmd = calloc(sizeof(*cmd));
+  cmd = calloc(1, sizeof(*cmd));
   cmd->type = LIST;
   cmd->cond = cond;
   cmd->left = left;
@@ -440,7 +440,7 @@ backcmd(struct cmd *subcmd)
 {
   struct backcmd *cmd;
 
-  cmd = calloc(sizeof(*cmd));
+  cmd = calloc(1, sizeof(*cmd));
   cmd->type = BACK;
   cmd->cmd = subcmd;
   return (struct cmd*)cmd;

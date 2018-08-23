@@ -818,8 +818,8 @@ main(int argc, char *argv[])
     return 1;
   }
 
-  const char* imgFn = argv[1];
-  const char* subcmdStr = argv[2];
+  const char* imgFn = argv[optind];
+  const char* subcmdStr = argv[optind + 1];
 
   SUBCMD subcmd = getSubcommand(subcmdStr);
   if (subcmd == INIT) {

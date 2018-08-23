@@ -200,9 +200,11 @@ int
 filetruncate(struct file* f, uint length)
 {
   if(f->type == FD_INODE){
+    begin_op();
     ilock(f->ip);
     isetsize(f->ip, length);
     iunlock(f->ip);
+    end_op();
     return 0;
   }
   return -1;

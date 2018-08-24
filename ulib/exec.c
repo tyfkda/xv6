@@ -63,21 +63,21 @@ _path_update(const char *path_val) {
   char *name, *next;
   
   new_path = strdup(path_val);
-  if ( new_path == 0 ) {
+  if ( new_path == NULL ) {
     
     rc = ENOMEM;
     goto free_out;
   }
   
-  if ( g_path.path_str != 0 ) 
+  if ( g_path.path_str != NULL ) 
     free(g_path.path_str);
   for( i = 0; MAX_PATH_NR > i; ++i) 
-    g_path.path[i] = 0;
+    g_path.path[i] = NULL;
   g_path.path_str = new_path;
   
   i = 0;
   next = skip_path_delim(new_path, &name);
-  while( ( next != 0 ) && ( *name != '\0' ) ) {
+  while( ( next != NULL ) && ( *name != '\0' ) ) {
     
     g_path.path[i] = name;
     next = skip_path_delim(next, &name);
@@ -85,7 +85,7 @@ _path_update(const char *path_val) {
     if ( i == ( MAX_PATH_NR - 1 ) )
       break;
   }
-  g_path.path[i] = 0;
+  g_path.path[i] = NULL;
   
   return 0;
   
@@ -112,10 +112,10 @@ exec(const char *path, char *const argv[]){
       break;
     snprintf(estr, ENV_VAR_LEN, "%s=%s", name, val);
     envs[i] = strdup(estr);
-    if ( envs[i] == 0 ) 
+    if ( envs[i] == NULL ) 
       goto free_env_out;
   }
-  envs[i] = 0;
+  envs[i] = NULL;
 
   /*
    * First, we try to execute a binary with relative path and absolute path
@@ -129,7 +129,7 @@ exec(const char *path, char *const argv[]){
    * Second, we try to execute a binary according to PATH environment variable.
    */
   dir = path_refer(i);
-  for(i = 0; dir != 0; ++i) {
+  for(i = 0; dir != NULL; ++i) {
     
     snprintf(cmd, PATH_MAX, "%s/%s", dir, path);
     rc = execve(cmd, argv, envs);
@@ -144,10 +144,10 @@ exec(const char *path, char *const argv[]){
 free_env_out:
   for(i = 0; MAXENV > i; ++i) {
     
-    if ( envs[i] != 0 ) {
+    if ( envs[i] != NULL ) {
       
       free(envs[i]);
-      envs[i] = 0;
+      envs[i] = NULL;
     }
   }
   

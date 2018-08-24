@@ -116,7 +116,7 @@ env_del(const char *name) {
 			
       p->namep = NULL;
       p->valp = NULL;
-      if ( p->var != 0 )
+      if ( p->var != NULL )
         free(p->var);
       p->var = NULL;
 
@@ -191,7 +191,7 @@ _setup_environment(char *envs[]){
 
   env_init();
 
-  for(i = 0; envs[i] != 0; ++i) {
+  for(i = 0; envs[i] != NULL; ++i) {
 
     env_add_from_environ(envs[i], 1);
   }

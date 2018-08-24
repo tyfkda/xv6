@@ -1,15 +1,12 @@
 #include "stdlib.h"
-
-extern char **environ;
+#include "stdio.h"
 
 extern int main(int argc, char** argv);
-extern void _setup_environment(char *[]);
+extern void _setup_environment(char *envs[]);
 
 void _start(int argc, char** argv, char **envp) {
-  environ = envp;
-
+  int code;
   _setup_environment(envp);
-
-  int code = main(argc, argv);
+  code = main(argc, argv);
   exit(code);
 }

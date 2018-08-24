@@ -5,9 +5,7 @@
 #include "unistd.h"
 #include "fcntl.h"
 
-extern char **environ;
-
-char *argv[] = { "/bin/sh", 0 };
+char *argv[] = { "sh", 0 };
 
 void runsh(int dev, const char* devname) __attribute__((noreturn));
 void
@@ -30,7 +28,7 @@ runsh(int dev, const char* devname)
       exit(1);
     }
     if(pid == 0){
-      execve("/bin/sh", argv, environ);
+      exec("sh", argv);
       fprintf(stderr, "init: exec sh failed\n");
       exit(1);
     }

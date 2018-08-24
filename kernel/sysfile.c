@@ -424,17 +424,16 @@ sys_chdir(void)
 int
 sys_execve(void)
 {
-  const char *argv[MAXARG];
-  const char *envp[MAXENV];
   const char *path;
+  const char *argv[MAXARG];
   int i;
   uintp uargv, uarg;
+  const char *envp[MAXENV];
   uintp uenvp, uenv;
 
   if(argcstr(0, &path) < 0 || arguintp(1, &uargv) < 0 || arguintp(2, &uenvp) < 0){
     return -1;
   }
-
   memset(argv, 0, sizeof(argv));
   for(i=0;; i++){
     if(i >= NELEM(argv))
@@ -445,8 +444,10 @@ sys_execve(void)
       argv[i] = 0;
       break;
     }
-    if(fetchstr(uarg, &argv[i]) < 0)
+    const char* v;
+    if(fetchstr(uarg, &v) < 0)
       return -1;
+    argv[i] = v;
   }
 
   memset(envp, 0, sizeof(envp));
@@ -460,7 +461,7 @@ sys_execve(void)
       break;
     }
     if(fetchstr(uenv, &envp[i]) < 0)
-      return -1;
+       return -1;
   }
 
   return execve(path, argv, envp);

@@ -63,4 +63,3 @@ SYSCALL(ioctl)
 SYSCALL(isatty)
 SYSCALL(ftruncate)
 SYSCALL2(_sysreaddir, SYS_readdir)
-

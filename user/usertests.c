@@ -387,7 +387,6 @@ void dirtest(void)
 void
 exectest(void)
 {
-
   printf("exec test\n");
   if(exec("echo", echoargv) < 0){
     printf("exec echo failed\n");

@@ -3,8 +3,7 @@
 ifeq ("$(X32)","")
 BITS = 64
 XOBJS = obj/knl/vm64.o
-STD_FLAGS = -std=gnu99
-XFLAGS = $(STD_FLAGS) -m64 -DX64 -mcmodel=kernel -mtls-direct-seg-refs -mno-red-zone
+XFLAGS = -m64 -DX64 -mcmodel=kernel -mtls-direct-seg-refs -mno-red-zone
 LDFLAGS = -m elf_x86_64 -nodefaultlibs
 QEMUTARGET = qemu-system-x86_64
 else
@@ -230,7 +229,7 @@ fs/bin/%: obj/user/%.o obj/ulib/ulib.a
 
 out/mkfs: tools/mkfs.c tools/hostfsaux.c tools/hostfsaux.h kernel/fs.h
 	@mkdir -p out
-	gcc -Werror -Wall $(STD_FLAGS) -o $@ tools/mkfs.c tools/hostfsaux.c
+	gcc -Werror -Wall -o $@ tools/mkfs.c tools/hostfsaux.c
 
 # Prevent deletion of intermediate files, e.g. cat.o, after first build, so
 # that disk image changes after first build are persistent until clean.  More

@@ -6,49 +6,62 @@
 #include "defs.h"
 #include "x86.h"
 #include "elf.h"
-#include "fs.h"
 
 #define FILE_SEPARATOR  '/'
 
-#define EXECVE_USTK_ARGS_NR       (4)
+// Find exe path
+static struct inode *find_path(const char *path, char *resultPath, int bufsiz) {
+  struct inode *ip;
 
-static int
-execelf(const char *path, const char *argv[], const char *envp[]){
+  if (strchr(path, FILE_SEPARATOR) != 0) {
+    ip = namei(path);
+    if (resultPath != 0)
+      safestrcpy(resultPath, path, bufsiz);
+  } else {
+    // Also find at root path. TODO: Search from $PATH
+    const char PATH[] = "/bin/";
+    const int LEN = sizeof(PATH) - 1;
+    const int BUFSIZ = 128;
+    char exepath[BUFSIZ];
+    memmove(exepath, PATH, LEN);
+    safestrcpy(exepath + LEN, path, BUFSIZ - LEN);
+    ip = namei(exepath);
+    if (resultPath != 0)
+      safestrcpy(resultPath, exepath, bufsiz);
+  }
+  return ip;
+}
+
+// Check ELF header
+int
+readelfhdr(struct inode *ip, struct elfhdr *elf)
+{
+  return readi(ip, elf, 0, sizeof(*elf)) == sizeof(*elf)
+      && elf->magic == ELF_MAGIC;
+}
+
+int
+execelf(const char *progname, const char *path, const char* const *argv,const char *envp[],
+        const struct elfhdr *elf, struct inode **pip, pde_t **ppgdir)
+{
   const char *s, *last;
-  int   i, off;
-  uintp sz, sp, ustack[EXECVE_USTK_ARGS_NR+MAXARG+1+MAXENV+1];
-  uintp arg_idx, nr_args, env_idx, nr_envs;
-  uintp uargvp, uenvp;
-  struct elfhdr elf;
+  int i, off;
+  uintp argc, sz, sp, ustack[4+MAXARG+1+MAXENV+1];
   struct inode *ip;
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
   struct proc *curproc = myproc();
+  uintp nr_args, env_idx, nr_envs;
 
-  begin_op();
-
-  ip = namei(path);
-  if( ip == 0 ){
-
-    end_op();
-    return -1;
-  }
-
-  ilock(ip);
+  ip = *pip;
   pgdir = 0;
-
-  // Check ELF header
-  if(readi(ip, &elf, 0, sizeof(elf)) != sizeof(elf))
-    goto bad;
-  if(elf.magic != ELF_MAGIC)
-    goto bad;
 
   if((pgdir = setupkvm()) == 0)
     goto bad;
 
   // Load program into memory.
   sz = 0;
-  for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
+  for(i=0, off=elf->phoff; i<elf->phnum; i++, off+=sizeof(ph)){
     if(readi(ip, &ph, off, sizeof(ph)) != sizeof(ph))
       goto bad;
     if(ph.type != ELF_PROG_LOAD)
@@ -57,16 +70,16 @@ execelf(const char *path, const char *argv[], const char *envp[]){
       goto bad;
     if(ph.vaddr + ph.memsz < ph.vaddr)
       goto bad;
-    if(ph.vaddr % PGSIZE != 0)
+    if((sz = allocuvm(pgdir, sz, ph.vaddr + ph.memsz)) == 0)
       goto bad;
-    if((sz = allocuvm(pgdir, sz, PGROUNDUP(ph.vaddr + ph.memsz))) == 0)
+    if(ph.vaddr % PGSIZE != 0)
       goto bad;
     if(loaduvm(pgdir, (char*)ph.vaddr, ip, ph.off, ph.filesz) < 0)
       goto bad;
   }
   iunlockput(ip);
   end_op();
-  ip = 0;
+  ip = *pip = 0;
 
   // Allocate two pages at the next page boundary.
   // Make the first inaccessible.  Use the second as the user stack.
@@ -78,60 +91,48 @@ execelf(const char *path, const char *argv[], const char *envp[]){
 
   for(nr_args = 0; (MAXARG > nr_args) && (argv[nr_args] != 0); ++nr_args);
   for(nr_envs = 0; (MAXENV > nr_envs) && (envp[nr_envs] != 0); ++nr_envs);
-  
-  /*
-   * Push environment strings, prepare rest of stack in ustack.
-   */
+
   for(env_idx = 0; nr_envs > env_idx; ++env_idx) {
 
-    /* Copy environment variable including NULL terminate
-     * and we ensure each element is aligned to the word.
-     */
+    // Copy environment variable including NULL terminate
+    // and we ensure each element is aligned to the word.
     sp = (sp - (strlen(envp[nr_envs - env_idx - 1]) + 1)) & ~(sizeof(uintp)-1);
     if (copyout(pgdir, sp, envp[nr_envs - env_idx - 1], 
 	strlen(envp[nr_envs - env_idx - 1]) + 1) < 0)
-      goto bad;
+       goto bad;
     
-    /* store the address of a variable */		
-    ustack[EXECVE_USTK_ARGS_NR + nr_args + 1 + nr_envs - env_idx - 1] = sp; 
+    // store the address of a variable
+    ustack[4 + nr_args + 1 + nr_envs - env_idx - 1] = sp; 
   }
-  ustack[EXECVE_USTK_ARGS_NR + nr_args + 1 + nr_envs] = (uintp)0;
-  
-  /*
-   * Push argument strings, prepare rest of stack in ustack.
-   */
-  for(arg_idx = 0; nr_args > arg_idx; ++arg_idx) {
-    
-    /* Copy an argument including NULL terminate
-     * and we ensure each element is aligned to the word.
-     */
-    sp = (sp - (strlen(argv[nr_args - arg_idx - 1]) + 1)) & ~(sizeof(uintp)-1);
-    if(copyout(pgdir, sp, argv[nr_args - arg_idx - 1], 
-	strlen(argv[nr_args - arg_idx - 1]) + 1) < 0)
-      goto bad;
-    ustack[EXECVE_USTK_ARGS_NR + nr_args - arg_idx - 1] = sp;
-  }
-  ustack[EXECVE_USTK_ARGS_NR+nr_args] = (uintp)0;
+  ustack[4 + nr_args + 1 + nr_envs] = (uintp)0;
 
-  uargvp = sp - (nr_args + 1 + nr_envs + 1)*sizeof(uintp);  // argv pointer
-  uenvp = sp - (nr_envs + 1)*sizeof(uintp);  // env pointer
-  
+  // Push argument strings, prepare rest of stack in ustack.
+  for(argc = 0; argv[argc] != 0; ++argc) {
+    if(argc >= MAXARG)
+      goto bad;
+    sp = (sp - (strlen(argv[argc]) + 1)) & ~(sizeof(uintp)-1);
+    if(copyout(pgdir, sp, argv[argc], strlen(argv[argc]) + 1) < 0)
+      goto bad;
+    ustack[4+argc] = sp;
+  }
+  ustack[4+argc] = 0;
+
   ustack[0] = 0xffffffff;  // fake return PC
-  ustack[1] = nr_args;
-  ustack[2] = uargvp;  // argv pointer
-  ustack[3] = uenvp;   // env pointer
+  ustack[1] = argc;
+  ustack[2] = sp - (argc+1+nr_envs+1)*sizeof(uintp);  // argv pointer
+  ustack[3] = sp - (nr_envs+1)*sizeof(uintp);  // env pointer
 #if X64
-  myproc()->tf->rdi = nr_args;
-  myproc()->tf->rsi = uargvp; // argv pointer
-  myproc()->tf->rdx = uenvp;  // env pointer
+  myproc()->tf->rdi = argc;
+  myproc()->tf->rsi = sp - (nr_args+1+nr_envs+1)*sizeof(uintp);
+  myproc()->tf->rdx = sp - (nr_envs+1)*sizeof(uintp);
 #endif
 
-  sp -= (EXECVE_USTK_ARGS_NR + nr_args + 1 + nr_envs + 1) * sizeof(uintp);
-  if(copyout(pgdir, sp, ustack, (EXECVE_USTK_ARGS_NR + nr_args + 1 + nr_envs + 1)*sizeof(uintp)) < 0)
+  sp -= (4+argc+1+nr_envs+1) * sizeof(uintp);
+  if(copyout(pgdir, sp, ustack, (4+argc+1+nr_envs+1)*sizeof(uintp)) < 0)
     goto bad;
 
   // Save program name for debugging.
-  for(last=s=path; *s; s++)
+  for(last=s=progname; *s; s++)
     if(*s == '/')
       last = s+1;
   safestrcpy(curproc->name, last, sizeof(curproc->name));
@@ -140,92 +141,99 @@ execelf(const char *path, const char *argv[], const char *envp[]){
   oldpgdir = curproc->pgdir;
   curproc->pgdir = pgdir;
   curproc->sz = sz;
-  curproc->tf->eip = elf.entry;  // main
+  curproc->tf->eip = elf->entry;  // main
   curproc->tf->esp = sp;
   switchuvm(curproc);
   freevm(oldpgdir);
-
+  *ppgdir = 0;  // Clear pgdir to avoid to be free
   return 0;
 
- bad:
-  if( pgdir != 0 )
-    freevm(pgdir);
-  if( ip != 0 ){
-    iunlockput(ip);
-    end_op();
-  }
-
+bad:
+  *ppgdir = pgdir;
   return -1;
 }
 
-static int
-execshebang(const char *path, const char *argv[], const char *envp[])
+int
+execshebang(const char *path, const char * const *argv, const char *envp[],
+            struct inode **pip, pde_t **ppgdir)
 {
-  struct inode          *ip;
-  char            line[512];
-  int                  size;
-  char            * shebang;
-  const char *argv2[MAXARG];
-  int                     i;
+  struct inode *ip = *pip;
 
-  /*
-   *  Load shebang line from the first block
-   */
-  begin_op();
-
-  ip = namei(path);
-  if(ip == 0){
-    end_op();
-    return -1;
-  }
-
-  ilock(ip);
-  size = readi(ip, line, 0, sizeof(line));
-  iunlockput(ip);
-
-  end_op();
+  // Check shebang
+  char line[512];
+  int size = readi(ip, line, 0, sizeof(line));
 
   if (size <= 2)
-    return -1;
+    goto bad;
   if (strncmp(line, "#!", 2) != 0)
-    return -1;
+    goto bad;
+
+  iunlockput(ip);
+  end_op();
+  ip = *pip = 0;
 
   line[sizeof(line) - 1] = '\n';
   *strchr(line, '\n') = '\0';
+  char* shebang = line + 2;
 
-  /*
-   * Setup argment
-   */
-  shebang = line + 2;
+  begin_op();
+  struct inode *ip2 = find_path(shebang, 0, 0);
+  if(ip2 == 0){
+    end_op();
+    return -1;
+  }
+  ilock(ip2);
+  *pip = ip2;
+
+  struct elfhdr elf;
+  if (!readelfhdr(ip2, &elf))
+    goto bad;
+
+  const char *argv2[MAXARG];
   argv2[0] = shebang;
   argv2[1] = path;
-  for (i = 1; i < MAXARG - 1; ++i) {
-
+  for (int i = 1; i < MAXARG - 1; ++i) {
     argv2[i + 1] = argv[i];
     if (argv[i] == 0)
       break;
   }
+  return execelf(path, shebang, argv2, envp, &elf, pip, ppgdir);
 
-  /*
-   * Invoking execve to handle user program again.
-   * It is needed to invoke shebang using shell command
-   * like #!/bin/script.sh
-   * Note that script.sh might contain shebang(#!).
-   */
-  return execve(argv2[0], argv2, envp);
+bad:
+  return -1;
 }
 
 int
-execve(const char *path, const char *argv[], const char *envp[])
+execve(const char *path, const char*argv[], const char *envp[])
 {
-  int               rc;
+  struct inode *ip;
+  struct elfhdr elf;
+  pde_t *pgdir;
+  char exepath[128];
 
-  rc = execelf(path, argv, envp);
-  if ( rc == 0 )
-    return 0;
-  rc = execshebang(path, argv,envp);
-  if ( rc == 0 )
-    return 0;
+  pgdir = 0;
 
-  return -1;
+  begin_op();
+
+  ip = find_path(path, exepath, sizeof(exepath));
+  if(ip == 0){
+    end_op();
+    return -1;
+  }
+  ilock(ip);
+
+  int result;
+  if (readelfhdr(ip, &elf)) {
+    result = execelf(path, path, argv, envp, &elf, &ip, &pgdir);
+  } else {
+    result = execshebang(exepath, argv, envp, &ip, &pgdir);
+  }
+
+  if(pgdir)
+    freevm(pgdir);
+  if(ip){
+    iunlockput(ip);
+    end_op();
+  }
+  return result;
 }

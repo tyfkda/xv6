@@ -1,5 +1,3 @@
-#include "fcntl.h"
-#include "file_def.h"
 #include "stdio.h"
 #include "stdlib.h"
 #include "string.h"
@@ -7,55 +5,43 @@
 #include "errno.h"
 #include "../kernel/param.h"
 
-#define ENV_VAR_LEN   (128)
-#define MAX_PATH_NR   (32)
-#define PATH_MAX      (128)
-#define PATH_DELIM    ':'
-#define FILE_DELIM    '/'
+#define ENV_VAR_LEN    (128)
+#define MAX_PATH_NR    (32)
+#define PATH_MAX       (128)
+#define PATH_SEPARATOR ':'
 
 typedef struct _path_store{
-	char *path_str;
-	char *path[MAX_PATH_NR];  /* Note: path[MAX_PATH_NR - 1] should be NULL */
+  char *path_str;
+  char *path[MAX_PATH_NR];  /* Note: path[MAX_PATH_NR - 1] should be NULL */
 }path_store;
 
-int env_find_by_idx(int _idx, char **_namep, char **_valp);
+int _env_find_by_idx(int _idx, char **_namep, char **_valp);
 
 static path_store g_path={0, {0}};
 
 static char*
 skip_path_delim(char *val, char **pathp){
   char *s;
-  int len, i;
+  int len;
   
-  while(*val == PATH_DELIM)
+  while(*val == PATH_SEPARATOR)
     ++val;
   if( *val == '\0' )
     return 0;
   
   s = val;
-  while( (*val != PATH_DELIM) && (*val != '\0') )
+  while( (*val != PATH_SEPARATOR) && (*val != '\0') )
     ++val;
-  
-  while( (*s != '\0') && (*s == FILE_DELIM ) && (*(s + 1) == FILE_DELIM ) )
-    ++s;
   
   len = val - s;
   if ( PATH_MAX <= len ) 
     len = PATH_MAX - 1;
   s[len] = '\0';
-  if ( (len - 1) != '\0' ) {
-    
-    for( i = len - 1; i >= 0; --i ){
-      if ( s[i] != FILE_DELIM )
-	break;
-      s[i] = '\0';
-    }
-  }
   
   *pathp = s;
   
   ++val;	
-  while( *val == PATH_DELIM )
+  while( *val == PATH_SEPARATOR )
     ++val;
   
   return (char *)val;
@@ -116,11 +102,12 @@ exec(const char *path, char *const argv[]){
   const char         *dir;
   char        *name, *val;
   int               i, rc;
+  char                *ch;
 
   memset(&envs[0], 0, sizeof(envs));
   for(i = 0; ( MAXENV - 1 ) > i; ++i) {
     
-    rc = env_find_by_idx(i, &name, &val);
+    rc = _env_find_by_idx(i, &name, &val);
     if ( rc != 0 )
       break;
     snprintf(estr, ENV_VAR_LEN, "%s=%s", name, val);
@@ -129,13 +116,15 @@ exec(const char *path, char *const argv[]){
       goto free_env_out;
   }
   envs[i] = 0;
-  
+
   /*
    * First, we try to execute a binary with relative path and absolute path
-   * ( e.g.,  ./path/a.out, /path/a.out and path/a.out ).
+   * ( e.g.,  ./path/a.out, /path/a.out and a.out/ ).
    */
-  execve(path, argv, envs);
-  
+  ch = strchr(path, PATH_SEPARATOR);
+  if ( ch != NULL )
+    execve(path, argv, envs);
+
   /*
    * Second, we try to execute a binary according to PATH environment variable.
    */
@@ -146,8 +135,13 @@ exec(const char *path, char *const argv[]){
     rc = execve(cmd, argv, envs);
     dir = path_refer(i);
   }
-  
- free_env_out:
+
+  /*
+   * Third try to exec with raw path string.
+   */
+  rc = execve(path, argv, envs);
+
+free_env_out:
   for(i = 0; MAXENV > i; ++i) {
     
     if ( envs[i] != 0 ) {

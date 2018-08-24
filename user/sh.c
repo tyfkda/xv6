@@ -211,7 +211,6 @@ putLastExitCode(int exitcode)
 void
 runecmd(struct execcmd *ecmd)
 {
-
   exec(ecmd->argv[0], ecmd->argv);
   fprintf(stderr, "sh: command not found: %s\n", ecmd->argv[0]);
   exit(1);

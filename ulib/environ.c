@@ -1,9 +1,7 @@
-#include "fcntl.h"
-#include "file_def.h"
 #include "stdio.h"
+#include "unistd.h"
 #include "stdlib.h"
 #include "string.h"
-#include "unistd.h"
 #include "errno.h"
 #include "../kernel/param.h"
 
@@ -11,7 +9,6 @@
 #define ENV_VAR_LEN   (128)
 #define ENV_VAR_DELIM   '='
 
-char **environ={0};
 extern int _path_update(const char *);
 
 typedef struct __evar_list{
@@ -36,15 +33,15 @@ static _evar_head evars={.prev = (struct __evar_list *)&evars, .next = (struct _
 
 static int
 env_add_from_environ(const char *var, int overwrite){
-  int i;
+  int        i;
   evar_type *p;
-  int  len;
+  int      len;
 
   for(i=0; MAXENV>i; ++i) {
 
     p = &evar_array[i];
 		
-    if ( p->var != 0 ) {
+    if ( p->var != NULL ) {
 
       len = strlen(p->namep);
       if ( ( strncmp(p->namep, var,  len) != 0 ) ||
@@ -56,10 +53,10 @@ env_add_from_environ(const char *var, int overwrite){
     }
     p->var = strdup(var);
 
-    if ( p->var == 0 ) {
+    if ( p->var == NULL ) {
 			
-      p->namep = 0;
-      p->valp = 0;
+      p->namep = NULL;
+      p->valp = NULL;
 
       /*
        * unlink
@@ -80,7 +77,7 @@ add_var:
 	
   p->namep = p->var;
   p->valp = strchr(p->var, '=');
-  if ( p->valp == 0 ) 
+  if ( p->valp == NULL ) 
     p->valp = &p->var[len];
   else {
 
@@ -109,7 +106,7 @@ env_add(const char *name, const char *val, int overwrite) {
 
 static int
 env_del(const char *name) {
-  int i;
+  int        i;
   evar_type *p;
         
   for(i=0; MAXENV>i; ++i) {
@@ -117,11 +114,11 @@ env_del(const char *name) {
     p = &evar_array[i];
     if ( strcmp(p->namep, name) == 0 ) {
 			
-      p->namep = 0;
-      p->valp = 0;
+      p->namep = NULL;
+      p->valp = NULL;
       if ( p->var != 0 )
         free(p->var);
-      p->var = 0;
+      p->var = NULL;
 
       /*
        * unlink
@@ -137,7 +134,7 @@ env_del(const char *name) {
   return ENOENT;
 }
 
-int
+static int
 env_find_by_name(const char *name, char **valp) {
   evar_type *p;
 
@@ -157,8 +154,8 @@ env_find_by_name(const char *name, char **valp) {
 
 
 int
-env_find_by_idx(int idx, char **namep, char **valp) {
-  int i;
+_env_find_by_idx(int idx, char **namep, char **valp) {
+  int        i;
   evar_type *p;
 
   for(i = 0, p = (evar_type *)(evars.next);
@@ -211,7 +208,7 @@ getenv(const char *name) {
   int    rc;
   char *val;
 
-  if ( name == 0 )
+  if ( name == NULL )
     return 0;
 
   rc = env_find_by_name(name, &val);
@@ -225,7 +222,7 @@ int
 setenv(const char *name, const char *value, int overwrite) {
   int   rc;
 
-  if ( ( name == 0 ) || ( value == 0 ) )
+  if ( ( name == NULL ) || ( value == NULL ) )
     return -1;
 
   rc = env_add(name, value, overwrite);
@@ -238,7 +235,7 @@ int
 unsetenv(const char *name) {
   int rc;
 
-  if ( name == 0 )
+  if ( name == NULL )
     return -1;
 	
   rc = env_del(name);
@@ -247,4 +244,3 @@ unsetenv(const char *name) {
 
   return 0;
 }
-

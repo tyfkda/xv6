@@ -15,4 +15,3 @@ stat(const char *n, struct stat *st)
   close(fd);
   return r;
 }
-

@@ -157,6 +157,7 @@ void open_fs_img(const char* imgFn) {
 }
 
 static void putdirent(uint parent, uint inum, const char *name) {
+printf("putdirent: %s, %d, %d\n", name, parent, inum);
   struct dirent de;
   assert(strchr(name, DS) == NULL);
   bzero(&de, sizeof(de));

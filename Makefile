@@ -272,7 +272,9 @@ fs/bin/%: obj/user/%.o obj/ulib/ulib.a libc.a obj/ulib/exit.o obj/ulib/gettimeof
 
 UPROGS=\
 	fs/bin/cat\
+	fs/bin/cp\
 	fs/bin/cpptest\
+	fs/bin/date\
 	fs/bin/echo\
 	fs/bin/forktest\
 	fs/bin/grep\
@@ -285,19 +287,16 @@ UPROGS=\
 	fs/bin/rm\
 	fs/bin/sh\
 	fs/bin/stressfs\
+	fs/bin/usertests\
 	fs/bin/wc\
 	fs/bin/zombie\
-
-#	fs/bin/cp\
-#	fs/bin/date\
-#	fs/bin/usertests\
 
 copyfsdata:
 	@mkdir -p fs
 	cp -upr fsdata/* fs/
 
 fs.img: $(UPROGS) copyfsdata # tools/mkfs
-	tools/mkfs -s 2000 $@ init
+	tools/mkfs -s 4000 $@ init
 	tools/mkfs $@ put fs/* /
 
 -include obj/*/*.d

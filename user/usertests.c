@@ -18,7 +18,7 @@
 char buf[8192];
 
 static void panic(const char *msg) {
-  fprintf(stderr, msg);
+  fprintf(stderr, "%s\n", msg);
   exit(1);
 }
 
@@ -1894,11 +1894,7 @@ bigargtest(void)
       args[i] = "bigargs test: failed\n                                                                                                                                                                                                       ";
     args[MAXARG-1] = 0;
     printf("bigarg test\n");
-<<<<<<< HEAD
     execvp("echo", args);
-=======
-    execv("echo", args);
->>>>>>> 【作業中】ユーザライブラリにNewlibを使用してみる
     printf("bigarg test ok\n");
     fd = open("bigarg-ok", O_CREAT);
     close(fd);

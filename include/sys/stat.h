@@ -14,7 +14,7 @@ struct stat {
   struct timespec st_mtim;   // Modified time
 };
 
-int mkdir(const char*);
+int mkdir(const char*, int);
 
 // Mock POSIX
 #define S_IFMT   (3)

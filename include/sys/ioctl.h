@@ -14,3 +14,5 @@ struct winsize {
 #define TCSETSW         (0x5403)
 #define TCSETSF         (0x5404)
 #define TIOCGWINSZ      (0x5413)
+
+int ioctl(int fd, int request, ...);

@@ -36,7 +36,6 @@ void* sbrk(int);
 int sleep(int);
 int uptime(void);
 int date(struct rtcdate *);
-int ioctl(int fd, int request, ...);
 int isatty(int fd);
 
 // ulib.c

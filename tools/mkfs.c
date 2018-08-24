@@ -615,6 +615,76 @@ static int nameiparent(const char* path, char* name) {
 
 ////////////////////////////////////////////////
 
+int readdirent(const char* path, struct dirent* pde) {
+  char name[DIRSIZ];
+  int parent = nameiparent(path, name);
+  if (parent == -1)
+    return FALSE;
+
+  struct dinode din;
+  rinode(parent, &din);
+  uint off;
+  if (dirlookup(&din, name, &off) < 0)
+    return FALSE;
+
+  return readi(&din, (char*)pde, off, sizeof(*pde)) == sizeof(*pde);
+}
+
+char*
+fmtname(const char *path)
+{
+  static char buf[DIRSIZ+1];
+  const char *p;
+
+  // Find first character after last slash.
+  for(p=path+strlen(path); p >= path && *p != '/'; p--)
+    ;
+  p++;
+
+  // Return blank-padded name.
+  if(strlen(p) >= DIRSIZ)
+    return (char*)p;
+  memmove(buf, p, strlen(p));
+  memset(buf+strlen(p), ' ', DIRSIZ-strlen(p));
+  return buf;
+}
+
+void dumpinfo(const char* name, const struct dinode* de) {
+  time_t mt = de->mtime;
+  struct tm *t = localtime(&mt);
+  printf("%s %4x %8d  %04d/%02d/%02d %02d:%02d\n",
+         name, de->type, (int)de->size,
+         t->tm_year + 1900, t->tm_mon + 1, t->tm_mday,
+         t->tm_hour, t->tm_min);
+}
+
+void doLs(const char* path) {
+  int ino = namei(path);
+  if (ino == -1) {
+    fprintf(stderr, "ls: path not found: %s\n", path);
+    exit(1);
+  }
+
+  struct dinode din;
+  rinode(ino, &din);
+  if (din.type == T_FILE) {
+    dumpinfo(fmtname(path), &din);
+  } else {
+    uint off;
+    struct dirent de;
+
+    for(off = 0; off < din.size; off += sizeof(de)){
+      if(readi(&din, (char*)&de, off, sizeof(de)) != sizeof(de))
+        panic("ls read");
+      if(de.d_ino == 0)
+        continue;
+      struct dinode din2;
+      rinode(de.d_ino, &din2);
+      dumpinfo(fmtname(de.d_name), &din2);
+    }
+  }
+}
+
 void doPut(const char* src, const char* dst) {
   char name[DIRSIZ];
   int parent = nameiparent(dst, name);
@@ -669,12 +739,14 @@ void doMkdir(const char* path) {
 typedef enum {
   UNKNOWN = -1,
   INIT,
+  LS,
   PUT,
   MKDIR,
 } SUBCMD;
 
 static const char* kSubCommands[] = {
   "init",
+  "ls",
   "put",
   "mkdir",
   NULL,
@@ -697,9 +769,10 @@ static void showHelp(void) {
           "\t-i <nr-inodes>\n"
           "\t-s <fssize>\n"
           "Subcommands:\n"
-          "\tinit                 Create initialized image\n"
-          "\tput <source> [dest]  Put a file from local to image (default: to root)\n"
-          "\tmkdir path...        Create a directory(s) in image\n"
+          "\tinit                    Create initialized image\n"
+          "\tls                      List directory contents\n"
+          "\tput <source...> [dest]  Put file(s) from local to image\n"
+          "\tmkdir path...           Create directory(s) in image\n"
           );
 }
 
@@ -745,8 +818,8 @@ main(int argc, char *argv[])
     return 1;
   }
 
-  const char* imgFn = argv[1];
-  const char* subcmdStr = argv[2];
+  const char* imgFn = argv[optind];
+  const char* subcmdStr = argv[optind + 1];
 
   SUBCMD subcmd = getSubcommand(subcmdStr);
   if (subcmd == INIT) {
@@ -755,6 +828,14 @@ main(int argc, char *argv[])
     open_fs_img(imgFn);
 
     switch (subcmd) {
+    case LS:
+      if (argc < 4) {
+        doLs("/");
+      } else {
+        for (int i = 3; i < argc; ++i)
+          doLs(argv[i]);
+      }
+      break;
     case PUT:
       {
         if (argc < 4) {

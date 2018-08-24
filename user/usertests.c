@@ -1,10 +1,12 @@
-#include "sys/stat.h"
+#include "fcntl.h"
+#include "signal.h"
 #include "stdio.h"
 #include "stdlib.h"
 #include "string.h"
+#include "sys/stat.h"
+#include "sys/wait.h"
 #include "unistd.h"
 #include "../kernel/fs.h"
-#include "fcntl.h"
 #include "../kernel/memlayout.h"
 #include "../kernel/param.h"
 #include "../kernel/traps.h"
@@ -23,7 +25,7 @@ iputtest(void)
 {
   printf("iput test\n");
 
-  if(mkdir("iputdir") < 0){
+  if(mkdir("iputdir", 0777) < 0){
     printf("mkdir failed\n");
     exit(1);
   }
@@ -56,7 +58,7 @@ exitiputtest(void)
     exit(1);
   }
   if(pid == 0){
-    if(mkdir("iputdir") < 0){
+    if(mkdir("iputdir", 0777) < 0){
       printf("mkdir failed\n");
       exit(1);
     }
@@ -91,7 +93,7 @@ openiputtest(void)
   int pid;
 
   printf("openiput test\n");
-  if(mkdir("oidir") < 0){
+  if(mkdir("oidir", 0777) < 0){
     printf("mkdir oidir failed\n");
     exit(1);
   }
@@ -204,7 +206,7 @@ writetest1(void)
   for(i = 0; i < MAXFILE; i++){
     ((int*)buf)[0] = i;
     if(write(fd, buf, 512) != 512){
-      printf("error: write big file failed\n", i);
+      printf("error: write big file failed: %d\n", i);
       exit(1);
     }
   }
@@ -362,7 +364,7 @@ void dirtest(void)
 {
   printf("mkdir test\n");
 
-  if(mkdir("dir0") < 0){
+  if(mkdir("dir0", 0777) < 0){
     printf("mkdir failed\n");
     exit(1);
   }
@@ -484,9 +486,9 @@ preempt(void)
   }
   close(pfds[0]);
   printf("kill... ");
-  kill(pid1);
-  kill(pid2);
-  kill(pid3);
+  kill(pid1, 0);
+  kill(pid2, 0);
+  kill(pid3, 0);
   printf("wait... ");
   wait(0);
   wait(0);
@@ -540,7 +542,7 @@ mem(void)
     m1 = malloc(1024*20);
     if(m1 == 0){
       printf("couldn't allocate mem?!!\n");
-      kill(ppid);
+      kill(ppid, 0);
       exit(1);
     }
     free(m1);
@@ -1028,7 +1030,7 @@ subdir(void)
   printf("subdir test\n");
 
   unlink("ff");
-  if(mkdir("dd") != 0){
+  if(mkdir("dd", 0777) != 0){
     printf("subdir mkdir dd failed\n");
     exit(1);
   }
@@ -1046,7 +1048,7 @@ subdir(void)
     exit(1);
   }
 
-  if(mkdir("/dd/dd") != 0){
+  if(mkdir("/dd/dd", 0777) != 0){
     printf("subdir mkdir dd/dd failed\n");
     exit(1);
   }
@@ -1150,15 +1152,15 @@ subdir(void)
     printf("link dd/ff dd/dd/ffff succeeded!\n");
     exit(1);
   }
-  if(mkdir("dd/ff/ff") == 0){
+  if(mkdir("dd/ff/ff", 0777) == 0){
     printf("mkdir dd/ff/ff succeeded!\n");
     exit(1);
   }
-  if(mkdir("dd/xx/ff") == 0){
+  if(mkdir("dd/xx/ff", 0777) == 0){
     printf("mkdir dd/xx/ff succeeded!\n");
     exit(1);
   }
-  if(mkdir("dd/dd/ffff") == 0){
+  if(mkdir("dd/dd/ffff", 0777) == 0){
     printf("mkdir dd/dd/ffff succeeded!\n");
     exit(1);
   }
@@ -1297,11 +1299,11 @@ fourteen(void)
   // DIRSIZ is 14.
   printf("fourteen test\n");
 
-  if(mkdir("12345678901234") != 0){
+  if(mkdir("12345678901234", 0777) != 0){
     printf("mkdir 12345678901234 failed\n");
     exit(1);
   }
-  if(mkdir("12345678901234/123456789012345") != 0){
+  if(mkdir("12345678901234/123456789012345", 0777) != 0){
     printf("mkdir 12345678901234/123456789012345 failed\n");
     exit(1);
   }
@@ -1318,11 +1320,11 @@ fourteen(void)
   }
   close(fd);
 
-  if(mkdir("12345678901234/12345678901234") == 0){
+  if(mkdir("12345678901234/12345678901234", 0777) == 0){
     printf("mkdir 12345678901234/12345678901234 succeeded!\n");
     exit(1);
   }
-  if(mkdir("123456789012345/12345678901234") == 0){
+  if(mkdir("123456789012345/12345678901234", 0777) == 0){
     printf("mkdir 12345678901234/123456789012345 succeeded!\n");
     exit(1);
   }
@@ -1334,7 +1336,7 @@ void
 rmdot(void)
 {
   printf("rmdot test\n");
-  if(mkdir("dots") != 0){
+  if(mkdir("dots", 0777) != 0){
     printf("mkdir dots failed\n");
     exit(1);
   }
@@ -1396,7 +1398,7 @@ dirfile(void)
     printf("create dirfile/xx succeeded!\n");
     exit(1);
   }
-  if(mkdir("dirfile/xx") == 0){
+  if(mkdir("dirfile/xx", 0777) == 0){
     printf("mkdir dirfile/xx succeeded!\n");
     exit(1);
   }
@@ -1438,7 +1440,7 @@ iref(void)
 
   // the 50 is NINODE
   for(i = 0; i < 50 + 1; i++){
-    if(mkdir("irefd") != 0){
+    if(mkdir("irefd", 0777) != 0){
       printf("mkdir irefd failed\n");
       exit(1);
     }
@@ -1447,7 +1449,7 @@ iref(void)
       exit(1);
     }
 
-    mkdir("");
+    mkdir("", 0777);
     link("README", "");
     fd = open("", O_CREAT);
     if(fd >= 0)
@@ -1516,7 +1518,7 @@ sbrktest(void)
   for(i = 0; i < 5000; i++){
     b = sbrk(1);
     if(b != a){
-      printf("sbrk test failed %d %x %x\n", i, a, b);
+      printf("sbrk test failed %d %p %p\n", i, a, b);
       exit(1);
     }
     *b = 1;
@@ -1558,7 +1560,7 @@ sbrktest(void)
   }
   c = sbrk(0);
   if(c != a - 4096){
-    printf("sbrk deallocation produced wrong address, a %x c %x\n", a, c);
+    printf("sbrk deallocation produced wrong address, a %p c %p\n", a, c);
     exit(1);
   }
 
@@ -1566,7 +1568,7 @@ sbrktest(void)
   a = sbrk(0);
   c = sbrk(4096);
   if(c != a || sbrk(0) != a + 4096){
-    printf("sbrk re-allocation failed, a %x c %x\n", a, c);
+    printf("sbrk re-allocation failed, a %p c %p\n", a, c);
     exit(1);
   }
   if(*lastaddr == 99){
@@ -1576,9 +1578,9 @@ sbrktest(void)
   }
 
   a = sbrk(0);
-  c = sbrk(-(sbrk(0) - oldbrk));
+  c = sbrk(-((char*)sbrk(0) - oldbrk));
   if(c != a){
-    printf("sbrk downsize failed, a %x c %x\n", a, c);
+    printf("sbrk downsize failed, a %p c %p\n", a, c);
     exit(1);
   }
 
@@ -1591,8 +1593,8 @@ sbrktest(void)
       exit(1);
     }
     if(pid == 0){
-      printf("oops could read %x = %x\n", a, *a);
-      kill(ppid);
+      printf("oops could read %p = %x\n", a, *a);
+      kill(ppid, 0);
       exit(1);
     }
     wait(0);
@@ -1621,7 +1623,7 @@ sbrktest(void)
   for(i = 0; i < sizeof(pids)/sizeof(pids[0]); i++){
     if(pids[i] == -1)
       continue;
-    kill(pids[i]);
+    kill(pids[i], 0);
     wait(0);
   }
   if(c == (char*)0xffffffff){
@@ -1629,8 +1631,8 @@ sbrktest(void)
     exit(1);
   }
 
-  if(sbrk(0) > oldbrk)
-    sbrk(-(sbrk(0) - oldbrk));
+  if((char*)sbrk(0) > oldbrk)
+    sbrk(-((char*)sbrk(0) - oldbrk));
 
   printf("sbrk test OK\n");
 }
@@ -1667,7 +1669,7 @@ validatetest(void)
     }
     sleep(0);
     sleep(0);
-    kill(pid);
+    kill(pid, 0);
     wait(0);
 
     // try to crash the kernel by passing in a bad string pointer
@@ -1828,14 +1830,6 @@ void argptest()
   printf("arg test passed\n");
 }
 
-unsigned long randstate = 1;
-unsigned int
-rand()
-{
-  randstate = randstate * 1664525 + 1013904223;
-  return randstate;
-}
-
 int
 main(int argc, char *argv[])
 {
@@ -1854,7 +1848,6 @@ main(int argc, char *argv[])
   fourfiles();
   sharedfd();
 
-  bigargtest();
   bigwrite();
   bigargtest();
   bsstest();

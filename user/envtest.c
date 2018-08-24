@@ -2,6 +2,7 @@
 #include "../kernel/param.h"
 
 extern int _env_find_by_idx(int , char **, char **);
+
 int
 main(int argc, char *argv[])
 {

@@ -1,36 +1,19 @@
 #include "stdlib.h"
+#include "exit.h"
+#include "unistd.h"  // for NULL
 
 extern int _sysexit(int) __attribute__((noreturn));
 
-typedef struct ExitFuncList {
-  struct ExitFuncList* next;
-  void (*function)(void);
-} ExitFuncList;
-
-static ExitFuncList* s_exitFuncList;
-static char exiting;
-
-int atexit(void (*function)(void)) {
-  if (exiting)
-    return -1;
-
-  ExitFuncList* p = (ExitFuncList*)malloc(sizeof(*p));
-  if (p == 0)
-    return -1;
-  p->next = s_exitFuncList;
-  p->function = function;
-  s_exitFuncList = p;
-  return 0;
-}
+struct atexitinfo __atexit;
 
 int exit(int code) {
-  if (exiting)
+  if (__atexit.exiting)
     return -1;
-  exiting = 1;
+  __atexit.exiting = 1;
 
-  ExitFuncList* p = s_exitFuncList;
-  s_exitFuncList = 0;
-  for (; p != 0; ) {
+  ExitFuncList* p = __atexit.exitFuncList;
+  __atexit.exitFuncList = NULL;
+  for (; p != NULL; ) {
     void (*function)(void) = p->function;
     p = p->next;
     (*function)();

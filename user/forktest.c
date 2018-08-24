@@ -3,6 +3,7 @@
 
 #include "stdio.h"
 #include "stdlib.h"
+#include "sys/wait.h"
 #include "unistd.h"
 
 #define N  1000
@@ -23,7 +24,7 @@ forktest(void)
   }
 
   if(n == N){
-    fprintf(stderr, "fork claimed to work N times!\n", N);
+    fprintf(stderr, "fork claimed to work %d times!\n", N);
     exit(1);
   }
 

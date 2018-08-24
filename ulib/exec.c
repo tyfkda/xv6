@@ -117,27 +117,25 @@ exec(const char *path, char *const argv[]){
   }
   envs[i] = NULL;
 
-  /*
-   * First, we try to execute a binary with relative path and absolute path
-   * ( e.g.,  ./path/a.out, /path/a.out and a.out/ ).
-   */
   ch = strchr(path, PATH_SEPARATOR);
-  if ( ch != NULL )
-    execve(path, argv, envs);
+  if ( ch == NULL ) {
 
-  /*
-   * Second, we try to execute a binary according to PATH environment variable.
-   */
-  dir = path_refer(i);
-  for(i = 0; dir != NULL; ++i) {
-    
-    snprintf(cmd, PATH_MAX, "%s/%s", dir, path);
-    rc = execve(cmd, argv, envs);
+    /*
+     * First, we try to execute a binary according to PATH environment variable
+     * when path does not contain any slash.
+     */
     dir = path_refer(i);
+    for(i = 0; dir != NULL; ++i) {
+      
+      snprintf(cmd, PATH_MAX, "%s/%s", dir, path);
+      rc = execve(cmd, argv, envs);
+      dir = path_refer(i);
+    }
   }
 
   /*
-   * Third try to exec with raw path string.
+   * Second, we try to execute a binary with relative path and absolute path
+   * ( e.g.,  ./path/a.out, /path/a.out and a.out/ ).
    */
   rc = execve(path, argv, envs);
 

@@ -1,4 +1,5 @@
 #include "fcntl.h"
+#include "signal.h"
 #include "stdio.h"
 #include "stdlib.h"
 #include "string.h"
@@ -485,9 +486,9 @@ preempt(void)
   }
   close(pfds[0]);
   printf("kill... ");
-  kill(pid1);
-  kill(pid2);
-  kill(pid3);
+  kill(pid1, 0);
+  kill(pid2, 0);
+  kill(pid3, 0);
   printf("wait... ");
   wait(0);
   wait(0);
@@ -541,7 +542,7 @@ mem(void)
     m1 = malloc(1024*20);
     if(m1 == 0){
       printf("couldn't allocate mem?!!\n");
-      kill(ppid);
+      kill(ppid, 0);
       exit(1);
     }
     free(m1);
@@ -1593,7 +1594,7 @@ sbrktest(void)
     }
     if(pid == 0){
       printf("oops could read %p = %x\n", a, *a);
-      kill(ppid);
+      kill(ppid, 0);
       exit(1);
     }
     wait(0);
@@ -1622,7 +1623,7 @@ sbrktest(void)
   for(i = 0; i < sizeof(pids)/sizeof(pids[0]); i++){
     if(pids[i] == -1)
       continue;
-    kill(pids[i]);
+    kill(pids[i], 0);
     wait(0);
   }
   if(c == (char*)0xffffffff){
@@ -1668,7 +1669,7 @@ validatetest(void)
     }
     sleep(0);
     sleep(0);
-    kill(pid);
+    kill(pid, 0);
     wait(0);
 
     // try to crash the kernel by passing in a bad string pointer

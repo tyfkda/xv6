@@ -270,7 +270,7 @@ create(const char *path, short type, short major, short minor, int* perr)
   if((ip = dirlookup(dp, name, &off)) != 0){
     iunlockput(dp);
     ilock(ip);
-    if(type == T_FILE && ip->type == T_FILE)
+    if(type == T_FILE && ip->type != T_DIR)  // T_FILE or T_DEV
       return ip;
     iunlockput(ip);
     *perr = -EEXIST;

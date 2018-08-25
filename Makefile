@@ -216,6 +216,8 @@ ULIBOBJS = \
 	obj/ulib/ulib.o\
 	obj/ulib/umalloc.o\
 	obj/ulib/usys.o\
+	obj/ulib/exec.o\
+	obj/ulib/environ.o\
 
 obj/ulib/ulib.a:	$(ULIBOBJS)
 	ar rcs $@ $^
@@ -256,6 +258,8 @@ UPROGS=\
 	fs/bin/usertests\
 	fs/bin/wc\
 	fs/bin/zombie\
+	fs/bin/execvetest\
+	fs/bin/envtest\
 
 copyfsdata:
 	@mkdir -p fs

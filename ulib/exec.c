@@ -11,6 +11,8 @@
 #define PATH_SEPARATOR ':'
 #define FILE_SEPARATOR '/'
 
+extern int _sysexecve(const char*, char *const[], char *const []);
+
 typedef struct _path_store{
   char *path_str;
   char *path[MAX_PATH_NR];  // Note: path[MAX_PATH_NR - 1] should be '\0'
@@ -93,10 +95,8 @@ free_out:
 
 int
 exec(const char *path, char *const argv[]){
-  char cmd[PATH_MAX];
   char *envs[MAXENV];
   char estr[ENV_VAR_LEN];
-  const char *dir;
   char *name, *val;
   int i, rc;
 
@@ -114,15 +114,7 @@ exec(const char *path, char *const argv[]){
   }
   envs[i] = NULL;
 
-  if (strchr(path, FILE_SEPARATOR) == NULL) {
-    for (i = 0; (dir = path_refer(i)) != NULL; ++i) {
-      snprintf(cmd, PATH_MAX, "%s/%s", dir, path);
-      rc = execve(cmd, argv, envs);
-      // If reached here, execve failed so search next path.
-    }
-  } else {
-    rc = execve(path, argv, envs);
-  }
+  rc = execve(path, argv, envs);
   // If reached here, execve failed.
 
 free_env_out:
@@ -132,6 +124,26 @@ free_env_out:
       envs[i] = NULL;
     }
   }
+
+  return rc;
+}
+
+int
+execve(const char *path, char *const argv[], char *const envp[]){
+  char cmd[PATH_MAX];
+  const char *dir;
+  int i, rc = -1;
+
+  if (strchr(path, FILE_SEPARATOR) == NULL) {
+    for (i = 0; (dir = path_refer(i)) != NULL; ++i) {
+      snprintf(cmd, PATH_MAX, "%s/%s", dir, path);
+      rc = _sysexecve(cmd, argv, envp);
+      // If reached here, _sysexecve failed so search next path.
+    }
+  } else {
+    rc = _sysexecve(path, argv, envp);
+  }
+  // If reached here, _sysexecve failed.
 
   return rc;
 }

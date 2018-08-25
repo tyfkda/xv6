@@ -9,6 +9,7 @@
 #define MAX_PATH_NR    (32)
 #define PATH_MAX       (128)
 #define PATH_SEPARATOR ':'
+#define FILE_SEPARATOR '/'
 
 typedef struct _path_store{
   char *path_str;
@@ -117,16 +118,16 @@ exec(const char *path, char *const argv[]){
   }
   envs[i] = NULL;
 
-  ch = strchr(path, PATH_SEPARATOR);
+  ch = strchr(path, FILE_SEPARATOR);
   if ( ch == NULL ) {
 
     /*
      * First, we try to execute a binary according to PATH environment variable
      * when path does not contain any slash.
      */
-    dir = path_refer(i);
-    for(i = 0; dir != NULL; ++i) {
-      
+    dir = path_refer(0);
+    for(i = 1; dir != NULL; ++i) {
+
       snprintf(cmd, PATH_MAX, "%s/%s", dir, path);
       rc = execve(cmd, argv, envs);
       dir = path_refer(i);

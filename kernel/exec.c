@@ -7,31 +7,6 @@
 #include "x86.h"
 #include "elf.h"
 
-#define FILE_SEPARATOR  '/'
-
-// Find exe path
-static struct inode *find_path(const char *path, char *resultPath, int bufsiz) {
-  struct inode *ip;
-
-  if (strchr(path, FILE_SEPARATOR) != 0) {
-    ip = namei(path);
-    if (resultPath != 0)
-      safestrcpy(resultPath, path, bufsiz);
-  } else {
-    // Also find at root path. TODO: Search from $PATH
-    const char PATH[] = "/bin/";
-    const int LEN = sizeof(PATH) - 1;
-    const int BUFSIZ = 128;
-    char exepath[BUFSIZ];
-    memmove(exepath, PATH, LEN);
-    safestrcpy(exepath + LEN, path, BUFSIZ - LEN);
-    ip = namei(exepath);
-    if (resultPath != 0)
-      safestrcpy(resultPath, exepath, bufsiz);
-  }
-  return ip;
-}
-
 // Check ELF header
 int
 readelfhdr(struct inode *ip, struct elfhdr *elf)
@@ -177,7 +152,7 @@ execshebang(const char *path, const char * const *argv, const char *envp[],
   char* shebang = line + 2;
 
   begin_op();
-  struct inode *ip2 = find_path(shebang, 0, 0);
+  struct inode *ip2 = namei(shebang);
   if(ip2 == 0){
     end_op();
     return -1;
@@ -209,13 +184,12 @@ execve(const char *path, const char*argv[], const char *envp[])
   struct inode *ip;
   struct elfhdr elf;
   pde_t *pgdir;
-  char exepath[128];
 
   pgdir = 0;
 
   begin_op();
 
-  ip = find_path(path, exepath, sizeof(exepath));
+  ip = namei(path);
   if(ip == 0){
     end_op();
     return -1;
@@ -226,7 +200,7 @@ execve(const char *path, const char*argv[], const char *envp[])
   if (readelfhdr(ip, &elf)) {
     result = execelf(path, path, argv, envp, &elf, &ip, &pgdir);
   } else {
-    result = execshebang(exepath, argv, envp, &ip, &pgdir);
+    result = execshebang(path, argv, envp, &ip, &pgdir);
   }
 
   if(pgdir)

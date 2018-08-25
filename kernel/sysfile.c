@@ -364,7 +364,7 @@ sys_mkdir(void)
 {
   const char *path;
   struct inode *ip;
-  int errno;
+  int errno = -EINVAL;
 
   begin_op();
   if(argcstr(0, &path) < 0 || (ip = create(path, T_DIR, 0, 0, &errno)) == 0){
@@ -381,7 +381,8 @@ sys_mknod(void)
 {
   struct inode *ip;
   const char *path;
-  int major, minor, errno;
+  int major, minor;
+  int errno = -EINVAL;
 
   begin_op();
   if((argcstr(0, &path)) < 0 ||

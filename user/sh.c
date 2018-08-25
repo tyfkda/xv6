@@ -148,8 +148,11 @@ expandarg(char *start, char *end)
     strncpy(buf, start + 1, len);
     buf[len] = '\0';
     char* var = getsvar(buf);  // TODO: Expand multi-values.
-    if (var == NULL)
-      var = " ";
+    if (var == NULL) {
+      var = getenv(buf);
+      if (var == NULL)
+        var = " ";
+    }
     return strdup(var);
   } else {
     // Handle escape sequence: Inplace replacement.

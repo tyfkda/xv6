@@ -132,13 +132,14 @@ exec(const char *path, char *const argv[]){
       rc = execve(cmd, argv, envs);
       dir = path_refer(i);
     }
-  }
+  } else {
 
-  /*
-   * Second, we try to execute a binary with relative path and absolute path
-   * ( e.g.,  ./path/a.out, /path/a.out and a.out/ ).
-   */
-  rc = execve(path, argv, envs);
+    /*
+     * Second, we try to execute a binary with relative path and absolute path
+     * ( e.g.,  ./path/a.out, /path/a.out and a.out/ ).
+     */
+    rc = execve(path, argv, envs);
+  }
 
 free_env_out:
   for(i = 0; MAXENV > i; ++i) {

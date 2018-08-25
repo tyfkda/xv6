@@ -58,6 +58,7 @@ int             namecmp(const char*, const char*);
 struct inode*   namei(const char*);
 struct inode*   nameiparent(const char*, char*);
 int             readi(struct inode*, void*, uint, uint);
+int             readdiri(struct inode*, void*, uint, uint);
 void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, void*, uint, uint);
 void            isetsize(struct inode*, uint);
@@ -116,6 +117,7 @@ int             pipewrite(struct pipe*, void*, int);
 
 //PAGEBREAK: 16
 // proc.c
+void            procinit(void);
 int             cpuid(void);
 void            exit(int) __attribute__((noreturn));
 int             fork(void);
@@ -163,6 +165,7 @@ char* strchr(const char*, char);
 int strncmp(const char*, const char*, int);
 int strlen(const char*);
 int atoi(const char *s);
+char* putint(char*p, int x);
 
 // syscall.c
 int             argint(int, int*);

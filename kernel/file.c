@@ -2,6 +2,7 @@
 // File descriptors
 //
 
+#include "dirent.h"
 #include "file.h"
 #include "types.h"
 #include "defs.h"
@@ -142,7 +143,8 @@ filereaddir(struct file *f, void *addr)
   if(f->type == FD_INODE){
     ilock(f->ip);
     if (f->ip->type == T_DIR) {
-      if((r = readi(f->ip, addr, f->off, sizeof(struct ddirent))) > 0)
+      r = readdiri(f->ip, addr, f->off, sizeof(struct dirent));
+      if(r > 0)
         f->off += r;
     } else {
       r = -1;

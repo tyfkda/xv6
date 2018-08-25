@@ -36,6 +36,7 @@ struct inode {
 // device functions
 struct devsw {
   int (*read)(void*, int);
+  int (*readdir)(void*, uint, uint);
   int (*write)(const void*, int);
   int (*ioctl)(int /*request*/, uintp /*arg*/);
 };
@@ -44,3 +45,4 @@ extern struct devsw devsw[];
 
 #define CONSOLE 1
 #define UART    2
+#define PROC    3

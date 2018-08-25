@@ -6,6 +6,8 @@
 #include "proc.h"
 #include "spinlock.h"
 #include "x86.h"
+#include "dirent.h"
+#include "file.h"
 
 struct {
   struct spinlock lock;
@@ -594,4 +596,30 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+static int
+procreaddir(void *dst, uint off, uint n)
+{
+  if (n != sizeof(struct dirent))
+    return -1;
+
+  int i = off / n;
+  if (i >= NPROC)
+    return -1;
+
+  struct proc *p = &ptable.proc[i];
+  struct dirent *de = dst;
+  de->d_ino = p->pid;
+  char* q = putint(de->d_name, p->pid);
+  *q = '\0';
+
+  return n;
+}
+
+void
+procinit(void)
+{
+cprintf("proc init\n");
+  devsw[PROC].readdir = procreaddir;
 }

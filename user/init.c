@@ -43,9 +43,20 @@ runsh(int dev, const char* devname)
   }
 }
 
+static void mountProc(void) {
+  int fd = open("proc", O_RDONLY);
+  if (fd < 0) {
+    mknod("proc", 3, 1);
+  } else {
+    close(fd);
+  }
+}
+
 void
 _start(int argc, char* argv[])
 {
+  mountProc();
+
   static const char* devnames[] = {
     "console",
     "uart",

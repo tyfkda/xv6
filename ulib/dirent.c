@@ -1,4 +1,5 @@
 #include "dirent.h"
+#include "errno.h"
 #include "fcntl.h"
 #include "sys/stat.h"
 #include "stdlib.h"
@@ -24,7 +25,11 @@ DIR *fdopendir(int fd) {
   if (fstat(fd, &st) < 0) {
     return NULL;
   }
-  if (!S_ISDIR(st.st_mode)) {
+  switch (st.st_mode & S_IFMT) {
+  case S_IFDIR:
+  case S_IFCHR:
+    break;
+  default:
     return NULL;
   }
 
@@ -53,7 +58,12 @@ int closedir(DIR *dir) {
 
 struct dirent *readdir(DIR *dir) {
   for (;;) {
-    if (_sysreaddir(dir->fd, &dir->dbuf) != 0)
+    int size = _sysreaddir(dir->fd, &dir->dbuf);
+    if (size < 0) {
+      errno = -size;
+      break;
+    }
+    if (size != sizeof(dir->dbuf))
       break;
     if (dir->dbuf.d_ino != 0)
       return &dir->dbuf;

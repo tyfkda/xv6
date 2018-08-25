@@ -109,3 +109,26 @@ atoi(const char *s)
     n = n * 10 + (*s - '0');
   return n;
 }
+
+char*
+putint(char*p, int x)
+{
+  if (x < 0) {
+    *p++ = '-';
+    x = -x;
+  }
+
+  char buf[sizeof(int) * 3 + 1];
+  char* q = buf;
+  for (int i = 0; i < sizeof(buf) - 1; ++i) {
+    *q++ = (x % 10) + '0';
+    x /= 10;
+    if (x <= 0)
+      break;
+  }
+  while (q > buf)
+    *p++ = *(--q);
+  // No nul-terminated.
+
+  return p;
+}

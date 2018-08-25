@@ -20,6 +20,7 @@
 #include "fs.h"
 #include "buf.h"
 #include "file.h"
+#include "errno.h"
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 static void itrunc(struct inode*);
@@ -574,6 +575,27 @@ readi(struct inode *ip, void *dst, uint off, uint n)
   return n;
 }
 
+int
+readdiri(struct inode *ip, void *dst, uint off, uint n)
+{
+  int result;
+
+  switch (ip->type) {
+  default:
+  case T_FILE:
+    return -ENOTDIR;
+  case T_DIR:
+    return readi(ip, dst, off, n);
+  case T_DEV:
+    if(ip->major < 0 || ip->major >= NDEV || !devsw[ip->major].readdir)
+      return -ENOTDIR;
+    iunlock(ip);
+    result = devsw[ip->major].readdir(dst, off, n);
+    ilock(ip);
+    return result;
+  }
+}
+
 // PAGEBREAK!
 // Write data to inode.
 // Caller must hold ip->lock.
@@ -629,11 +651,11 @@ dirlookup(struct inode *dp, const char *name, uint *poff)
   uint off, inum;
   struct ddirent de;
 
-  if(dp->type != T_DIR)
+  if(dp->type == T_FILE)
     panic("dirlookup not DIR");
 
   for(off = 0; off < dp->size; off += sizeof(de)){
-    if(readi(dp, &de, off, sizeof(de)) != sizeof(de))
+    if(readdiri(dp, &de, off, sizeof(de)) != sizeof(de))
       panic("dirlookup read");
     if(de.d_ino == 0)
       continue;
@@ -736,7 +758,7 @@ namex(const char *path, int nameiparent, char *name)
 
   while((path = skipelem(path, name)) != 0){
     ilock(ip);
-    if(ip->type != T_DIR){
+    if(ip->type == T_FILE){
       iunlockput(ip);
       return 0;
     }

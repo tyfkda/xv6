@@ -6,6 +6,7 @@
 #include "string.h"
 #include "time.h"
 #include "unistd.h"
+#include "errno.h"
 
 #ifndef DIRSIZ
 #define DIRSIZ  (16)
@@ -62,9 +63,15 @@ void lsdir(const char *path)
   }
 
   for (;;) {
+    errno = 0;
     struct dirent* de = readdir(dir);
-    if (de == NULL)
+    if (de == NULL) {
+      if (errno != 0) {
+        perror("readdir");
+        exit(1);
+      }
       break;
+    }
 
     strncpy(p, de->d_name, DIRSIZ);
     p[DIRSIZ] = 0;
@@ -94,6 +101,7 @@ ls(const char *path)
     break;
 
   case S_IFDIR:
+  case S_IFCHR:
     lsdir(path);
     break;
   }

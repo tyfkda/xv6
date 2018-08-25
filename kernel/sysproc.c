@@ -25,12 +25,13 @@ sys_exit(void)
 }
 
 int
-sys_wait(void)
+sys_waitpid(void)
 {
+  int pid, option;
   uintp p;
-  if(arguintp(0, &p) < 0)
+  if(argint(0, &pid) < 0 || arguintp(1, &p) < 0 || argint(2, &option) < 0)
     return -1;
-  return wait((int*)p);
+  return waitpid(pid, (int*)p, option);
 }
 
 int

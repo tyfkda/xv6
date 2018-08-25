@@ -218,6 +218,7 @@ ULIBOBJS = \
 	obj/ulib/ulib.o\
 	obj/ulib/umalloc.o\
 	obj/ulib/usys.o\
+	obj/ulib/wait.o\
 
 obj/ulib/ulib.a:	$(ULIBOBJS)
 	ar rcs $@ $^

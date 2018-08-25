@@ -39,7 +39,7 @@
 
 SYSCALL(fork)
 SYSCALL2(_sysexit, SYS_exit)
-SYSCALL(wait)
+SYSCALL_WITH_ERROR(waitpid)
 SYSCALL(pipe)
 SYSCALL(read)
 SYSCALL(write)

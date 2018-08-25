@@ -1637,6 +1637,50 @@ forktest(void)
 }
 
 void
+waitpidtest()
+{
+  const int N = 10;
+  int pids[N];
+
+  printf("waitpid test\n");
+
+  for (int i = 0; i < N; ++i) {
+    int pid = fork();
+    if (pid < 0) {
+      fprintf(stderr, "waitpidtest: fork failed\n");
+      exit(1);
+    }
+    if (pid == 0)
+      exit(i * 10);
+    pids[i] = pid;
+  }
+
+  for (int i = N; --i >= 0; ) {
+    int code;
+    int r = waitpid(pids[i], &code, 0);
+    if (r < 0) {
+      fprintf(stderr, "waitpidtest: waitpid failed\n");
+      exit(1);
+    }
+    if (r != pids[i]) {
+      fprintf(stderr, "waitpidtest: unexpected pid: %d for %d\n", r, pids[i]);
+      exit(1);
+    }
+    if (code != i * 10) {
+      fprintf(stderr, "waitpidtest: unexpected exit code: %d for %d\n", code, i * 10);
+      exit(1);
+    }
+  }
+
+  if(wait(NULL) != -1){
+    fprintf(stderr, "wait got too many\n");
+    exit(1);
+  }
+
+  printf("waitpid test OK\n");
+}
+
+void
 sbrktest(void)
 {
   int fds[2], pid, pids[10], ppid;
@@ -2014,6 +2058,7 @@ main(int argc, char *argv[])
   dirfile();
   iref();
   forktest();
+  waitpidtest();
   bigdir(); // slow
 
   uio();

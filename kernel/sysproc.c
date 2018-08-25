@@ -13,15 +13,15 @@ sys_fork(void)
   return fork();
 }
 
-int
+void
 sys_exit(void)
 {
   int code;
 
   if(argint(0, &code) < 0)
-    return -1;
+    //return -1;
+    code = -1;
   exit(code);
-  return 0;  // not reached
 }
 
 int

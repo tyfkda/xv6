@@ -5,7 +5,7 @@
 #define EXIT_SUCCESS  (0)
 #define EXIT_FAILURE  (1)
 
-int exit(int);
+void exit(int) __attribute__((noreturn));
 int atexit(void (*function)(void));
 
 void* malloc(size_t);

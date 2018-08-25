@@ -308,8 +308,9 @@ getcmd(FILE* fp, char *buf, int nbuf)
 }
 
 void
-sh(FILE* fp, int tty)
+sh(FILE* fp)
 {
+  int tty = isatty(fileno(fp));
   char buf[100];
   int exitcode;
 
@@ -349,7 +350,7 @@ main(int argc, char* argv[])
   }
 
   if (argc < 2) {
-    sh(stdin, TRUE);
+    sh(stdin);
   } else {
     for (int i = 1; i < argc; ++i) {
       FILE* fp = fopen(argv[i], "r");
@@ -358,7 +359,7 @@ main(int argc, char* argv[])
         sprintf(buf, "Cannot open: %s", argv[i]);
         panic(buf);
       }
-      sh(fp, FALSE);
+      sh(fp);
       fclose(fp);
     }
   }

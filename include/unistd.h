@@ -36,6 +36,4 @@ int isatty(int fd);
 // ulib.c
 int stat(const char*, struct stat*);
 
-int isatty(int fd);
-
 int ftruncate(int fd, unsigned int length);

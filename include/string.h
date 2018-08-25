@@ -27,6 +27,8 @@ long strtol(const char *p, char **pp, int base);
 
 const char *strerror(int errnum);
 
+char *strpbrk(const char *s1, const char *s2);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

@@ -36,7 +36,11 @@ File *make_file(FILE *file, char *name) {
     struct stat st;
     if (fstat(fileno(file), &st) == -1)
         error("fstat failed: %s", strerror(errno));
+#if 0
     r->mtime = st.st_mtime;
+#else
+    r->mtime = st.st_mtim.tv_sec;
+#endif
     return r;
 }
 

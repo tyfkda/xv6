@@ -1,5 +1,7 @@
 #pragma once
 
+#include "stddef.h"  // for size_t
+
 typedef unsigned long time_t;
 
 struct tm {
@@ -25,6 +27,10 @@ extern "C" {
 
 time_t time(time_t *tloc);
 struct tm *localtime(time_t *tloc);
+
+size_t strftime(char *s, size_t max, const char *format,
+                const struct tm *tm);
+struct tm *localtime_r(const time_t *timeval, struct tm *result);
 
 #ifdef __cplusplus
 }  // extern "C"

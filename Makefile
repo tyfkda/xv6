@@ -269,6 +269,7 @@ out/mkfs: tools/mkfs.c tools/hostfsaux.c tools/hostfsaux.h kernel/fs.h
 .PRECIOUS: obj/ulib/%.o, obj/user/%.o
 
 UPROGS=\
+	fs/bin/8cc\
 	fs/bin/cat\
 	fs/bin/cp\
 	fs/bin/cpptest\
@@ -288,6 +289,9 @@ UPROGS=\
 	fs/bin/usertests\
 	fs/bin/wc\
 	fs/bin/zombie\
+
+fs/bin/8cc:
+	make -C 8cc
 
 copyfsdata:
 	@mkdir -p fs

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "stddef.h"  // for size_t
+
 #define STDIN_FILENO   (0)
 #define STDOUT_FILENO  (1)
 #define STDERR_FILENO  (2)
@@ -48,6 +50,12 @@ int isatty(int fd);
 int stat(const char*, struct stat*);
 
 int ftruncate(int fd, unsigned int length);
+
+char *getcwd(char *buffer, size_t size);
+
+int getopt(int argc, char * const argv[], const char *optstring);
+extern char *optarg;
+extern int optind, opterr, optopt;
 
 #ifdef __cplusplus
 }  // extern "C"

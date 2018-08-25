@@ -86,9 +86,9 @@ fgetc(FILE* fp)
 }
 
 int
-getc(void)
+getc(FILE* fp)
 {
-  return fgetc(stdin);
+  return fgetc(fp);
 }
 
 int

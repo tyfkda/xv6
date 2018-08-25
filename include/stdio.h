@@ -18,7 +18,7 @@ size_t fread(void* buffer, size_t size, size_t count, FILE* fp);
 
 int fileno(const FILE *);
 
-int getc(void);
+int getc(FILE* fp);
 int getchar(void);
 int fgetc(FILE* fp);
 char* gets_s(char*, size_t max);

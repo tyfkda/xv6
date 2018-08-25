@@ -11,7 +11,8 @@
 void
 forktest(void)
 {
-  int n, pid;
+  int n;
+  pid_t pid;
 
   printf("fork test\n");
 

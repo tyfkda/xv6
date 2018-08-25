@@ -14,9 +14,10 @@ struct stat;
 struct rtcdate;
 
 typedef long off_t;
+typedef int pid_t;
 
 // system calls
-int fork(void);
+pid_t fork(void);
 int pipe(int*);
 int write(int, const void*, int);
 int read(int, void*, int);
@@ -32,7 +33,7 @@ int fstat(int fd, struct stat*);
 int link(const char*, char*);
 int chdir(const char*);
 int dup(int);
-int getpid(void);
+pid_t getpid(void);
 void* sbrk(int);
 int sleep(int);
 int uptime(void);

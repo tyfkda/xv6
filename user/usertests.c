@@ -19,6 +19,11 @@ char buf[8192];
 char name[3];
 char *echoargv[] = { "echo", "ALL", "TESTS", "PASSED", 0 };
 
+static void panic(const char *msg) {
+  fprintf(stderr, msg);
+  exit(1);
+}
+
 // does chdir() call iput(p->cwd) in a transaction?
 void
 iputtest(void)
@@ -394,6 +399,71 @@ exectest(void)
     printf("exec echo failed\n");
     exit(1);
   }
+}
+
+void execvetest() {
+  const char tempfn[] = "exectestresult";
+  unlink(tempfn);
+
+  // Run "echo 'echo $PATH $FOO' | sh" and check the result.
+  int p[2];
+  if (pipe(p) < 0)
+    panic("execvetest: pipe");
+  if (fork() == 0) {
+    // former child.
+    close(1);
+    dup(p[1]);
+    close(p[0]);
+    close(p[1]);
+
+    char* argv[] = {"echo", "echo $PATH $FOO", NULL};
+    exec("echo", argv);
+  }
+  if (fork() == 0) {
+    // latter child.
+    close(0);
+    dup(p[0]);
+    close(p[0]);
+    close(p[1]);
+
+    // Redirect stdout to a file.
+    close(1);
+    int fd = open(tempfn, O_WRONLY | O_CREAT | O_TRUNC);
+    if (fd < 0)
+      panic("execvetest: open");
+
+    char* argv[] = {"sh", NULL};
+    char* envp[] = {"PATH=/usr/local/bin:/bin", "FOO=foobar", NULL};
+    execve("sh", argv, envp);
+  }
+
+  close(p[0]);
+  close(p[1]);
+  int ec1, ec2;
+  wait(&ec1);
+  wait(&ec2);
+  if (ec1 != 0 || ec2 != 0)
+    panic("execvetest: pipe not succeeded");
+
+  // Judge output
+  int fd = open(tempfn, O_RDONLY);
+  if (fd < 0)
+    panic("execvetest: result not written");
+  const char expected[] = "/usr/local/bin:/bin foobar\n";
+  char buf[128];
+  int size = read(fd, buf, sizeof(buf));
+  if (size != sizeof(expected) - 1)
+    panic("execvetest: size");
+  if (strncmp(buf, expected, size) != 0)
+    panic("execvetest: output different");
+  close(fd);
+  unlink(tempfn);
+
+  // Check child environment variable not affected to the parent.
+  if (strcmp(getenv("PATH"), "/bin") != 0 || getenv("FOO") != NULL)
+    panic("execvetest: env");
+
+  printf("execve test passed\n");
 }
 
 // simple fork and pipe read/write
@@ -1884,6 +1954,7 @@ main(int argc, char *argv[])
   uio();
 
   exectest();
+  execvetest();
 
   return 0;
 }

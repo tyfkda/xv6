@@ -107,7 +107,7 @@ CFLAGS = -fno-pic -static -fno-builtin -fno-strict-aliasing -Wall -MD -ggdb -Wer
 CFLAGS += -ffreestanding -fno-common -nostdlib -Iinclude -gdwarf-2 $(XFLAGS) $(OPT)
 CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
 CFLAGS += -nostdinc
-ASFLAGS = -gdwarf-2 -Wa,-divide -Iinclude $(XFLAGS)
+ASFLAGS = -fno-pic -gdwarf-2 -Wa,-divide -Iinclude $(XFLAGS)
 
 xv6.img: out/bootblock out/kernel.elf fs.img
 	dd if=/dev/zero of=$@ count=10000

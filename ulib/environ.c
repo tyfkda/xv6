@@ -5,11 +5,12 @@
 #include "errno.h"
 #include "../kernel/param.h"
 
-#define PATH_ENV_VAR "PATH"
 #define ENV_VAR_LEN   (128)
 #define ENV_VAR_DELIM   '='
 
-extern int _path_update(const char *);
+extern char **_environ;
+
+static int bInitialized;
 
 typedef struct _evar_list{
   struct _evar_list *prev;
@@ -24,7 +25,9 @@ typedef struct _evar_type{
 } evar_type;
 
 static evar_type evar_array[MAXENV];
-static evar_list evars={.prev = &evars, .next = &evars};
+static evar_list evars;
+
+void _setup_environment(void);
 
 static int
 env_add_from_environ(const char *var, int overwrite){
@@ -137,6 +140,8 @@ _env_find_by_idx(int idx, char **namep, char **valp) {
   int i;
   evar_list *p;
 
+  _setup_environment();
+
   for (i = 0, p = evars.next; i < MAXENV && p != &evars; p = p->next, ++i) {
     if (i == idx) {
       *namep = ((evar_type*)p)->namep;
@@ -152,6 +157,9 @@ void
 env_init(void) {
   int i;
 
+  evars.prev = &evars;
+  evars.next = &evars;
+
   for (i = 0; i < MAXENV; ++i) {
     memset(&evar_array[i], 0, sizeof(evar_type));
     evar_array[i].link.prev = evar_array[i].link.next = &evar_array[i].link;
@@ -159,21 +167,19 @@ env_init(void) {
 }
 
 void
-_setup_environment(char *envs[]){
-  int i, rc;
-  char *val;
+_setup_environment(void){
+  int i;
 
+  if (bInitialized)
+    return;
+  bInitialized = 1;  // TRUE
+
+  char **envs = _environ;
   env_init();
 
   for (i = 0; envs[i] != NULL; ++i) {
     env_add_from_environ(envs[i], 1);
   }
-
-  rc = env_find_by_name(PATH_ENV_VAR, &val);
-  if (rc == 0)
-    _path_update(val);
-
-  return;
 }
 
 char *
@@ -184,6 +190,7 @@ getenv(const char *name) {
   if (name == NULL)
     return NULL;
 
+  _setup_environment();
   rc = env_find_by_name(name, &val);
   if (rc != 0)
     return NULL;
@@ -198,6 +205,7 @@ setenv(const char *name, const char *value, int overwrite) {
   if (name == NULL || value == NULL)
     return -1;
 
+  _setup_environment();
   rc = env_add(name, value, overwrite);
   if (rc != 0)
     return -1;
@@ -211,6 +219,7 @@ unsetenv(const char *name) {
   if (name == NULL)
     return -1;
 
+  _setup_environment();
   rc = env_del(name);
   if (rc != 0)
     return -1;

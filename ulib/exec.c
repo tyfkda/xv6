@@ -5,6 +5,7 @@
 #include "errno.h"
 #include "../kernel/param.h"
 
+#define PATH_ENV_VAR "PATH"
 #define ENV_VAR_LEN    (128)
 #define MAX_PATH_NR    (32)
 #define PATH_MAX       (128)
@@ -133,6 +134,10 @@ execve(const char *path, char *const argv[], char *const envp[]){
   char cmd[PATH_MAX];
   const char *dir;
   int i, rc = -1;
+
+  char *envpath = getenv(PATH_ENV_VAR);
+  if (envpath != NULL)
+    _path_update(envpath);
 
   if (strchr(path, FILE_SEPARATOR) == NULL) {
     for (i = 0; (dir = path_refer(i)) != NULL; ++i) {

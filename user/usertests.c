@@ -418,6 +418,7 @@ void execvetest() {
 
     char* argv[] = {"echo", "echo $PATH $FOO", NULL};
     exec("echo", argv);
+    exit(1);
   }
   if (fork() == 0) {
     // latter child.
@@ -435,6 +436,7 @@ void execvetest() {
     char* argv[] = {"sh", NULL};
     char* envp[] = {"PATH=/usr/local/bin:/bin", "FOO=foobar", NULL};
     execve("sh", argv, envp);
+    exit(2);
   }
 
   close(p[0]);
@@ -443,7 +445,7 @@ void execvetest() {
   wait(&ec1);
   wait(&ec2);
   if (ec1 != 0 || ec2 != 0)
-    panic("execvetest: pipe not succeeded");
+    panic("execvetest: child process failed");
 
   // Judge output
   int fd = open(tempfn, O_RDONLY);

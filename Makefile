@@ -202,7 +202,9 @@ ULIBOBJS = \
 	obj/ulib/crt0.o\
 	obj/ulib/ctype.o\
 	obj/ulib/dirent.o\
+	obj/ulib/environ.o\
 	obj/ulib/errno.o\
+	obj/ulib/exec.o\
 	obj/ulib/exit.o\
 	obj/ulib/localtime.o\
 	obj/ulib/perror.o\

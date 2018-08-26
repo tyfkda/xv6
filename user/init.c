@@ -1,16 +1,22 @@
 // init: The initial user-level program
 
 #include "fcntl.h"
-#include "stdio.h"
-#include "stdlib.h"
+#include "stddef.h"  // for NULL
 #include "sys/wait.h"
 #include "unistd.h"
 
+#define FDPUTS(fd, str)  write(fd, (str), sizeof(str) - 1)
+#define exit     _sysexit
+#define execve  _sysexecve
+
+extern void _sysexit(int);
+extern int _sysexecve(const char*, char *const[], char *const []);
+
 char *argv[] = { "sh", 0 };
 
-void runsh(int dev, const char* devname) __attribute__((noreturn));
+void runsh(int dev, const char* devname, char** environ) __attribute__((noreturn));
 void
-runsh(int dev, const char* devname)
+runsh(int dev, const char* devname, char** environ)
 {
   int pid, wpid;
 
@@ -22,24 +28,24 @@ runsh(int dev, const char* devname)
   dup(0);  // stderr
 
   for(;;){
-    printf("init: starting sh\n");
+    FDPUTS(STDOUT_FILENO, "init: starting sh\n");
     pid = fork();
     if(pid < 0){
-      fprintf(stderr, "init: fork failed\n");
+      FDPUTS(STDERR_FILENO, "init: fork failed\n");
       exit(1);
     }
     if(pid == 0){
-      exec("sh", argv);
-      fprintf(stderr, "init: exec sh failed\n");
+      execve("/bin/sh", argv, environ);
+      FDPUTS(STDERR_FILENO, "init: exec sh failed\n");
       exit(1);
     }
     while((wpid=wait(NULL)) >= 0 && wpid != pid)
-      fprintf(stderr, "zombie!\n");
+      FDPUTS(STDERR_FILENO, "zombie!\n");
   }
 }
 
-int
-main(void)
+void
+_start(int argc, char* argv[], char** environ)
 {
   static const char* devnames[] = {
     "console",
@@ -49,14 +55,14 @@ main(void)
   for (int i = 0; i < 2; ++i) {
     int pid = fork();
     if (pid < 0) {
-      fprintf(stderr, "init: fork failed\n");
+      FDPUTS(STDERR_FILENO, "init: fork failed\n");
       exit(1);
     }
     if (pid == 0)
-      runsh(i + 1, devnames[i]);
+      runsh(i + 1, devnames[i], environ);
   }
   for (int i = 0; i < 2; ++i) {
     wait(NULL);
   }
-  return 0;
+  exit(0);
 }

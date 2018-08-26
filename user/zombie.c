@@ -3,10 +3,12 @@
 
 #include "unistd.h"
 
-int
-main(void)
+extern void _sysexit(int);
+
+void
+_start(void)
 {
   if(fork() > 0)
     sleep(5);  // Let child exit before parent.
-  return 0;
+  _sysexit(0);
 }

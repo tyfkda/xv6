@@ -252,6 +252,8 @@ out/fsutil: tools/fsutil.c tools/hostfsaux.c tools/hostfsaux.h
 .PRECIOUS: obj/ulib/%.o, obj/user/%.o
 
 UPROGS=\
+	fs/bin/yes\
+	fs/bin/head\
 	fs/bin/cat\
 	fs/bin/cp\
 	fs/bin/cpptest\

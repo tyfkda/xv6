@@ -42,6 +42,10 @@ inputintr(struct input *input, int (*getc)(void), void (*putc)(int))
         // procdump() locks cons.lock indirectly; invoke later
         doprocdump = 1;
         continue;
+      case C('C'):
+        //kill(myproc()->pid);  // Suicide
+        myproc()->killed = 1;  // Suicide
+        goto quitfunc;
       case C('H'): case '\x7f':  // Backspace
         if(input->c != input->w){
           // Shift after cursor to the left.
@@ -131,6 +135,7 @@ inputintr(struct input *input, int (*getc)(void), void (*putc)(int))
   if (input->nobuffering)
     flushedit(input);
 
+quitfunc:
   release(&input->lock);
   if(doprocdump) {
     procdump();  // now call procdump() wo. cons.lock held

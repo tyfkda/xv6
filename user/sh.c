@@ -289,7 +289,7 @@ runcmd(struct cmd *cmd)
     close(p[1]);
     wait(&ec1);
     wait(&ec2);
-    exit(ec1 ? ec1 : ec2 ? ec2 : 0);
+    exit(ec1 != 0 ? ec1 : ec2);
     break;
 
   case BACK:

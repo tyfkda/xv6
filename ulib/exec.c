@@ -1,8 +1,9 @@
+#include "errno.h"
 #include "stdio.h"
 #include "stdlib.h"
 #include "string.h"
+#include "sys/stat.h"
 #include "unistd.h"
-#include "errno.h"
 #include "../kernel/param.h"
 
 #define PATH_ENV_VAR "PATH"
@@ -12,7 +13,12 @@
 #define PATH_SEPARATOR ':'
 #define FILE_SEPARATOR '/'
 
-extern int _sysexecve(const char*, char *const[], char *const []);
+#ifndef FALSE
+#define FALSE (0)
+#endif
+#ifndef TRUE
+#define TRUE  (1)
+#endif
 
 typedef struct _path_store{
   char *path_str;
@@ -94,8 +100,23 @@ free_out:
   return rc;
 }
 
+static int findExe(const char* path, char* out) {
+  char *envpath = getenv(PATH_ENV_VAR);
+  if (envpath != NULL)
+    _path_update(envpath);
+
+  const char *dir;
+  for (int i = 0; (dir = path_refer(i)) != NULL; ++i) {
+    snprintf(out, PATH_MAX, "%s/%s", dir, path);
+    struct stat st;
+    if (stat(out, &st) == 0)
+      return TRUE;
+  }
+  return FALSE;
+}
+
 int
-exec(const char *path, char *const argv[]){
+execv(const char *path, char *const argv[]){
   char *envs[MAXENV];
   char estr[ENV_VAR_LEN];
   char *name, *val;
@@ -130,25 +151,12 @@ free_env_out:
 }
 
 int
-execve(const char *path, char *const argv[], char *const envp[]){
-  char cmd[PATH_MAX];
-  const char *dir;
-  int i, rc = -1;
+execvp(const char *path, char *const argv[]){
+  if (strchr(path, FILE_SEPARATOR) != NULL)
+    return execv(path, argv);
 
-  char *envpath = getenv(PATH_ENV_VAR);
-  if (envpath != NULL)
-    _path_update(envpath);
-
-  if (strchr(path, FILE_SEPARATOR) == NULL) {
-    for (i = 0; (dir = path_refer(i)) != NULL; ++i) {
-      snprintf(cmd, PATH_MAX, "%s/%s", dir, path);
-      rc = _sysexecve(cmd, argv, envp);
-      // If reached here, _sysexecve failed so search next path.
-    }
-  } else {
-    rc = _sysexecve(path, argv, envp);
-  }
-  // If reached here, _sysexecve failed.
-
-  return rc;
+  char exepath[PATH_MAX];
+  if (!findExe(path, exepath))
+    return -1;
+  return execv(exepath, argv);
 }

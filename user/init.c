@@ -7,12 +7,10 @@
 
 #define FDPUTS(fd, str)  write(fd, (str), sizeof(str) - 1)
 #define exit     _sysexit
-#define execve  _sysexecve
 
 extern void _sysexit(int);
-extern int _sysexecve(const char*, char *const[], char *const []);
 
-char *argv[] = { "sh", 0 };
+char *argv[] = { "/bin/sh", 0 };
 
 void runsh(int dev, const char* devname, char** environ) __attribute__((noreturn));
 void
@@ -35,7 +33,7 @@ runsh(int dev, const char* devname, char** environ)
       exit(1);
     }
     if(pid == 0){
-      execve("/bin/sh", argv, environ);
+      execve(argv[0], argv, environ);
       FDPUTS(STDERR_FILENO, "init: exec sh failed\n");
       exit(1);
     }

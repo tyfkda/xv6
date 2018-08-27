@@ -16,8 +16,6 @@
 #endif
 
 char buf[8192];
-char name[3];
-char *echoargv[] = { "echo", "ALL", "TESTS", "PASSED", 0 };
 
 static void panic(const char *msg) {
   fprintf(stderr, msg);
@@ -256,6 +254,7 @@ void
 createtest(void)
 {
   int i, fd;
+  char name[3];
 
   printf("many creates, followed by unlink test\n");
 
@@ -448,9 +447,11 @@ void dirtest(void)
 void
 exectest(void)
 {
+  char *argv[] = {"echo", "ALL", "TESTS", "PASSED", 0};
+
   printf("exec test\n");
   if (fork() == 0) {
-    if(exec("echo", echoargv) < 0){
+    if(execvp(argv[0], argv) < 0){
       exit(1);
     }
   }
@@ -478,7 +479,7 @@ void execvetest() {
     close(p[1]);
 
     char* argv[] = {"echo", "echo $PATH $FOO", NULL};
-    exec("echo", argv);
+    execvp(argv[0], argv);
     exit(1);
   }
   if (fork() == 0) {
@@ -494,9 +495,9 @@ void execvetest() {
     if (fd < 0)
       panic("execvetest: open");
 
-    char* argv[] = {"sh", NULL};
+    char* argv[] = {"/bin/sh", NULL};
     char* envp[] = {"PATH=/usr/local/bin:/bin", "FOO=foobar", NULL};
-    execve("sh", argv, envp);
+    execve(argv[0], argv, envp);
     exit(2);
   }
 
@@ -1849,7 +1850,7 @@ bigargtest(void)
       args[i] = "bigargs test: failed\n                                                                                                                                                                                                       ";
     args[MAXARG-1] = 0;
     printf("bigarg test\n");
-    exec("echo", args);
+    execvp("echo", args);
     printf("bigarg test ok\n");
     fd = open("bigarg-ok", O_CREAT);
     close(fd);

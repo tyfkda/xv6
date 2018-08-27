@@ -449,9 +449,16 @@ void
 exectest(void)
 {
   printf("exec test\n");
-  if(exec("echo", echoargv) < 0){
+  if (fork() == 0) {
+    if(exec("echo", echoargv) < 0){
+      exit(1);
+    }
+  }
+  int code;
+  wait(&code);
+  if (code != 0) {
     printf("exec echo failed\n");
-    exit(1);
+    exit(code);
   }
 }
 

@@ -98,7 +98,7 @@ getchar(void)
 }
 
 char*
-fgets_s(char *buf, size_t max, FILE* fp)
+fgets(char *buf, size_t max, FILE* fp)
 {
   int eof = 1;
   size_t i;
@@ -118,7 +118,7 @@ fgets_s(char *buf, size_t max, FILE* fp)
 char*
 gets_s(char *buf, size_t max)
 {
-  char* result = fgets_s(buf, max, stdin);
+  char* result = fgets(buf, max, stdin);
   if (result == 0)
     return 0;
 

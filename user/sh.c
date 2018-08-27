@@ -305,7 +305,7 @@ int
 getcmd(FILE* fp, char *buf, int nbuf)
 {
   memset(buf, 0, nbuf);
-  if (fgets_s(buf, nbuf, fp) == 0)  // EOF
+  if (fgets(buf, nbuf, fp) == 0)  // EOF
     return -1;
   return 0;
 }

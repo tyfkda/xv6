@@ -22,7 +22,7 @@ int getc(FILE* fp);
 int getchar(void);
 int fgetc(FILE* fp);
 char* gets_s(char*, size_t max);
-char* fgets_s(char*, size_t max, FILE* fp);
+char* fgets(char*, size_t max, FILE* fp);
 int putchar(int);
 
 int printf(const char*, ...);

@@ -91,7 +91,7 @@ startothers(void)
     *(uint64*)(code-16) = (uint64) (stack + KSTACKSIZE);
 #else
     *(void**)(code-4) = stack + KSTACKSIZE;
-    *(void**)(code-8) = mpenter;
+    *(void(**)(void))(code-8) = mpenter;
     *(int**)(code-12) = (void *) V2P(entrypgdir);
 #endif
 

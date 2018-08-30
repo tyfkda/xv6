@@ -16,7 +16,7 @@
 
 
 #define V2P(a) (((uintp) (a)) - KERNBASE)
-#define P2V(a) (((void *) (a)) + KERNBASE)
+#define P2V(a) ((void *)(((char *) (a)) + KERNBASE))
 #define IO2V(a) (((void *) (a)) + DEVBASE - DEVSPACE)
 
 #define V2P_WO(x) ((x) - KERNBASE)    // same as V2P, but without casts

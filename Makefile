@@ -194,7 +194,7 @@ out/kernelmemfs.elf: $(MEMFSOBJS) $(ENTRYCODE) out/entryother out/initcode $(LIN
 
 MKVECTORS = tools/vectors$(BITS).pl
 kernel/vectors.S: $(MKVECTORS)
-	perl $(MKVECTORS) > $@
+	$(MKVECTORS) > $@
 
 ULIBOBJS = \
 	obj/ulib/atexit.o\

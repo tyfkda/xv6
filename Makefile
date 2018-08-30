@@ -109,7 +109,7 @@ CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 &
 CFLAGS += -nostdinc
 ASFLAGS = -fno-pic -gdwarf-2 -Wa,-divide -Iinclude $(XFLAGS)
 
-xv6.img: out/bootblock out/kernel.elf fs.img
+xv6.img: out/bootblock out/kernel.elf
 	dd if=/dev/zero of=$@ count=10000
 	dd if=out/bootblock of=$@ conv=notrunc
 	dd if=out/kernel.elf of=$@ seek=1 conv=notrunc

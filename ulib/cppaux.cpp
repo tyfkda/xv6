@@ -24,7 +24,7 @@ void __gxx_personality_v0() {
   // Dummy implementation
 }
 
-void* operator new(unsigned long size) {
+void* operator new(size_t size) {
   return malloc(size);
 }
 
@@ -32,6 +32,6 @@ void operator delete(void* adr) {
   free(adr);
 }
 
-void operator delete(void* adr, unsigned long size) {
+void operator delete(void* adr, size_t size) {
   free(adr);
 }

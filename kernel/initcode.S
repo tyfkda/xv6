@@ -38,5 +38,5 @@ argv:
 # char *envp[] = { init_env, 0 };
 .p2align 2
 envp:
-  .quad init_env
-  .quad 0
+  .long init_env
+  .long 0

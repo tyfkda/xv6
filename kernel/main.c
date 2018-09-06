@@ -6,10 +6,13 @@
 #include "proc.h"
 #include "x86.h"
 
-static void startothers(void);
-static void mpmain(void)  __attribute__((noreturn));
+//static void startothers(void);
+//static void mpmain(void)  __attribute__((noreturn));
 extern pde_t *kpgdir;
 extern char end[]; // first address after kernel loaded from ELF file
+
+#define CRTPORT 0x3d4
+static ushort *crt = (ushort*)P2V(0xb8000);  // CGA memory
 
 // Bootstrap processor starts running C code here.
 // Allocate a real stack and switch to it, first
@@ -17,6 +20,7 @@ extern char end[]; // first address after kernel loaded from ELF file
 int
 main(void)
 {
+#if 0
   uartearlyinit();
   kinit1(end, P2V(4*1024*1024)); // phys page allocator
   kvmalloc();      // kernel page table
@@ -37,18 +41,36 @@ main(void)
   kinit2(P2V(4*1024*1024), P2V(PHYSTOP)); // must come after startothers()
   userinit();      // first user process
   mpmain();        // finish this processor's setup
+#else
+  // Cursor position: col + SCRW * row.
+  outb(CRTPORT, 14);
+  int pos = inb(CRTPORT + 1) << 8;
+  outb(CRTPORT, 15);
+  pos |= inb(CRTPORT + 1);
+
+  crt[pos] = 'A' | 0x0700;
+
+  for (;;)
+    hlt();
+#endif
 }
 
 // Other CPUs jump here from entryother.S.
 void
 mpenter(void)
 {
+#if 0
   switchkvm();
   seginit();
   lapicinit();
   mpmain();
+#else
+  for (;;)
+    hlt();
+#endif
 }
 
+#if 0
 // Common CPU setup code.
 static void
 mpmain(void)
@@ -58,10 +80,12 @@ mpmain(void)
   xchg(&(mycpu()->started), 1); // tell startothers() we're up
   scheduler();     // start running processes
 }
+#endif
 
 extern pde_t entrypgdir[];  // For entry.S
 void entry32mp(void);
 
+#if 0
 // Start the non-boot (AP) processors.
 static void
 startothers(void)
@@ -102,6 +126,7 @@ startothers(void)
       ;
   }
 }
+#endif
 
 #ifndef X64
 // The boot page table used in entry.S and entryother.S.

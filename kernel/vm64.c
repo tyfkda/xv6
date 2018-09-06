@@ -30,7 +30,6 @@
 #include "memlayout.h"
 #include "mmu.h"
 #include "proc.h"
-#include "elf.h"
 
 static pde_t *kpml4;
 static pde_t *kpdpt;

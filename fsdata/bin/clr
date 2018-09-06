@@ -1,2 +1,0 @@
-#!/bin/sh
-echo "\x1b[2J\x1b[H"  # Clear screen, Move to the top left.

@@ -213,29 +213,7 @@ kernel/vectors.S: $(MKVECTORS)
 	$(MKVECTORS) > $@
 
 ULIBOBJS = \
-	obj/ulib/atexit.o\
-	obj/ulib/commonstr.o\
-	obj/ulib/cppaux.o\
 	obj/ulib/crt0.o\
-	obj/ulib/ctype.o\
-	obj/ulib/dirent.o\
-	obj/ulib/environ.o\
-	obj/ulib/errno.o\
-	obj/ulib/exec.o\
-	obj/ulib/exit.o\
-	obj/ulib/localtime.o\
-	obj/ulib/perror.o\
-	obj/ulib/printf.o\
-	obj/ulib/setjmp$(BITS).o\
-	obj/ulib/sprintf.o\
-	obj/ulib/stdio.o\
-	obj/ulib/string.o\
-	obj/ulib/termios.o\
-	obj/ulib/time.o\
-	obj/ulib/ulib.o\
-	obj/ulib/umalloc.o\
-	obj/ulib/usys.o\
-	obj/ulib/wait.o\
 
 obj/ulib/ulib.a:	$(ULIBOBJS)
 	ar rcs $@ $^
@@ -269,11 +247,7 @@ out/mkfs: tools/mkfs.c tools/hostfsaux.c tools/hostfsaux.h kernel/fs.h
 UPROGS=\
 	fs/bin/zombie\
 
-copyfsdata:
-	@mkdir -p fs
-	cp -upr fsdata/* fs/
-
-fs.img: out/mkfs $(UPROGS) copyfsdata
+fs.img: out/mkfs $(UPROGS)
 	out/mkfs $@ init
 	out/mkfs $@ put fs/* /
 

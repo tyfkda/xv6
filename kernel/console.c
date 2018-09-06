@@ -17,7 +17,6 @@
 #include "proc.h"
 #include "x86.h"
 #include "input.h"
-#include "stdio.h"  // for sprintf
 #include "sys/ioctl.h"
 
 static void consputc(int);
@@ -29,7 +28,6 @@ static struct {
   struct spinlock lock;
   int locking;
 
-  int escape;
   int bufCount;
   uchar buf[16];
 
@@ -197,14 +195,6 @@ setBgColor(int c)
     cons.attr = (cons.attr & 0xf0ff) | (kColorTable[c] << 8);
 }
 
-static void
-flipColor(void)
-{
-  ushort a = cons.attr;
-  cons.attr = (a & 0x00ff) | ((a & 0xf000) >> 4) | ((a & 0x0f00) << 4);
-  cons.flipColor = 1 - cons.flipColor;
-}
-
 static int getCursorPos(void) {
   // Cursor position: col + SCRW * row.
   outb(CRTPORT, 14);
@@ -281,163 +271,7 @@ static void
 consuartputc(int c)
 {
   consputc(c);
-  uartputc(c);
-}
-
-static void
-procescseq(uchar c)
-{
-  cons.buf[cons.bufCount++] = c;
-  if (cons.buf[1] == '[') {
-    switch (c) {
-    case '?':
-      //cons.question = TRUE;
-      return;
-    case 'B':
-      // CUD: CUrsor Downward.
-      {
-        int d = atoi((char*)&cons.buf[2]);
-        int pos = getCursorPos();
-        int y = pos / SCRW;
-        int ny = y + d;
-        if (ny > SCRH - 1)
-          ny = SCRH - 1;
-        setCursorPos(pos + (ny - y) * SCRW);
-      }
-      break;
-    case 'C':
-      // CUF: CUrsor Forward.
-      {
-        int f = atoi((char*)&cons.buf[2]);
-        int pos = getCursorPos();
-        int x = pos % SCRW;
-        int nx = x + f;
-        if (nx > SCRW - 1)
-          nx = SCRW - 1;
-        setCursorPos(pos - x + nx);
-      }
-      break;
-    case 'H':
-      // CUP
-      {
-        // Set cursor position
-        int cols = 0, rows = 0;
-        for (int i = 2; i < cons.bufCount - 1; ++i) {
-          if (cons.buf[i] == ';') {
-            cols = atoi((char*)&cons.buf[2]) - 1;
-            rows = atoi((char*)&cons.buf[i + 1]) - 1;
-            cols = cols < 0 ? 0 : cols > SCRH - 1 ? SCRH - 1 : cols;
-            rows = rows < 0 ? 0 : rows > SCRW - 1 ? SCRW - 1 : rows;
-            break;
-          }
-        }
-        setCursorPos(cols * SCRW + rows);
-      }
-      break;
-    case 'J':
-      // ED
-      {
-        // TODO: Consider SPA and ERM.
-        int n = atoi((char*)&cons.buf[2]);
-        if (0 <= n && n <= 2) {
-          int pos = getCursorPos();
-          int start = 0, end = SCRW * SCRH;
-          switch (n) {
-          case 0:  start = pos; break;
-          case 1:  end = pos; break;
-          }
-          for (int i = start; i < end; ++i)
-            crt[i] = cons.attr;
-        }
-      }
-      break;
-    case 'K':
-      // EL
-      {
-        // TODO: Consider SPA and ERM.
-        int n = atoi((char*)&cons.buf[2]);
-        if (0 <= n && n <= 2) {
-          int pos = getCursorPos();
-          int y = pos / SCRW;
-          int start = 0 + y * SCRW, end = 0 + (y + 1) * SCRW;
-          switch (n) {
-          case 0:  start = pos; break;
-          case 1:  end = pos; break;
-          }
-          for (int i = start; i < end; ++i)
-            crt[i] = cons.attr;
-        }
-      }
-      break;
-    case 'h':
-      // DECSET
-      // TODO: Implement
-      break;
-    case 'l':
-      // DECRST
-      // TODO: Implement
-      break;
-    case 'm':
-      // SGR: Select Graphic Rendition
-      {
-        int v = atoi((char*)&cons.buf[2]);
-        switch (v) {
-        case 0:  // Reset
-          cons.flipColor = 0;
-          setFontColor(kDefaultColor);
-          setBgColor(kDefaultBgColor);
-          break;
-        case 7:
-          if (!cons.flipColor) {
-            flipColor();
-          }
-          break;
-        default:
-          {
-            int x = v % 10;
-            switch (v / 10) {
-            case 3: case 9:
-              setFontColor(x == 9 ? kDefaultColor : x + (v >= 90 ? 8 : 0));
-              break;
-            case 4: case 10:
-              setBgColor(x == 9 ? kDefaultBgColor : x + (v >= 100 ? 8 : 0));
-              break;
-            }
-          }
-          break;
-        }
-      }
-      break;
-    case 'n':
-      // DSR: Device Status Report.
-      switch (cons.buf[2]) {
-      case '6':  // Return cursor position
-        {
-          int pos = getCursorPos();
-          char buf[16];
-          snprintf(buf, sizeof(buf), "\x1b[%d;%dR", pos / SCRW + 1, pos % SCRW + 1);
-          inputwrite(&s_input, buf, strlen(buf));
-        }
-        break;
-      }
-      break;
-    default:
-      if ((c < 'A'|| c > 'Z') && (c < 'a' || c > 'z') &&
-          cons.bufCount < sizeof(cons.buf)) {
-        return;  // Continue.
-      }
-
-      // Unhandled: emit buffered characters and quit escape sequence.
-      for (int i = 0; i < cons.bufCount; ++i) {
-        consputc(cons.buf[i]);
-      }
-      break;
-    }
-  }
-
-  // Quit escape sequence.
-  cons.escape = 0;
-  cons.bufCount = 0;
+  //uartputc(c);
 }
 
 int
@@ -449,15 +283,7 @@ consolewrite(const void *buf_, int n)
   acquire(&cons.lock);
   for(i = 0; i < n; i++) {
     uchar c = buf[i];
-    if (cons.escape) {
-      procescseq(c);
-    } else if (c == ESC) {
-      cons.buf[0] = c;
-      cons.bufCount = 1;
-      cons.escape = 1;
-    } else {
-      consputc(c);
-    }
+    consputc(c);
   }
   release(&cons.lock);
 
@@ -514,7 +340,6 @@ consoleinit(void)
   devsw[CONSOLE].read = consoleread;
   devsw[CONSOLE].ioctl = consoleioctl;
   cons.locking = 1;
-  cons.escape = 0;
   cons.bufCount = 0;
   cons.attr = 0x0000;
   cons.flipColor = 0;

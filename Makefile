@@ -38,14 +38,12 @@ OBJS := \
 	obj/knl/proc.o\
 	obj/knl/sleeplock.o\
 	obj/knl/spinlock.o\
-	obj/knl/sprintf.o\
 	obj/knl/swtch$(BITS).o\
 	obj/knl/syscall.o\
 	obj/knl/sysfile.o\
 	obj/knl/sysproc.o\
 	obj/knl/trapasm$(BITS).o\
 	obj/knl/trap.o\
-	obj/knl/uart.o\
 	obj/knl/vectors.o\
 	obj/knl/vm.o\
 	$(XOBJS)
@@ -269,24 +267,6 @@ out/mkfs: tools/mkfs.c tools/hostfsaux.c tools/hostfsaux.h kernel/fs.h
 .PRECIOUS: obj/ulib/%.o, obj/user/%.o
 
 UPROGS=\
-	fs/bin/cat\
-	fs/bin/cp\
-	fs/bin/cpptest\
-	fs/bin/date\
-	fs/bin/echo\
-	fs/bin/forktest\
-	fs/bin/grep\
-	fs/bin/init\
-	fs/bin/kill\
-	fs/bin/ln\
-	fs/bin/ls\
-	fs/bin/mkdir\
-	fs/bin/pwd\
-	fs/bin/rm\
-	fs/bin/sh\
-	fs/bin/stressfs\
-	fs/bin/usertests\
-	fs/bin/wc\
 	fs/bin/zombie\
 
 copyfsdata:

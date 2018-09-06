@@ -190,18 +190,6 @@ out/kernel.elf: $(OBJS) $(ENTRYCODE) out/entryother out/initcode $(LINKSCRIPT) $
 	$(OBJDUMP) -S $@ > out/kernel.asm
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/kernel.sym
 
-# kernelmemfs is a copy of kernel that maintains the
-# disk image in memory instead of writing to a disk.
-# This is not so useful for testing persistent storage or
-# exploring disk buffering implementations, but it is
-# great for testing the kernel on real hardware without
-# needing a scratch disk.
-MEMFSOBJS = $(filter-out obj/knl/ide.o,$(OBJS)) obj/knl/memide.o
-out/kernelmemfs.elf: $(MEMFSOBJS) $(ENTRYCODE) out/entryother out/initcode $(LINKSCRIPT) fs.img
-	$(LD) $(LDFLAGS) -T $(LINKSCRIPT) -o $@ $(ENTRYCODE)  $(MEMFSOBJS) -b binary out/initcode out/entryother fs.img
-	$(OBJDUMP) -S $@ > out/kernelmemfs.asm
-	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/kernelmemfs.sym
-
 MKVECTORS = tools/vectors$(BITS).pl
 kernel/vectors.S: $(MKVECTORS)
 	$(MKVECTORS) > $@

@@ -8,7 +8,6 @@ struct context;
 struct file;
 struct inode;
 struct proc;
-struct rtcdate;
 struct spinlock;
 struct sleeplock;
 struct stat;
@@ -82,14 +81,12 @@ void            kinit2(void*, void*);
 void            kbdintr(void);
 
 // lapic.c
-void            cmostime(struct rtcdate *r);
 int             lapicid(void);
 extern volatile uint*    lapic;
 void            lapiceoi(void);
 void            lapicinit(void);
 void            lapicstartap(uchar, uint);
 void            microdelay(int);
-uint            cmosepochtime(void);
 
 // log.c
 void            initlog(int dev);

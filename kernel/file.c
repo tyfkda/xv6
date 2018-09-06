@@ -75,7 +75,7 @@ fileclose(struct file *f, int error)
     int bUpdate = 0;
     if (ff.writable) {
       // Update mtime.
-      uint mtime = cmosepochtime();
+      uint mtime = 0;  //cmosepochtime();
       ilock(ff.ip);
       ff.ip->mtime = mtime;
       iunlock(ff.ip);

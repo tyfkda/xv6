@@ -15,8 +15,6 @@
 #include "sleeplock.h"
 #include "file.h"
 #include "fcntl.h"
-#include "date.h"
-#include "time.h"
 #include "errno.h"
 
 // Fetch the nth word-sized system call argument as a file descriptor
@@ -284,7 +282,7 @@ create(const char *path, short type, short major, short minor, int* perr)
   ip->major = major;
   ip->minor = minor;
   ip->nlink = 1;
-  ip->mtime = cmosepochtime();
+  ip->mtime = 0;  //cmosepochtime();
   iupdate(ip);
 
   if(type == T_DIR){  // Create . and .. entries.
@@ -471,18 +469,6 @@ sys_ftruncate(void)
   if(argfd(0, 0, &f) < 0 || argint(1, (int*)&length) < 0)
     return -1;
   return filetruncate(f, length);
-}
-
-int
-sys_time(void)
-{
-  time_t *pt;
-
-  if(arguintp(0, (uintp*)&pt) < 0){
-    return -1;
-  }
-  *pt = cmosepochtime();
-  return 0;
 }
 
 int

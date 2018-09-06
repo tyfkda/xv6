@@ -2,7 +2,6 @@
 
 ifeq ("$(X32)","")
 BITS = 64
-XOBJS = obj/knl/vm64.o
 XFLAGS = -m64 -DX64 -mcmodel=kernel -mtls-direct-seg-refs -mno-red-zone
 LDFLAGS = -m elf_x86_64 -nodefaultlibs
 QEMUTARGET = qemu-system-x86_64
@@ -18,20 +17,12 @@ OPT ?= -O2
 OBJS := \
 	obj/knl/commonstr.o\
 	obj/knl/console.o\
-	obj/knl/fs.o\
 	obj/knl/kalloc.o\
-	obj/knl/lapic.o\
-	obj/knl/log.o\
 	obj/knl/main.o\
 	obj/knl/mp.o\
 	obj/knl/proc.o\
 	obj/knl/spinlock.o\
-	obj/knl/syscall.o\
-	obj/knl/trapasm$(BITS).o\
-	obj/knl/trap.o\
-	obj/knl/vectors.o\
 	obj/knl/vm.o\
-	$(XOBJS)
 
 ifneq ("$(MEMFS)","")
 # build filesystem image in to kernel and use memory-ide-device

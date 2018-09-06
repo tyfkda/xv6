@@ -13,12 +13,6 @@ struct sleeplock;
 struct stat;
 struct superblock;
 
-// bio.c
-void            binit(void);
-struct buf*     bread(uint, uint);
-void            brelse(struct buf*);
-void            bwrite(struct buf*);
-
 // console.c
 void            cprintf(char*, ...);
 void            panic(char*) __attribute__((noreturn));

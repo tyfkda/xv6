@@ -20,9 +20,7 @@ void            brelse(struct buf*);
 void            bwrite(struct buf*);
 
 // console.c
-void            consoleinit(void);
 void            cprintf(char*, ...);
-void            consoleintr(int(*)(void));
 void            panic(char*) __attribute__((noreturn));
 
 // exec.c
@@ -76,9 +74,6 @@ char*           kalloc(void);
 void            kfree(char*);
 void            kinit1(void*, void*);
 void            kinit2(void*, void*);
-
-// kbd.c
-void            kbdintr(void);
 
 // lapic.c
 int             lapicid(void);

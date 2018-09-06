@@ -23,11 +23,9 @@ OBJS := \
 	obj/knl/file.o\
 	obj/knl/fs.o\
 	obj/knl/ide.o\
-	obj/knl/input.o\
 	obj/knl/ioapic.o\
 	obj/knl/ioctl.o\
 	obj/knl/kalloc.o\
-	obj/knl/kbd.o\
 	obj/knl/lapic.o\
 	obj/knl/log.o\
 	obj/knl/main.o\

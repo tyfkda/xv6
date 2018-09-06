@@ -25,7 +25,6 @@ OBJS := \
 	obj/knl/main.o\
 	obj/knl/mp.o\
 	obj/knl/proc.o\
-	obj/knl/sleeplock.o\
 	obj/knl/spinlock.o\
 	obj/knl/syscall.o\
 	obj/knl/trapasm$(BITS).o\

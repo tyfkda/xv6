@@ -16,9 +16,7 @@
 #include "mmu.h"
 #include "proc.h"
 #include "spinlock.h"
-#include "sleeplock.h"
 #include "fs.h"
-#include "buf.h"
 #include "file.h"
 
 void

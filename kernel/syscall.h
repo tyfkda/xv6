@@ -21,7 +21,7 @@
 #define SYS_mkdir  20
 #define SYS_close  21
 //#define SYS_time   22
-#define SYS_ioctl  23
+//#define SYS_ioctl  23
 #define SYS_isatty 24
 #define SYS_ftruncate 25
 #define SYS_readdir 26

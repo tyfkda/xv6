@@ -1,7 +1,7 @@
 # Initial process execs /init.
 
-#include "syscall.h"
-#include "traps.h"
+//#include "syscall.h"
+//#include "traps.h"
 
 
 # exec(init, argv)
@@ -10,13 +10,13 @@ start:
   mov $init, %rdi
   mov $argv, %rsi
   mov $envp, %rdx
-  mov $SYS_execve, %rax
-  int $T_SYSCALL
+  //mov $SYS_execve, %rax
+  //int $T_SYSCALL
 
 # for(;;) exit();
 exit:
-  mov $SYS_exit, %rax
-  int $T_SYSCALL
+  //mov $SYS_exit, %rax
+  //int $T_SYSCALL
   jmp exit
 
 # char init[] = "/bin/init\0";

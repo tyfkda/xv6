@@ -2,7 +2,6 @@
 
 ifeq ("$(X32)","")
 BITS = 64
-XOBJS = obj/knl/vm64.o
 XFLAGS = -m64 -DX64 -mcmodel=kernel -mtls-direct-seg-refs -mno-red-zone
 LDFLAGS = -m elf_x86_64 -nodefaultlibs
 QEMUTARGET = qemu-system-x86_64
@@ -16,39 +15,7 @@ endif
 OPT ?= -O2
 
 OBJS := \
-	obj/knl/bio.o\
-	obj/knl/commonstr.o\
-	obj/knl/console.o\
-	obj/knl/exec.o\
-	obj/knl/file.o\
-	obj/knl/fs.o\
-	obj/knl/ide.o\
-	obj/knl/input.o\
-	obj/knl/ioapic.o\
-	obj/knl/ioctl.o\
-	obj/knl/kalloc.o\
-	obj/knl/kbd.o\
-	obj/knl/lapic.o\
-	obj/knl/log.o\
 	obj/knl/main.o\
-	obj/knl/mp.o\
-	obj/knl/acpi.o\
-	obj/knl/picirq.o\
-	obj/knl/pipe.o\
-	obj/knl/proc.o\
-	obj/knl/sleeplock.o\
-	obj/knl/spinlock.o\
-	obj/knl/sprintf.o\
-	obj/knl/swtch$(BITS).o\
-	obj/knl/syscall.o\
-	obj/knl/sysfile.o\
-	obj/knl/sysproc.o\
-	obj/knl/trapasm$(BITS).o\
-	obj/knl/trap.o\
-	obj/knl/uart.o\
-	obj/knl/vectors.o\
-	obj/knl/vm.o\
-	$(XOBJS)
 
 ifneq ("$(MEMFS)","")
 # build filesystem image in to kernel and use memory-ide-device
@@ -198,46 +165,12 @@ out/kernel.elf: $(OBJS) $(ENTRYCODE) out/entryother out/initcode $(LINKSCRIPT) $
 	$(OBJDUMP) -S $@ > out/kernel.asm
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/kernel.sym
 
-# kernelmemfs is a copy of kernel that maintains the
-# disk image in memory instead of writing to a disk.
-# This is not so useful for testing persistent storage or
-# exploring disk buffering implementations, but it is
-# great for testing the kernel on real hardware without
-# needing a scratch disk.
-MEMFSOBJS = $(filter-out obj/knl/ide.o,$(OBJS)) obj/knl/memide.o
-out/kernelmemfs.elf: $(MEMFSOBJS) $(ENTRYCODE) out/entryother out/initcode $(LINKSCRIPT) fs.img
-	$(LD) $(LDFLAGS) -T $(LINKSCRIPT) -o $@ $(ENTRYCODE)  $(MEMFSOBJS) -b binary out/initcode out/entryother fs.img
-	$(OBJDUMP) -S $@ > out/kernelmemfs.asm
-	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/kernelmemfs.sym
-
 MKVECTORS = tools/vectors$(BITS).pl
 kernel/vectors.S: $(MKVECTORS)
 	$(MKVECTORS) > $@
 
 ULIBOBJS = \
-	obj/ulib/atexit.o\
-	obj/ulib/commonstr.o\
-	obj/ulib/cppaux.o\
 	obj/ulib/crt0.o\
-	obj/ulib/ctype.o\
-	obj/ulib/dirent.o\
-	obj/ulib/environ.o\
-	obj/ulib/errno.o\
-	obj/ulib/exec.o\
-	obj/ulib/exit.o\
-	obj/ulib/localtime.o\
-	obj/ulib/perror.o\
-	obj/ulib/printf.o\
-	obj/ulib/setjmp$(BITS).o\
-	obj/ulib/sprintf.o\
-	obj/ulib/stdio.o\
-	obj/ulib/string.o\
-	obj/ulib/termios.o\
-	obj/ulib/time.o\
-	obj/ulib/ulib.o\
-	obj/ulib/umalloc.o\
-	obj/ulib/usys.o\
-	obj/ulib/wait.o\
 
 obj/ulib/ulib.a:	$(ULIBOBJS)
 	ar rcs $@ $^
@@ -269,31 +202,9 @@ out/mkfs: tools/mkfs.c tools/hostfsaux.c tools/hostfsaux.h kernel/fs.h
 .PRECIOUS: obj/ulib/%.o, obj/user/%.o
 
 UPROGS=\
-	fs/bin/cat\
-	fs/bin/cp\
-	fs/bin/cpptest\
-	fs/bin/date\
-	fs/bin/echo\
-	fs/bin/forktest\
-	fs/bin/grep\
-	fs/bin/init\
-	fs/bin/kill\
-	fs/bin/ln\
-	fs/bin/ls\
-	fs/bin/mkdir\
-	fs/bin/pwd\
-	fs/bin/rm\
-	fs/bin/sh\
-	fs/bin/stressfs\
-	fs/bin/usertests\
-	fs/bin/wc\
 	fs/bin/zombie\
 
-copyfsdata:
-	@mkdir -p fs
-	cp -upr fsdata/* fs/
-
-fs.img: out/mkfs $(UPROGS) copyfsdata
+fs.img: out/mkfs $(UPROGS)
 	out/mkfs $@ init
 	out/mkfs $@ put fs/* /
 

@@ -53,7 +53,7 @@ ideinit(void)
   int i;
 
   initlock(&idelock, "ide");
-  ioapicenable(IRQ_IDE, ncpu - 1);
+  //ioapicenable(IRQ_IDE, ncpu - 1);
   idewait(0);
 
   // Check if disk 1 is present

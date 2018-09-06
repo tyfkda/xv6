@@ -22,7 +22,6 @@ OBJS := \
 	obj/knl/file.o\
 	obj/knl/fs.o\
 	obj/knl/ide.o\
-	obj/knl/ioapic.o\
 	obj/knl/kalloc.o\
 	obj/knl/lapic.o\
 	obj/knl/log.o\

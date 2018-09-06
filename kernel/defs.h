@@ -56,11 +56,6 @@ void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, void*, uint, uint);
 void            isetsize(struct inode*, uint);
 
-// ide.c
-void            ideinit(void);
-void            ideintr(void);
-void            iderw(struct buf*);
-
 // kalloc.c
 char*           kalloc(void);
 void            kfree(char*);

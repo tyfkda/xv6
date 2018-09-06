@@ -19,7 +19,6 @@ OBJS := \
 	obj/knl/bio.o\
 	obj/knl/commonstr.o\
 	obj/knl/console.o\
-	obj/knl/exec.o\
 	obj/knl/file.o\
 	obj/knl/fs.o\
 	obj/knl/ide.o\

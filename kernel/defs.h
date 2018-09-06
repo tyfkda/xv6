@@ -23,9 +23,6 @@ void            bwrite(struct buf*);
 void            cprintf(char*, ...);
 void            panic(char*) __attribute__((noreturn));
 
-// exec.c
-int             execve(const char *, const char*[] , const char*[]);
-
 // file.c
 struct file*    filealloc(void);
 void            fileclose(struct file*, int error);

@@ -421,46 +421,6 @@ sys_chdir(void)
 }
 
 int
-sys_execve(void)
-{
-  const char *path;
-  int i;
-  uintp uargv, uarg;
-  uintp uenvp, uenv;
-
-  if(argcstr(0, &path) < 0 || arguintp(1, &uargv) < 0 || arguintp(2, &uenvp) < 0){
-    return -1;
-  }
-  for(i=0;; i++){
-    if(i >= MAXARG)
-      return -1;
-    if(fetchuintp(uargv+sizeof(uintp)*i, &uarg) < 0)
-      return -1;
-    if(uarg == 0){
-      break;
-    }
-    const char* v;
-    if(fetchstr(uarg, &v) < 0)
-      return -1;
-  }
-
-  for(i=0;; i++){
-    if(i >= MAXENV)
-      return -1;
-    if(fetchuintp(uenvp+sizeof(uintp)*i, &uenv) < 0)
-      return -1;
-    if(uenv == 0){
-      break;
-    }
-    const char* v;
-    if(fetchstr(uenv, &v) < 0)
-       return -1;
-  }
-
-  return execve(path, (const char**)uargv, (const char**)uenvp);
-}
-
-int
 sys_ftruncate(void)
 {
   struct file *f;

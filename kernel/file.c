@@ -11,7 +11,6 @@
 #include "sleeplock.h"
 #include "sys/stat.h"
 
-struct devsw devsw[NDEV];
 struct {
   struct spinlock lock;
   struct file file[NFILE];
@@ -227,25 +226,4 @@ filetruncate(struct file* f, uint length)
     return 0;
   }
   return -1;
-}
-
-int
-fileisatty(struct file* f)
-{
-  int result = 0;
-  switch (f->type) {
-  case FD_INODE:
-    {
-      ilock(f->ip);
-      short type = f->ip->type;
-      iunlock(f->ip);
-      if (type == T_DEV) {  // TODO: Check
-        result = 1;
-      }
-    }
-    break;
-  default:
-    break;
-  }
-  return result;
 }

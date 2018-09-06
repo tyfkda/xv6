@@ -31,16 +31,3 @@ struct inode {
   uint size;
   uint addrs[NDIRECT+1];
 };
-
-// table mapping major device number to
-// device functions
-struct devsw {
-  int (*read)(void*, int);
-  int (*write)(const void*, int);
-  int (*ioctl)(int /*request*/, uintp /*arg*/);
-};
-
-extern struct devsw devsw[];
-
-#define CONSOLE 1
-#define UART    2

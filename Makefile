@@ -15,14 +15,7 @@ endif
 OPT ?= -O2
 
 OBJS := \
-	obj/knl/commonstr.o\
-	obj/knl/console.o\
-	obj/knl/kalloc.o\
 	obj/knl/main.o\
-	obj/knl/mp.o\
-	obj/knl/proc.o\
-	obj/knl/spinlock.o\
-	obj/knl/vm.o\
 
 ifneq ("$(MEMFS)","")
 # build filesystem image in to kernel and use memory-ide-device

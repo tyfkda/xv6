@@ -7,23 +7,24 @@
 
 use core::panic::PanicInfo;
 
-//const CRTPORT: u16 = 0x03d4;
-
-//fn outb(port: u16, data: u8) {
-//  unsafe {
-//    asm!("out $0,$1" : : "0" (data), "1" (port));
-//  }
-//}
-
 fn hlt() {
   unsafe {
     asm!("hlt");
   }
 }
 
+static HELLO: &[u8] = b"Hello World!";
+
 #[no_mangle]
-pub extern fn main() {
-  //outb(CRTPORT, 14);
+pub extern "C" fn main() {
+  let vga_buffer = 0xb8000 as *mut u16;
+
+  for (i, &byte) in HELLO.iter().enumerate() {
+    unsafe {
+      *vga_buffer.offset(i as isize) = (byte as u16) | 0x0f00;
+    }
+  }
+
   loop {
     hlt();
   }

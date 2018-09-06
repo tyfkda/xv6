@@ -33,8 +33,6 @@ OBJS := \
 	obj/knl/spinlock.o\
 	obj/knl/swtch$(BITS).o\
 	obj/knl/syscall.o\
-	obj/knl/sysfile.o\
-	obj/knl/sysproc.o\
 	obj/knl/trapasm$(BITS).o\
 	obj/knl/trap.o\
 	obj/knl/vectors.o\

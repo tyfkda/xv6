@@ -7,7 +7,6 @@ struct buf;
 struct context;
 struct file;
 struct inode;
-struct pipe;
 struct proc;
 struct rtcdate;
 struct spinlock;
@@ -108,12 +107,6 @@ int             acpiinit(void);
 // picirq.c
 void            picenable(int);
 void            picinit(void);
-
-// pipe.c
-int             pipealloc(struct file**, struct file**);
-void            pipeclose(struct pipe*, int writable, int error);
-int             piperead(struct pipe*, void*, int);
-int             pipewrite(struct pipe*, void*, int);
 
 //PAGEBREAK: 16
 // proc.c

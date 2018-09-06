@@ -34,7 +34,6 @@ OBJS := \
 	obj/knl/mp.o\
 	obj/knl/acpi.o\
 	obj/knl/picirq.o\
-	obj/knl/pipe.o\
 	obj/knl/proc.o\
 	obj/knl/sleeplock.o\
 	obj/knl/spinlock.o\

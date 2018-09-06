@@ -71,9 +71,7 @@ fileclose(struct file *f, int error)
   f->type = FD_NONE;
   release(&ftable.lock);
 
-  if(ff.type == FD_PIPE)
-    pipeclose(ff.pipe, ff.writable, error);
-  else if(ff.type == FD_INODE){
+  if(ff.type == FD_INODE){
     int bUpdate = 0;
     if (ff.writable) {
       // Update mtime.
@@ -113,8 +111,6 @@ fileread(struct file *f, void *addr, int n)
 
   if(f->readable == 0)
     return -1;
-  if(f->type == FD_PIPE)
-    return piperead(f->pipe, addr, n);
   if(f->type == FD_INODE){
     ilock(f->ip);
     if (f->ip->type == T_DIR) {
@@ -136,8 +132,6 @@ filereaddir(struct file *f, void *addr)
   int r;
 
   if(f->readable == 0)
-    return -1;
-  if(f->type == FD_PIPE)
     return -1;
   if(f->type == FD_INODE){
     ilock(f->ip);
@@ -162,8 +156,6 @@ filewrite(struct file *f, void *addr, int n)
 
   if(f->writable == 0)
     return -1;
-  if(f->type == FD_PIPE)
-    return pipewrite(f->pipe, addr, n);
   if(f->type == FD_INODE){
     // write a few blocks at a time to avoid exceeding
     // the maximum log transaction size, including

@@ -158,12 +158,21 @@ out/initcode: $(INITCODESRC)
 	$(OBJCOPY) -S -O binary out/initcode.out $@
 	$(OBJDUMP) -S out/initcode.o > out/initcode.asm
 
+
+RUSTC = rustc
+RUSTCFLAGS = -C opt-level=3 -C lto --crate-type="staticlib"
+out/kernel.a:	kernel/main.rs
+	@mkdir -p out
+	$(RUSTC) $(RUSTCFLAGS) -o $@ $<
+
+
 ENTRYCODE = obj/knl/entry$(BITS).o
 LINKSCRIPT = kernel/kernel$(BITS).ld
-out/kernel.elf: $(OBJS) $(ENTRYCODE) out/entryother out/initcode $(LINKSCRIPT) $(FSIMAGE)
-	$(LD) $(LDFLAGS) -T $(LINKSCRIPT) -o $@ $(ENTRYCODE) $(OBJS) -b binary out/initcode out/entryother $(FSIMAGE)
+out/kernel.elf: out/kernel.a $(ENTRYCODE) out/entryother out/initcode $(LINKSCRIPT) $(FSIMAGE)
+	$(LD) $(LDFLAGS) -T $(LINKSCRIPT) -o $@ $(ENTRYCODE) out/kernel.a -b binary out/initcode out/entryother $(FSIMAGE)
 	$(OBJDUMP) -S $@ > out/kernel.asm
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/kernel.sym
+	strip $@
 
 MKVECTORS = tools/vectors$(BITS).pl
 kernel/vectors.S: $(MKVECTORS)

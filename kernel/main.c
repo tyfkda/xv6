@@ -12,6 +12,9 @@ static ushort *crt = (ushort*)P2V(0xb8000);  // CGA memory
 int
 main(void)
 {
+  asm volatile("out %0,%1" : : "a" (data), "d" (port));
+
+
   // Cursor position: col + SCRW * row.
   outb(CRTPORT, 14);
   int pos = inb(CRTPORT + 1) << 8;

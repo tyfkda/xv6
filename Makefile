@@ -339,3 +339,23 @@ qemu-gdb: fs.img xv6.img .gdbinit
 qemu-nox-gdb: fs.img xv6.img .gdbinit
 	@echo "*** Now run 'gdb'." 1>&2
 	$(QEMU) -nographic $(QEMUOPTS) -S $(QEMUGDB)
+
+
+################################################
+# Docker
+
+docker_image ?= xv6
+tag ?= dev
+
+docker_args ?= -e LOCAL_UID=$(shell id -u) -e LOCAL_GID=$(shell id -g) \
+	-v $(shell pwd):$(shell pwd) -w $(shell pwd) \
+	-v /etc/localtime:/etc/localtime:ro \
+
+build-docker-image:
+	docker build docker/ -t $(docker_image):$(tag)
+
+docker-make:
+	@docker run --rm $(docker_args) $(docker_image):$(tag) make $(MAKE_TARGET)
+
+docker-interactive:
+	@docker run -it --rm $(docker_args) $(docker_image):$(tag)

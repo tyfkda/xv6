@@ -187,9 +187,9 @@ INITCODESRC = kernel/initcode$(BITS).S
 out/initcode: $(INITCODESRC)
 	@mkdir -p out
 	$(CC) $(CFLAGS) -nostdinc -I. -o out/initcode.o -c $(INITCODESRC)
-	$(LD) $(LDFLAGS) -N -e start -Ttext 0 -o out/initcode.out out/initcode.o
+	$(LD) $(LDFLAGS) -N -e start -Ttext 0x10000 -o out/initcode.out out/initcode.o
 	$(OBJCOPY) -S -O binary out/initcode.out $@
-	$(OBJDUMP) -S out/initcode.o > out/initcode.asm
+	$(OBJDUMP) -S out/initcode.out > out/initcode.asm
 
 ENTRYCODE = obj/knl/entry$(BITS).o
 LINKSCRIPT = kernel/kernel$(BITS).ld

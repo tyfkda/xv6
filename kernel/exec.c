@@ -35,7 +35,7 @@ execelf(const char *progname, const char *path, const char* const *argv,
     goto bad;
 
   // Load program into memory.
-  sz = PGSIZE;
+  sz = 0;
   for(i=0, off=elf->phoff; i<elf->phnum; i++, off+=sizeof(ph)){
     if(readi(ip, &ph, off, sizeof(ph)) != sizeof(ph))
       goto bad;
@@ -43,11 +43,13 @@ execelf(const char *progname, const char *path, const char* const *argv,
       continue;
     if(ph.memsz < ph.filesz)
       goto bad;
+    if(ph.vaddr % PGSIZE != 0)
+      goto bad;
     if(ph.vaddr + ph.memsz < ph.vaddr)
       goto bad;
+    if (sz == 0)
+      sz = ph.vaddr;
     if((sz = allocuvm(pgdir, sz, ph.vaddr + ph.memsz)) == 0)
-      goto bad;
-    if(ph.vaddr % PGSIZE != 0)
       goto bad;
     if(loaduvm(pgdir, (char*)ph.vaddr, ip, ph.off, ph.filesz) < 0)
       goto bad;

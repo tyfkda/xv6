@@ -2009,6 +2009,22 @@ void argptest()
   printf("arg test passed\n");
 }
 
+void pagefaulttest()
+{
+  printf("pagefault test\n");
+  pid_t pid = fork();
+  if (pid < 0)
+    panic("fork failed");
+  if (pid == 0) {
+    printf("%x\n", *((char*)0));
+    exit(0);
+  }
+  if (wait(NULL) == 0) {
+    panic("pagefault test: Reading at 0x0 should not be permitted");
+  }
+  printf("pagefault test passed\n");
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -2061,6 +2077,8 @@ main(int argc, char *argv[])
   forktest();
   waitpidtest();
   bigdir(); // slow
+
+  pagefaulttest();
 
   uio();
 

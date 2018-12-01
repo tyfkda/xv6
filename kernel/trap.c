@@ -80,8 +80,14 @@ trap(struct trapframe *tf)
     lapiceoi();
     break;
   case T_PGFLT:
-    cprintf("Null pointer exception\n");
-    kill(myproc()->pid);
+    cprintf("Page fault for address %p at %p\n", (void*)rcr2(), tf->eip);
+    if(myproc() == 0 || (tf->cs&3) == 0){
+      // In kernel, page fault might be happened when user passes illegal address to syscall.
+      // TODO: Stop calling panic function, and exit outer trapframe with error code.
+      panic("Page fault");
+    } else {
+      myproc()->killed = 1;
+    }
     break;
 
   //PAGEBREAK: 13
@@ -98,6 +104,7 @@ trap(struct trapframe *tf)
             myproc()->pid, myproc()->name, tf->trapno,
             tf->err, cpuid(), tf->eip, rcr2());
     myproc()->killed = 1;
+    break;
   }
 
   // Force process exit if it has been killed and is in user space.

@@ -260,7 +260,11 @@ fs/bin/%: obj/user/%.o obj/ulib/ulib.a
 
 out/mkfs: tools/mkfs.c tools/hostfsaux.c tools/hostfsaux.h kernel/fs.h
 	@mkdir -p out
-	gcc -Werror -Wall -o $@ tools/mkfs.c tools/hostfsaux.c
+	gcc -Werror -Wall -o $@ $< tools/hostfsaux.c
+
+out/fsutil: tools/fsutil.c tools/hostfsaux.c tools/hostfsaux.h
+	@mkdir -p out
+	gcc -Werror -Wall -iquote include -o $@ $< tools/hostfsaux.c
 
 # Prevent deletion of intermediate files, e.g. cat.o, after first build, so
 # that disk image changes after first build are persistent until clean.  More

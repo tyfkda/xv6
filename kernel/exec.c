@@ -22,7 +22,7 @@ execelf(const char *progname, const char *path, const char* const *argv,
 {
   const char *s, *last;
   int i, off;
-  uintp argc, envc, sz, sp, ustack[4+MAXARG+1+MAXENV+1];
+  uintp argc, envc, start, sz, sp, ustack[4+MAXARG+1+MAXENV+1];
   struct inode *ip;
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
@@ -35,7 +35,7 @@ execelf(const char *progname, const char *path, const char* const *argv,
     goto bad;
 
   // Load program into memory.
-  sz = 0;
+  start = sz = 0;
   for(i=0, off=elf->phoff; i<elf->phnum; i++, off+=sizeof(ph)){
     if(readi(ip, &ph, off, sizeof(ph)) != sizeof(ph))
       goto bad;
@@ -48,7 +48,7 @@ execelf(const char *progname, const char *path, const char* const *argv,
     if(ph.vaddr + ph.memsz < ph.vaddr)
       goto bad;
     if (sz == 0)
-      sz = ph.vaddr;
+      start = sz = ph.vaddr;
     if((sz = allocuvm(pgdir, sz, ph.vaddr + ph.memsz)) == 0)
       goto bad;
     if(loaduvm(pgdir, (char*)ph.vaddr, ip, ph.off, ph.filesz) < 0)
@@ -112,6 +112,7 @@ execelf(const char *progname, const char *path, const char* const *argv,
   // Commit to the user image.
   oldpgdir = curproc->pgdir;
   curproc->pgdir = pgdir;
+  curproc->startaddr = start;
   curproc->sz = sz;
   curproc->tf->eip = elf->entry;  // main
   curproc->tf->esp = sp;

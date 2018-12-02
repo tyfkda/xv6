@@ -55,7 +55,7 @@ fetchstr(uintp addr, const char **pp)
   const char *s, *ep;
   struct proc *curproc = myproc();
 
-  if(addr < PGSIZE || addr >= curproc->sz)  // TODO: Store proc start address into proc struct and use it.
+  if(addr < curproc->startaddr || addr >= curproc->sz)
     return -1;
   *pp = (const char*)addr;
   ep = (const char*)curproc->sz;

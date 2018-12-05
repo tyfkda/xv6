@@ -16,8 +16,7 @@ readelfhdr(struct inode *ip, struct elfhdr *elf)
 }
 
 int
-execelf(const char *progname, const char *path, const char* const *argv,
-        const char *envp[],
+execelf(const char *progname, const char* const *argv, const char *envp[],
         const struct elfhdr *elf, struct inode **pip, pde_t **ppgdir)
 {
   const char *s, *last;
@@ -170,7 +169,7 @@ execshebang(const char *path, const char * const *argv, const char *envp[],
     if (argv[i] == 0)
       break;
   }
-  return execelf(path, shebang, argv2, envp, &elf, pip, ppgdir);
+  return execelf(path, argv2, envp, &elf, pip, ppgdir);
 
 bad:
   return -1;
@@ -196,7 +195,7 @@ execve(const char *path, const char*argv[], const char *envp[])
 
   int result;
   if (readelfhdr(ip, &elf)) {
-    result = execelf(path, path, argv, envp, &elf, &ip, &pgdir);
+    result = execelf(path, argv, envp, &elf, &ip, &pgdir);
   } else {
     result = execshebang(path, argv, envp, &ip, &pgdir);
   }

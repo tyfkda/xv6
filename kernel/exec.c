@@ -69,8 +69,10 @@ execelf(const char *progname, const char* const *argv, const char *envp[],
   for(argc = 0; argv[argc] != 0; ++argc) {
     if(argc >= MAXARG)
       goto bad;
-    sp = (sp - (strlen(argv[argc]) + 1)) & ~(sizeof(uintp)-1);
-    if(copyout(pgdir, sp, argv[argc], strlen(argv[argc]) + 1) < 0)
+    const char* arg = argv[argc];
+    size_t len = strlen(arg);
+    sp = (sp - (len + 1)) & ~(sizeof(uintp)-1);
+    if(copyout(pgdir, sp, arg, len + 1) < 0)
       goto bad;
     ustack[4+argc] = sp;
   }
@@ -79,8 +81,10 @@ execelf(const char *progname, const char* const *argv, const char *envp[],
   for(envc = 0; envp[envc] != 0; ++envc) {
     if(argc >= MAXENV)
       goto bad;
-    sp = (sp - (strlen(envp[envc]) + 1)) & ~(sizeof(uintp)-1);
-    if (copyout(pgdir, sp, envp[envc], strlen(envp[envc]) + 1) < 0)
+    const char* env = envp[envc];
+    size_t len = strlen(env);
+    sp = (sp - (len + 1)) & ~(sizeof(uintp)-1);
+    if (copyout(pgdir, sp, env, len + 1) < 0)
        goto bad;
 
     // store the address of a variable

@@ -1,19 +1,14 @@
-OUTPUT_FORMAT(elf64-x86-64)
 ENTRY(_start)
 
 MEMORY {
-    rom (rx) : ORIGIN = 0, LENGTH = 1024K
-    ram (rwx) : ORIGIN = 64K, LENGTH = 1024K
+    rom (rx) : ORIGIN = 0x1000, LENGTH = 1024K
 }
 
 SECTIONS {
     .text : {
         *(.text.startup .text.startup.*)
         *(.text)
-    } > rom
 
-    .data : {
-        *(.data)
         *(.rodata*)
 
         . = ALIGN(16);
@@ -31,5 +26,9 @@ SECTIONS {
         *(.fini_array)
         __fini_array_end = .;
         . = ALIGN(16);
-    } > ram AT > rom
+    } > rom
+
+    .data : {
+        *(.data)
+    } > rom
 }

@@ -2079,6 +2079,33 @@ void modifycodetest()
   printf("modifycode test passed\n");
 }
 
+void runonstacktest()
+{
+  static unsigned char kCode[] = {
+    0xb8, 0x2a, 0x00, 0x00, 0x00,  // mov $42,%eax
+    0xc3,  // retq
+  };
+
+  printf("runonstack test\n");
+  pid_t pid = fork();
+  if (pid < 0)
+    panic("fork failed");
+  if (pid == 0) {
+    unsigned long codeArea[(sizeof(kCode) + sizeof(unsigned long) - 1) / sizeof(unsigned long)];
+    memcpy(codeArea, kCode, sizeof(kCode));
+
+    int (*f)(void) = (int (*)(void))codeArea;
+    int result = f();
+    printf("runonstack test: result=%d\n", result);
+    exit(0);
+  }
+  int res = 0;
+  if (wait(&res) < 0 || res == 0) {
+    panic("runonstack test: Running code on stack should not be permitted");
+  }
+  printf("runonstack test passed\n");
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -2090,6 +2117,8 @@ main(int argc, char *argv[])
   }
   close(open("usertests.ran", O_CREAT));
 
+  runonstacktest();
+#if 0
   argptest();
   createdelete();
   linkunlink();
@@ -2138,6 +2167,7 @@ main(int argc, char *argv[])
   uio();
 
   execvetest();
+#endif
   exectest();
 
   return 0;

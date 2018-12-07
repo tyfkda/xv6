@@ -140,7 +140,7 @@ userinit(void)
 #endif
   p->tf->eflags = FL_IF;
   p->tf->eip = START_ADDRESS;  // beginning of initcode.S: entry point = start address.
-  p->tf->esp = START_ADDRESS + PGSIZE;
+  p->tf->esp = USTACKBOTTOM;
   p->startaddr = START_ADDRESS;
   p->sz = START_ADDRESS + PGSIZE;
 

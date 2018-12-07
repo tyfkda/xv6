@@ -57,13 +57,10 @@ execelf(const char *progname, const char* const *argv, const char *envp[],
   end_op();
   ip = *pip = 0;
 
-  // Allocate two pages at the next page boundary.
-  // Make the first inaccessible.  Use the second as the user stack.
-  sz = PGROUNDUP(sz);
-  if((sz = allocuvm(pgdir, sz, sz + 2*PGSIZE)) == 0)
+  // Allocate user stack
+  sp = USTACKBOTTOM;
+  if((allocuvm(pgdir, USTACKTOP, USTACKBOTTOM)) == 0)
     goto bad;
-  clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
-  sp = sz;
 
   // Push argument strings, prepare rest of stack in ustack.
   for(argc = 0; argv[argc] != 0; ++argc) {

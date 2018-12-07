@@ -13,13 +13,17 @@
 // library system call function. The saved user %esp points
 // to a saved program counter, and then the first argument.
 
+static inline int invaliduaddr(uintp addr) {
+  struct proc *curproc = myproc();
+  return ((addr < USTACKTOP || addr >= USTACKBOTTOM) &&
+          (addr < curproc->startaddr || addr >= curproc->sz));
+}
+
 // Fetch the int at addr from the current process.
 int
 fetchint(uintp addr, int *ip)
 {
-  struct proc *curproc = myproc();
-
-  if(addr >= curproc->sz || addr+sizeof(int) > curproc->sz)
+  if(invaliduaddr(addr) || invaliduaddr(addr+sizeof(int)-1))
     return -1;
   *ip = *(int*)(addr);
   return 0;
@@ -29,9 +33,7 @@ fetchint(uintp addr, int *ip)
 int
 fetchlong(uintp addr, long *ip)
 {
-  struct proc *curproc = myproc();
-
-  if(addr >= curproc->sz || addr+sizeof(long) > curproc->sz)
+  if(invaliduaddr(addr) || invaliduaddr(addr+sizeof(long)-1))
     return -1;
   *ip = *(long*)(addr);
   return 0;
@@ -40,7 +42,7 @@ fetchlong(uintp addr, long *ip)
 int
 fetchuintp(uintp addr, uintp *ip)
 {
-  if(addr >= myproc()->sz || addr+sizeof(uintp) > myproc()->sz)
+  if(invaliduaddr(addr) || invaliduaddr(addr+sizeof(uintp)-1))
     return -1;
   *ip = *(uintp*)(addr);
   return 0;
@@ -55,10 +57,10 @@ fetchstr(uintp addr, const char **pp)
   const char *s, *ep;
   struct proc *curproc = myproc();
 
-  if(addr < curproc->startaddr || addr >= curproc->sz)
+  if(invaliduaddr(addr))
     return -1;
   *pp = (const char*)addr;
-  ep = (const char*)curproc->sz;
+  ep = addr >= USTACKTOP ? (const char*)USTACKBOTTOM : (const char*)curproc->sz;
   for(s = *pp; s < ep; s++){
     if(*s == '\0')
       return s - *pp;
@@ -131,11 +133,10 @@ int
 argptr(int n, char **pp, int size)
 {
   uintp i;
-  struct proc *curproc = myproc();
 
   if(arguintp(n, &i) < 0)
     return -1;
-  if(size < 0 || i >= curproc->sz || i+size > curproc->sz)
+  if(size < 0 || invaliduaddr(i) || invaliduaddr(i+size-1))
     return -1;
   *pp = (char*)i;
   return 0;

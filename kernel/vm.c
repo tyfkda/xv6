@@ -193,6 +193,9 @@ inituvm(pde_t *pgdir, char *init, uint sz, uintp addr)
   memset(mem, 0, PGSIZE);
   mappages(pgdir, (void*)addr, PGSIZE, V2P(mem), PTE_W|PTE_U);
   memmove(mem, init, sz);
+
+  // Stack
+  allocuvm(pgdir, USTACKTOP, USTACKBOTTOM);
 }
 
 // Load a program segment into pgdir.  addr must be page-aligned
@@ -316,28 +319,41 @@ clearpteu(pde_t *pgdir, char *uva)
 // Given a parent process's page table, create a copy
 // of it for a child.
 pde_t*
-copyuvm(pde_t *pgdir, uintp startaddr, uint sz)
+copyuvm(pde_t *pgdir, uintp startaddr, uintp endaddr)
 {
   pde_t *d;
   pte_t *pte;
   uintp pa, i, flags;
   char *mem;
+  int j;
+
+  struct {
+    uintp start;
+    uintp end;
+  } blocks[] = {
+    {startaddr, endaddr},
+    {USTACKTOP, USTACKBOTTOM},
+  };
 
   if((d = setupkvm()) == 0)
     return 0;
-  for(i = startaddr; i < sz; i += PGSIZE){
-    if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
-      panic("copyuvm: pte should exist");
-    if(!(*pte & PTE_P))
-      panic("copyuvm: page not present");
-    pa = PTE_ADDR(*pte);
-    flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto bad;
-    memmove(mem, (char*)P2V(pa), PGSIZE);
-    if(mappages(d, (void*)i, PGSIZE, V2P(mem), flags) < 0) {
-      kfree(mem);
-      goto bad;
+
+  for(j = 0; j < NELEM(blocks); ++j) {
+    uintp end = blocks[j].end;
+    for(i = blocks[j].start; i < end; i += PGSIZE){
+      if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
+        panic("copyuvm: pte should exist");
+      if(!(*pte & PTE_P))
+        panic("copyuvm: page not present");
+      pa = PTE_ADDR(*pte);
+      flags = PTE_FLAGS(*pte);
+      if((mem = kalloc()) == 0)
+        goto bad;
+      memmove(mem, (char*)P2V(pa), PGSIZE);
+      if(mappages(d, (void*)i, PGSIZE, V2P(mem), flags) < 0) {
+        kfree(mem);
+        goto bad;
+      }
     }
   }
   return d;

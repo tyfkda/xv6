@@ -79,13 +79,13 @@ execelf(const char *progname, const char* const *argv, const char *envp[],
   ustack[4+argc] = 0;
 
   for(envc = 0; envp[envc] != 0; ++envc) {
-    if(argc >= MAXENV)
+    if(envc >= MAXENV)
       goto bad;
     const char* env = envp[envc];
     size_t len = strlen(env);
     sp = (sp - (len + 1)) & ~(sizeof(uintp)-1);
     if (copyout(pgdir, sp, env, len + 1) < 0)
-       goto bad;
+      goto bad;
 
     // store the address of a variable
     ustack[4 + argc + 1 + envc] = sp;

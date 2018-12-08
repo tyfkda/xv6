@@ -171,7 +171,7 @@ out/bootblock: kernel/bootasm.S kernel/bootmain.c
 	@mkdir -p out
 	$(CC) -fno-builtin -fno-pic -m32 -nostdinc -Iinclude -O -o out/bootmain.o -c kernel/bootmain.c
 	$(CC) -fno-builtin -fno-pic -m32 -nostdinc -Iinclude -o out/bootasm.o -c kernel/bootasm.S
-	$(LD) -m elf_i386 -nodefaultlibs -N -e start -Ttext 0x7C00 -o out/bootblock.o out/bootasm.o out/bootmain.o
+	$(LD) -m elf_i386 -nodefaultlibs -e start -Ttext 0x7C00 -o out/bootblock.o out/bootasm.o out/bootmain.o
 	$(OBJDUMP) -S out/bootblock.o > out/bootblock.asm
 	$(OBJCOPY) -S -O binary -j .text out/bootblock.o $@
 	tools/sign.pl $@
@@ -179,7 +179,7 @@ out/bootblock: kernel/bootasm.S kernel/bootmain.c
 out/entryother: kernel/entryother.S
 	@mkdir -p out
 	$(CC) $(CFLAGS) -fno-pic -nostdinc -I. -o out/entryother.o -c kernel/entryother.S
-	$(LD) $(LDFLAGS) -N -e start -Ttext 0x7000 -o out/bootblockother.o out/entryother.o
+	$(LD) $(LDFLAGS) -e start -Ttext 0x7000 -o out/bootblockother.o out/entryother.o
 	$(OBJCOPY) -S -O binary -j .text out/bootblockother.o $@
 	$(OBJDUMP) -S out/bootblockother.o > out/entryother.asm
 
@@ -187,7 +187,7 @@ INITCODESRC = kernel/initcode$(BITS).S
 out/initcode: $(INITCODESRC)
 	@mkdir -p out
 	$(CC) $(CFLAGS) -nostdinc -I. -o out/initcode.o -c $(INITCODESRC)
-	$(LD) $(LDFLAGS) -N -e start -Ttext 0x10000 -o out/initcode.out out/initcode.o
+	$(LD) $(LDFLAGS) -e start -Ttext 0x10000 -o out/initcode.out out/initcode.o
 	$(OBJCOPY) -S -O binary out/initcode.out $@
 	$(OBJDUMP) -S out/initcode.out > out/initcode.asm
 
@@ -246,7 +246,7 @@ APPLS = ulib/xv6app.ls
 
 fs/bin/%: obj/user/%.o obj/ulib/ulib.a
 	@mkdir -p fs/bin out
-	$(LD) $(LDFLAGS) -N -T $(APPLS) -o $@ $^
+	$(LD) $(LDFLAGS) -T $(APPLS) -o $@ $^
 	$(OBJDUMP) -S $@ > out/$*.asm
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/$*.sym
 	strip $@

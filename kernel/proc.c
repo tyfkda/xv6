@@ -141,8 +141,8 @@ userinit(void)
   p->tf->eflags = FL_IF;
   p->tf->eip = START_ADDRESS;  // beginning of initcode.S: entry point = start address.
   p->tf->esp = USTACKBOTTOM;
-  p->startaddr = START_ADDRESS;
-  p->sz = START_ADDRESS + PGSIZE;
+  p->textstart = START_ADDRESS;
+  p->textend = START_ADDRESS + PGSIZE;
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
@@ -166,15 +166,19 @@ growproc(int n)
   uint sz;
   struct proc *curproc = myproc();
 
-  sz = curproc->sz;
+  sz = curproc->dataend;
   if(n > 0){
+    if (sz == 0)
+      curproc->datastart = sz = 0x10000;  // Default data address.
     if((sz = allocuvm(curproc->pgdir, sz, sz + n)) == 0)
       return -1;
   } else if(n < 0){
+    if (sz == 0)
+      return -1;
     if((sz = deallocuvm(curproc->pgdir, sz, sz + n)) == 0)
       return -1;
   }
-  curproc->sz = sz;
+  curproc->dataend = sz;
   switchuvm(curproc);
   return 0;
 }
@@ -195,14 +199,17 @@ fork(void)
   }
 
   // Copy process state from proc.
-  if((np->pgdir = copyuvm(curproc->pgdir, curproc->startaddr, curproc->sz)) == 0){
+  if((np->pgdir = copyuvm(curproc->pgdir, curproc->textstart, curproc->textend,
+                          curproc->datastart, curproc->dataend)) == 0){
     kfree(np->kstack);
     np->kstack = 0;
     np->state = UNUSED;
     return -1;
   }
-  np->startaddr = curproc->startaddr;
-  np->sz = curproc->sz;
+  np->textstart = curproc->textstart;
+  np->textend = curproc->textend;
+  np->datastart = curproc->datastart;
+  np->dataend = curproc->dataend;
   np->parent = curproc;
   *np->tf = *curproc->tf;
   np->exitcode = 0xbe;  // Initialize exitcode with an illegal value.

@@ -319,7 +319,7 @@ clearpteu(pde_t *pgdir, char *uva)
 // Given a parent process's page table, create a copy
 // of it for a child.
 pde_t*
-copyuvm(pde_t *pgdir, uintp startaddr, uintp endaddr)
+copyuvm(pde_t *pgdir, uintp textstart, uintp textend, uintp datastart, uintp dataend)
 {
   pde_t *d;
   pte_t *pte;
@@ -331,7 +331,8 @@ copyuvm(pde_t *pgdir, uintp startaddr, uintp endaddr)
     uintp start;
     uintp end;
   } blocks[] = {
-    {startaddr, endaddr},
+    {textstart, textend},
+    {datastart, dataend},
     {USTACKTOP, USTACKBOTTOM},
   };
 
@@ -340,6 +341,8 @@ copyuvm(pde_t *pgdir, uintp startaddr, uintp endaddr)
 
   for(j = 0; j < NELEM(blocks); ++j) {
     uintp end = blocks[j].end;
+    if (end == 0)
+      continue;
     for(i = blocks[j].start; i < end; i += PGSIZE){
       if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
         panic("copyuvm: pte should exist");

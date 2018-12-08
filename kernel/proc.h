@@ -59,8 +59,11 @@ enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 // Per-process state
 struct proc {
-  uintp startaddr;             // Start address
-  uintp sz;                    // Size of process memory (bytes)
+  uintp textstart;             // .text start address
+  uintp textend;               // .text end address
+  uintp datastart;             // .data start address
+  uintp dataend;               // .data end address
+
   pde_t* pgdir;                // Page table
   char *kstack;                // Bottom of kernel stack for this process
   enum procstate state;        // Process state

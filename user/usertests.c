@@ -2025,6 +2025,52 @@ void pagefaulttest()
   printf("pagefault test passed\n");
 }
 
+#pragma GCC push_options
+#pragma GCC optimize("O0")
+static int modifycodetestsub()
+{
+  // X32
+  //    5380:	55                   	push   %ebp
+  //    5381:	89 e5                	mov    %esp,%ebp
+  //  return 42;
+  //    5383:	b8 2a 00 00 00       	mov    $0x2a,%eax
+
+  // X64
+  //    4f50:	55                   	push   %rbp
+  //    4f51:	48 89 e5             	mov    %rsp,%rbp
+  //  return 42;
+  //    4f54:	b8 2a 00 00 00       	mov    $0x2a,%eax
+
+  return 42;
+}
+#pragma GCC pop_options
+
+void modifycodetest()
+{
+  printf("modifycode test\n");
+
+  pid_t pid = fork();
+  if (pid < 0)
+    panic("fork failed");
+  if (pid == 0) {
+#if X64
+    int* p = (int*)(((char*)modifycodetestsub) + 5);
+#else  // X32
+    int* p = (int*)(((char*)modifycodetestsub) + 4);
+#endif
+    *p = 1234;
+    int result = modifycodetestsub();
+    printf("modifycode test: result=%d\n", result);
+    exit(0);
+  }
+  int res = 0;
+  if (wait(&res) < 0 || res == 0) {
+    panic("modifycode test: Modifying code should not be permitted");
+  }
+
+  printf("modifycode test passed\n");
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -2079,6 +2125,7 @@ main(int argc, char *argv[])
   bigdir(); // slow
 
   pagefaulttest();
+  modifycodetest();
 
   uio();
 

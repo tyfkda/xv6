@@ -2106,6 +2106,33 @@ void runonstacktest()
   printf("runonstack test passed\n");
 }
 
+void runonallocmemtest()
+{
+  static unsigned char kCode[] = {
+    0xb8, 0x2a, 0x00, 0x00, 0x00,  // mov $42,%eax
+    0xc3,  // retq
+  };
+
+  printf("runonallocmem test\n");
+  pid_t pid = fork();
+  if (pid < 0)
+    panic("fork failed");
+  if (pid == 0) {
+    unsigned char* codeArea = malloc(sizeof(kCode));
+    memcpy(codeArea, kCode, sizeof(kCode));
+
+    int (*f)(void) = (int (*)(void))codeArea;
+    int result = f();
+    printf("runonallocmem test: result=%d\n", result);
+    exit(0);
+  }
+  int res = 0;
+  if (wait(&res) < 0 || res == 0) {
+    panic("runonallocmem test: Running code on allocated memory should not be permitted");
+  }
+  printf("runonallocmem test passed\n");
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -2118,6 +2145,7 @@ main(int argc, char *argv[])
   close(open("usertests.ran", O_CREAT));
 
   runonstacktest();
+  runonallocmemtest();
 #if 0
   argptest();
   createdelete();

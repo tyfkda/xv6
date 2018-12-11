@@ -303,17 +303,16 @@ freevm(pde_t *pgdir)
   kfree((char*)pgdir);
 }
 
-// Clear PTE_U on a page. Used to create an inaccessible
-// page beneath the user stack.
 void
-clearpteu(pde_t *pgdir, char *uva)
+setpteflags(pde_t *pgdir, uintp start, uintp end, int perm)
 {
-  pte_t *pte;
-
-  pte = walkpgdir(pgdir, uva, 0);
-  if(pte == 0)
-    panic("clearpteu");
-  *pte &= ~PTE_U;
+  perm |= PTE_P;
+  for(uintp p = PGROUNDDOWN(start); p < end; p += PGSIZE) {
+    pte_t *pte = walkpgdir(pgdir, (void*)p, 0);
+    if(pte == 0)
+      panic("setpteflags");
+    *pte = (*pte & ~((1 << PTXSHIFT) - 1)) | perm;
+  }
 }
 
 // Given a parent process's page table, create a copy

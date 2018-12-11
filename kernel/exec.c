@@ -61,10 +61,15 @@ execelf(const char *progname, const char* const *argv, const char *envp[],
       psz = &dataend;
     }
 
-    if((*psz = allocuvm(pgdir, *psz, ph.vaddr + ph.memsz)) == 0)
+    uintp start = *psz, end;
+    if((*psz = end = allocuvm(pgdir, start, ph.vaddr + ph.memsz)) == 0)
       goto bad;
     if(loaduvm(pgdir, (char*)ph.vaddr, ip, ph.off, ph.filesz) < 0)
       goto bad;
+
+    if (!(ph.flags & ELF_PROG_FLAG_WRITE)) {
+      setpteflags(pgdir, start, end, PTE_U);  // Drop PTE_W flag.
+    }
   }
   iunlockput(ip);
   end_op();

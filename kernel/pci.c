@@ -2,7 +2,7 @@
 #include "x86.h"
 #include "defs.h"
 #include "pciregisters.h"
-//#include "e1000.h"
+#include "e1000.h"
 //#include "nic.h"
 
 static const char *pci_class[] = {"Unclassified device", "Mass storage controller", "Network controller", "Display controller", "Multimedia device", "Memory controller", "Bridge device"};
@@ -107,7 +107,6 @@ void pci_enable_device(struct pci_func *f) {
   }
 }
 
-#if 0
 static int e1000_attach(struct pci_func *pcif) {
   pci_enable_device(pcif);
   struct nic_device nd;
@@ -117,10 +116,9 @@ static int e1000_attach(struct pci_func *pcif) {
   register_device(nd);
   return 0;
 }
-#endif
 
 struct pci_driver pci_attach_vendor_based[] = {
-//  { 0x8086, 0x100e, e1000_attach},
+  { 0x8086, 0x100e, e1000_attach},
   { 0, 0, 0 },
 };
 

@@ -14,3 +14,9 @@ typedef unsigned int  uintp;
 #endif
 
 typedef uintp pde_t;
+
+
+
+typedef uchar uint8_t;
+typedef ushort uint16_t;
+typedef uint32 uint32_t;

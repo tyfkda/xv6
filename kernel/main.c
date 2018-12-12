@@ -3,6 +3,7 @@
 #include "param.h"
 #include "memlayout.h"
 #include "mmu.h"
+#include "pci.h"
 #include "proc.h"
 #include "x86.h"
 
@@ -35,6 +36,7 @@ main(void)
   ideinit();       // disk
   startothers();   // start other processors
   kinit2(P2V(4*1024*1024), P2V(PHYSTOP)); // must come after startothers()
+  pci_init();      // PCI devices
   userinit();      // first user process
   mpmain();        // finish this processor's setup
 }

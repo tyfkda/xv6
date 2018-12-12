@@ -16,6 +16,7 @@ endif
 OPT ?= -O2
 
 OBJS := \
+	obj/knl/pci.o\
 	obj/knl/bio.o\
 	obj/knl/commonstr.o\
 	obj/knl/console.o\

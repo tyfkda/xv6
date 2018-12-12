@@ -16,7 +16,8 @@
 static inline int invaliduaddr(uintp addr) {
   struct proc *curproc = myproc();
   return ((addr < USTACKTOP || addr >= USTACKBOTTOM) &&
-          (addr < curproc->startaddr || addr >= curproc->sz));
+          (addr < curproc->textstart || addr >= curproc->textend) &&
+          (addr < curproc->datastart || addr >= curproc->dataend));
 }
 
 // Fetch the int at addr from the current process.
@@ -57,10 +58,16 @@ fetchstr(uintp addr, const char **pp)
   const char *s, *ep;
   struct proc *curproc = myproc();
 
-  if(invaliduaddr(addr))
+  if (addr >= USTACKTOP && addr < USTACKBOTTOM)
+    ep = (const char*)USTACKBOTTOM;
+  else if (addr >= curproc->textstart && addr < curproc->textend)
+    ep = (const char*)curproc->textend;
+  else if (addr >= curproc->datastart && addr < curproc->dataend)
+    ep = (const char*)curproc->dataend;
+  else
     return -1;
+
   *pp = (const char*)addr;
-  ep = addr >= USTACKTOP ? (const char*)USTACKBOTTOM : (const char*)curproc->sz;
   for(s = *pp; s < ep; s++){
     if(*s == '\0')
       return s - *pp;

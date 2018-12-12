@@ -303,23 +303,22 @@ freevm(pde_t *pgdir)
   kfree((char*)pgdir);
 }
 
-// Clear PTE_U on a page. Used to create an inaccessible
-// page beneath the user stack.
 void
-clearpteu(pde_t *pgdir, char *uva)
+setpteflags(pde_t *pgdir, uintp start, uintp end, int perm)
 {
-  pte_t *pte;
-
-  pte = walkpgdir(pgdir, uva, 0);
-  if(pte == 0)
-    panic("clearpteu");
-  *pte &= ~PTE_U;
+  perm |= PTE_P;
+  for(uintp p = PGROUNDDOWN(start); p < end; p += PGSIZE) {
+    pte_t *pte = walkpgdir(pgdir, (void*)p, 0);
+    if(pte == 0)
+      panic("setpteflags");
+    *pte = (*pte & ~((1 << PTXSHIFT) - 1)) | perm;
+  }
 }
 
 // Given a parent process's page table, create a copy
 // of it for a child.
 pde_t*
-copyuvm(pde_t *pgdir, uintp startaddr, uintp endaddr)
+copyuvm(pde_t *pgdir, uintp textstart, uintp textend, uintp datastart, uintp dataend)
 {
   pde_t *d;
   pte_t *pte;
@@ -331,7 +330,8 @@ copyuvm(pde_t *pgdir, uintp startaddr, uintp endaddr)
     uintp start;
     uintp end;
   } blocks[] = {
-    {startaddr, endaddr},
+    {textstart, textend},
+    {datastart, dataend},
     {USTACKTOP, USTACKBOTTOM},
   };
 
@@ -340,6 +340,8 @@ copyuvm(pde_t *pgdir, uintp startaddr, uintp endaddr)
 
   for(j = 0; j < NELEM(blocks); ++j) {
     uintp end = blocks[j].end;
+    if (end == 0)
+      continue;
     for(i = blocks[j].start; i < end; i += PGSIZE){
       if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
         panic("copyuvm: pte should exist");

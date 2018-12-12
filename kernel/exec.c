@@ -21,7 +21,8 @@ execelf(const char *progname, const char* const *argv, const char *envp[],
 {
   const char *s, *last;
   int i, off;
-  uintp argc, envc, start, sz, sp, ustack[4+MAXARG+1+MAXENV+1];
+  uintp argc, envc, sp, ustack[4+MAXARG+1+MAXENV+1];
+  uintp textstart, textend, datastart, dataend;
   struct inode *ip;
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
@@ -34,7 +35,7 @@ execelf(const char *progname, const char* const *argv, const char *envp[],
     goto bad;
 
   // Load program into memory.
-  start = sz = 0;
+  textstart = textend = datastart = dataend = 0;
   for(i=0, off=elf->phoff; i<elf->phnum; i++, off+=sizeof(ph)){
     if(readi(ip, &ph, off, sizeof(ph)) != sizeof(ph))
       goto bad;
@@ -46,12 +47,29 @@ execelf(const char *progname, const char* const *argv, const char *envp[],
       goto bad;
     if(ph.vaddr + ph.memsz < ph.vaddr)
       goto bad;
-    if (sz == 0)
-      start = sz = ph.vaddr;
-    if((sz = allocuvm(pgdir, sz, ph.vaddr + ph.memsz)) == 0)
+
+    uintp *psz;
+    if (ph.flags & ELF_PROG_FLAG_EXEC) {  // Executable: .text
+      if (textend != 0)
+        goto bad;
+      textstart = textend = ph.vaddr;
+      psz = &textend;
+    } else {  // Other: .data
+      if (dataend != 0)
+        goto bad;
+      datastart = dataend = ph.vaddr;
+      psz = &dataend;
+    }
+
+    uintp start = *psz, end;
+    if((*psz = end = allocuvm(pgdir, start, ph.vaddr + ph.memsz)) == 0)
       goto bad;
     if(loaduvm(pgdir, (char*)ph.vaddr, ip, ph.off, ph.filesz) < 0)
       goto bad;
+
+    if (!(ph.flags & ELF_PROG_FLAG_WRITE)) {
+      setpteflags(pgdir, start, end, PTE_U);  // Drop PTE_W flag.
+    }
   }
   iunlockput(ip);
   end_op();
@@ -112,8 +130,10 @@ execelf(const char *progname, const char* const *argv, const char *envp[],
   // Commit to the user image.
   oldpgdir = curproc->pgdir;
   curproc->pgdir = pgdir;
-  curproc->startaddr = start;
-  curproc->sz = sz;
+  curproc->textstart = textstart;
+  curproc->textend = textend;
+  curproc->datastart = datastart;
+  curproc->dataend = dataend;
   curproc->tf->eip = elf->entry;  // main
   curproc->tf->esp = sp;
   switchuvm(curproc);

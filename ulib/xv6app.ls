@@ -2,6 +2,7 @@ ENTRY(_start)
 
 MEMORY {
     rom (rx) : ORIGIN = 0x1000, LENGTH = 1024K
+    ram (rw) : ORIGIN = 0x10000, LENGTH = 1024K
 }
 
 SECTIONS {
@@ -30,5 +31,11 @@ SECTIONS {
 
     .data : {
         *(.data)
-    } > rom
+    } > ram
+
+    .bss : {
+        *(.bss)
+        *(.bss.*)
+        *(COMMON)
+    } > ram
 }

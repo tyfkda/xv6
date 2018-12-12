@@ -58,9 +58,11 @@ sys_sbrk(void)
 
   if(arguintp(0, &n) < 0)
     return -1;
-  addr = myproc()->sz;
+  addr = myproc()->dataend;
   if(growproc(n) < 0)
     return -1;
+  if (addr == 0)
+    addr = myproc()->datastart;
   return addr;
 }
 

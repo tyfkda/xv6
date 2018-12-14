@@ -193,19 +193,19 @@ struct e1000 {
   int rbd_tail;
   char rbd_idle;
 
-  uint32_t iobase;
-  uint32_t membase;
+  uintp iobase;
+  uintp membase;
   uint8_t irq_line;
   uint8_t irq_pin;
   uint8_t mac_addr[6];
 };
 
 static void e1000_reg_write(uint32_t reg_addr, uint32_t value, struct e1000 *the_e1000) {
-  *(uint32_t*)(uintp)(the_e1000->membase + reg_addr) = value;
+  *(uint32_t*)(the_e1000->membase + reg_addr) = value;
 }
 
 static uint32_t e1000_reg_read(uint32_t reg_addr, struct e1000 *the_e1000) {
-  uint32_t value = *(uint32_t*)(uintp)(the_e1000->membase + reg_addr);
+  uint32_t value = *(uint32_t*)(the_e1000->membase + reg_addr);
   //cprintf("Read value 0x%x from E1000 I/O port 0x%x\n", value, reg_addr);
 
   return value;
@@ -251,7 +251,7 @@ int e1000_init(struct pci_func *pcif, void** driver, uint8_t *mac_addr) {
 
   for (int i = 0; i < 6; i++) {
     // I/O port numbers are 16 bits, so they should be between 0 and 0xffff.
-    if (pcif->reg_base[i] <= 0xffff) {
+    if ((uint32)pcif->reg_base[i] <= 0xffff) {
       the_e1000->iobase = pcif->reg_base[i];
       if(pcif->reg_size[i] != 64) {  // CSR is 64-byte
         panic("I/O space BAR size != 64");

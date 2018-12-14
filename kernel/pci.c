@@ -77,19 +77,26 @@ void pci_enable_device(struct pci_func *f) {
       continue;
 
     int regnum = PCI_MAPREG_NUM(bar);
-    uint32_t base, size;
+    uintp base;
+    uint32_t size;
     if (PCI_MAPREG_TYPE(rv) == PCI_MAPREG_TYPE_MEM) {
       if (PCI_MAPREG_MEM_TYPE(rv) == PCI_MAPREG_MEM_TYPE_64BIT)
         bar_width = 8;
 
       size = PCI_MAPREG_MEM_SIZE(rv);
       base = PCI_MAPREG_MEM_ADDR(oldv);
-      cprintf("mem region %d: %d bytes at 0x%x\n",
+#if X64
+      base |= -(1UL << 32);
+#endif
+      cprintf("mem region %d: %d bytes at 0x%p\n",
               regnum, size, base);
     } else {
       size = PCI_MAPREG_IO_SIZE(rv);
       base = PCI_MAPREG_IO_ADDR(oldv);
-      cprintf("io region %d: %d bytes at 0x%x\n",
+#if X64
+      base |= -(1UL << 32);
+#endif
+      cprintf("io region %d: %d bytes at 0x%p\n",
               regnum, size, base);
     }
 

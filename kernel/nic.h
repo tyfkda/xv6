@@ -22,6 +22,6 @@ struct nic_device {
 extern struct nic_device nic_devices[];
 
 void register_device(struct nic_device nd);
-int get_device(char* interface, struct nic_device** nd);
+int get_device(const char* interface, struct nic_device** nd);
 
 #endif

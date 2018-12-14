@@ -22,7 +22,7 @@ struct ethr_hdr {
   uint16_t padd;//This need not be here explicitly. Compiler automatically inserts padding. But since we are removing padding length from struct length while calculating length, lets keep it here explicitly.
 };
 
-int create_eth_arp_frame(uint8_t* smac, char* ipAddr, struct ethr_hdr *eth);
+int create_eth_arp_frame(uint8_t* smac, const char* ipAddr, struct ethr_hdr *eth);
 void unpack_mac(uchar* mac, char* mac_str);
 char int_to_hex (uint n);
 

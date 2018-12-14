@@ -42,7 +42,7 @@ void pack_mac(uchar* dest, char* src) {
   }
 }
 
-uint32_t get_ip (char* ip, uint len) {
+uint32_t get_ip (const char* ip, uint len) {
   uint ipv4  = 0;
   char arr[4];
   int n1 = 0;
@@ -79,7 +79,7 @@ uint32_t htonl(uint32_t v) {
   return htons(v >> 16) | (htons((uint16_t) v) << 16);
 }
 
-int create_eth_arp_frame(uint8_t* smac, char* ipAddr, struct ethr_hdr *eth) {
+int create_eth_arp_frame(uint8_t* smac, const char* ipAddr, struct ethr_hdr *eth) {
   cprintf("Create ARP frame\n");
   char* dmac = BROADCAST_MAC;
 

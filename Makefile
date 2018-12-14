@@ -19,7 +19,9 @@ OBJS := \
 	obj/knl/pci.o\
 	obj/knl/e1000.o\
 	obj/knl/nic.o\
+	obj/knl/arp.o\
 	obj/knl/arp_frame.o\
+	obj/knl/sysarp.o\
 	obj/knl/bio.o\
 	obj/knl/commonstr.o\
 	obj/knl/console.o\
@@ -270,6 +272,7 @@ out/fsutil: tools/fsutil.c tools/hostfsaux.c tools/hostfsaux.h
 .PRECIOUS: obj/ulib/%.o, obj/user/%.o
 
 UPROGS=\
+	fs/bin/arptest\
 	fs/bin/cat\
 	fs/bin/cp\
 	fs/bin/cpptest\

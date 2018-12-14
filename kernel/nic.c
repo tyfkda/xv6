@@ -3,7 +3,7 @@
 
 struct nic_device nic_devices[1];
 
-int get_device(char* interface, struct nic_device** nd) {
+int get_device(const char* interface, struct nic_device** nd) {
   cprintf("get device for interface=%s\n", interface);
   /**
    *TODO: Use interface name to fetch device details

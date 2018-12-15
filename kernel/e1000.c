@@ -225,10 +225,10 @@ static void udelay(unsigned int u)
 void e1000_send(void *driver, uint8_t *pkt, uint16_t length )
 {
   struct e1000 *e1000 = (struct e1000*)driver;
-  cprintf("e1000 driver: Sending packet of length:0x%x %x starting at physical address:0x%x\n", length, sizeof(struct ethr_hdr), V2P(e1000->tx_buf[e1000->tbd_tail]));
+  cprintf("e1000 driver: Sending packet of length:0x%x %x starting at physical address:0x%p\n", length, (int)sizeof(struct ethr_hdr), V2P(e1000->tx_buf[e1000->tbd_tail]));
   memset(e1000->tbd[e1000->tbd_tail], 0, sizeof(struct e1000_tbd));
   memmove((e1000->tx_buf[e1000->tbd_tail]), pkt, length);
-  e1000->tbd[e1000->tbd_tail]->addr = (uint64_t)(uint32_t)V2P(e1000->tx_buf[e1000->tbd_tail]);
+  e1000->tbd[e1000->tbd_tail]->addr = V2P(e1000->tx_buf[e1000->tbd_tail]);
   e1000->tbd[e1000->tbd_tail]->length = length;
   e1000->tbd[e1000->tbd_tail]->cmd = (E1000_TDESC_CMD_RS | E1000_TDESC_CMD_EOP | E1000_TDESC_CMD_IFCS);
   e1000->tbd[e1000->tbd_tail]->cso = 0;
@@ -251,12 +251,18 @@ int e1000_init(struct pci_func *pcif, void** driver, uint8_t *mac_addr) {
     // I/O port numbers are 16 bits, so they should be between 0 and 0xffff.
     if ((uint32_t)pcif->reg_base[i] <= 0xffff) {
       the_e1000->iobase = pcif->reg_base[i];
+#if X64  // See memlayout
+      the_e1000->iobase += DEVBASE - DEVSPACE;
+#endif
       if(pcif->reg_size[i] != 64) {  // CSR is 64-byte
         panic("I/O space BAR size != 64");
       }
       break;
     } else if (pcif->reg_base[i] > 0) {
       the_e1000->membase = pcif->reg_base[i];
+#if X64  // See memlayout
+      the_e1000->membase += DEVBASE - DEVSPACE;
+#endif
       if(pcif->reg_size[i] != (1<<17)) {  // CSR is 64-byte
         panic("Mem space BAR size != 128KB");
       }
@@ -393,4 +399,5 @@ cprintf("e1000:Interrupt enabled mask:0x%x\n", e1000_reg_read(E1000_IMS, the_e10
 }
 
 void e1000_recv(void *driver, uint8_t* pkt, uint16_t length) {
+  cprintf("e1000_recv: length=%d\n", length);
 }

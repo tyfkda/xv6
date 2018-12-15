@@ -85,9 +85,6 @@ void pci_enable_device(struct pci_func *f) {
 
       size = PCI_MAPREG_MEM_SIZE(rv);
       base = PCI_MAPREG_MEM_ADDR(oldv);
-#if X64  // XV6-64bit uses 0xFFFFFFFF_80000000~ (vm64.c)
-      base |= -(1UL << 32);
-#endif
       cprintf("mem region %d: %d bytes at 0x%p\n",
               regnum, size, base);
     } else {

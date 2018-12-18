@@ -222,7 +222,7 @@ static void udelay(unsigned int u)
     inb(0x84);
 }
 
-void e1000_send(void *driver, uint8_t *pkt, uint16_t length )
+void e1000_send(void *driver, const uint8_t *pkt, uint16_t length )
 {
   struct e1000 *e1000 = (struct e1000*)driver;
   cprintf("e1000 driver: Sending packet of length:0x%x %x starting at physical address:0x%p\n", length, (int)sizeof(struct ethr_hdr), V2P(e1000->tx_buf[e1000->tbd_tail]));
@@ -392,7 +392,6 @@ cprintf("e1000:Interrupt enabled mask:0x%x\n", e1000_reg_read(E1000_IMS, the_e10
   picenable(the_e1000->irq_line);
   ioapicenable(the_e1000->irq_line, 0);
   ioapicenable(the_e1000->irq_line, 1);
-
 
   *driver = the_e1000;
   return 0;

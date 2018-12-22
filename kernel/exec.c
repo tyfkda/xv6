@@ -86,7 +86,7 @@ execelf(const char *progname, const char* const *argv, const char *envp[],
       goto bad;
     const char* arg = argv[argc];
     size_t len = strlen(arg);
-    sp = (sp - (len + 1)) & ~(sizeof(uintp)-1);
+    sp -= len + 1;
     if(copyout(pgdir, sp, arg, len + 1) < 0)
       goto bad;
     ustack[4+argc] = sp;
@@ -98,7 +98,7 @@ execelf(const char *progname, const char* const *argv, const char *envp[],
       goto bad;
     const char* env = envp[envc];
     size_t len = strlen(env);
-    sp = (sp - (len + 1)) & ~(sizeof(uintp)-1);
+    sp -= len + 1;
     if (copyout(pgdir, sp, env, len + 1) < 0)
       goto bad;
 
@@ -106,6 +106,8 @@ execelf(const char *progname, const char* const *argv, const char *envp[],
     ustack[4 + argc + 1 + envc] = sp;
   }
   ustack[4 + argc + 1 + envc] = 0;
+
+  sp &= ~(sizeof(uintp)-1);
 
   ustack[0] = 0xffffffff;  // fake return PC
   ustack[1] = argc;

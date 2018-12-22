@@ -1,7 +1,6 @@
 #pragma once
 
 #include "types.h"
-#include "../commonsrc/commonsrc.h"
 
 struct buf;
 struct context;
@@ -153,6 +152,17 @@ void            acquiresleep(struct sleeplock*);
 void            releasesleep(struct sleeplock*);
 int             holdingsleep(struct sleeplock*);
 void            initsleeplock(struct sleeplock*, char*);
+
+// string.c
+int memcmp(const void *v1, const void *v2, int n);
+void* memmove(void*, const void*, int);
+void* memset(void*, int, int);
+char* safestrcpy(char*, const char*, int);
+char* strncpy(char*, const char*, int);
+char* strchr(const char*, char);
+int strncmp(const char*, const char*, int);
+int strlen(const char*);
+int atoi(const char *s);
 
 // syscall.c
 int             argint(int, int*);

@@ -17,7 +17,6 @@
 #include "proc.h"
 #include "x86.h"
 #include "input.h"
-#include "stdio.h"  // for sprintf
 #include "sys/ioctl.h"
 
 static void consputc(int);
@@ -231,6 +230,29 @@ scrollUp(int pos)
   return pos;
 }
 
+static char*
+putint(char*p, int x)
+{
+  if (x < 0) {
+    *p++ = '-';
+    x = -x;
+  }
+
+  char buf[sizeof(int) * 3 + 1];
+  char* q = buf;
+  for (int i = 0; i < sizeof(buf) - 1; ++i) {
+    *q++ = (x % 10) + '0';
+    x /= 10;
+    if (x <= 0)
+      break;
+  }
+  while (q > buf)
+    *p++ = *(--q);
+  // No nul-terminated.
+
+  return p;
+}
+
 static void
 cgaputc(int c)
 {
@@ -415,8 +437,13 @@ procescseq(uchar c)
         {
           int pos = getCursorPos();
           char buf[16];
-          snprintf(buf, sizeof(buf), "\x1b[%d;%dR", pos / SCRW + 1, pos % SCRW + 1);
-          inputwrite(&s_input, buf, strlen(buf));
+          // Build "\x1b[%d;%dR"
+          strncpy(buf, "\x1b[", sizeof(buf));
+          char* p = putint(buf + 2, pos / SCRW + 1);
+          *p++ = ';';
+          p = putint(buf + 2, pos / SCRW + 1);
+          *p++ = 'R';
+          inputwrite(&s_input, buf, p - buf);
         }
         break;
       }

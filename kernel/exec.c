@@ -90,7 +90,7 @@ execelf(const char *progname, const char* const *argv, const char *envp[],
     if(argc >= MAXARG)
       goto bad;
     const char* arg = argv[argc];
-    size_t len = strlen(arg);
+    int len = strlen(arg);
     sp -= len + 1;
     if(copyout(pgdir, sp, arg, len + 1) < 0)
       goto bad;
@@ -104,7 +104,7 @@ execelf(const char *progname, const char* const *argv, const char *envp[],
       if(envc >= MAXENV)
         goto bad;
       const char* env = envp[envc];
-      size_t len = strlen(env);
+      int len = strlen(env);
       sp -= len + 1;
       if (copyout(pgdir, sp, env, len + 1) < 0)
         goto bad;

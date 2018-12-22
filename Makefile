@@ -17,7 +17,6 @@ OPT ?= -O2
 
 OBJS := \
 	obj/knl/bio.o\
-	obj/knl/commonstr.o\
 	obj/knl/console.o\
 	obj/knl/exec.o\
 	obj/knl/file.o\
@@ -38,7 +37,7 @@ OBJS := \
 	obj/knl/proc.o\
 	obj/knl/sleeplock.o\
 	obj/knl/spinlock.o\
-	obj/knl/sprintf.o\
+	obj/knl/string.o\
 	obj/knl/swtch$(BITS).o\
 	obj/knl/syscall.o\
 	obj/knl/sysfile.o\
@@ -134,10 +133,6 @@ obj/knl/%.o: kernel/%.c
 	@mkdir -p obj/knl
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-obj/knl/%.o: commonsrc/%.c
-	@mkdir -p obj/knl
-	$(CC) $(CFLAGS) -c -o $@ $<
-
 obj/knl/%.o: kernel/%.S
 	@mkdir -p obj/knl
 	$(CC) $(ASFLAGS) -c -o $@ $<
@@ -158,10 +153,6 @@ obj/ulib/%.o: ulib/%.c
 obj/ulib/%.o: ulib/%.cpp
 	@mkdir -p obj/ulib
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
-
-obj/ulib/%.o: commonsrc/%.c
-	@mkdir -p obj/ulib
-	$(CC) $(CFLAGS) -c -o $@ $<
 
 obj/ulib/%.o: ulib/%.S
 	@mkdir -p obj/ulib
@@ -216,7 +207,6 @@ kernel/vectors.S: $(MKVECTORS)
 
 ULIBOBJS = \
 	obj/ulib/atexit.o\
-	obj/ulib/commonstr.o\
 	obj/ulib/cppaux.o\
 	obj/ulib/crt0.o\
 	obj/ulib/ctype.o\

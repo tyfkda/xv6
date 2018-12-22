@@ -19,9 +19,14 @@ int
 execelf(const char *progname, const char* const *argv, const char *envp[],
         const struct elfhdr *elf, struct inode **pip, pde_t **ppgdir)
 {
+#if X64
+#define SPIDX  (1)
+#else
+#define SPIDX  (4)
+#endif
   const char *s, *last;
   int i, off;
-  uintp argc, envc, sp, ustack[4+MAXARG+1+MAXENV+1];
+  uintp argc, envc, sp, ustack[SPIDX+MAXARG+1+MAXENV+1];
   uintp textstart, textend, datastart, dataend;
   struct inode *ip;
   struct proghdr ph;
@@ -89,9 +94,9 @@ execelf(const char *progname, const char* const *argv, const char *envp[],
     sp -= len + 1;
     if(copyout(pgdir, sp, arg, len + 1) < 0)
       goto bad;
-    ustack[4+argc] = sp;
+    ustack[SPIDX+argc] = sp;
   }
-  ustack[4+argc] = 0;
+  ustack[SPIDX+argc] = 0;
 
   for(envc = 0; envp[envc] != 0; ++envc) {
     if(envc >= MAXENV)
@@ -103,24 +108,25 @@ execelf(const char *progname, const char* const *argv, const char *envp[],
       goto bad;
 
     // store the address of a variable
-    ustack[4 + argc + 1 + envc] = sp;
+    ustack[SPIDX + argc + 1 + envc] = sp;
   }
-  ustack[4 + argc + 1 + envc] = 0;
+  ustack[SPIDX + argc + 1 + envc] = 0;
 
   sp &= ~(sizeof(uintp)-1);
 
   ustack[0] = 0xffffffff;  // fake return PC
+#if !X64
   ustack[1] = argc;
   ustack[2] = sp - (argc+1+envc+1)*sizeof(uintp);  // argv pointer
   ustack[3] = sp - (envc+1)*sizeof(uintp);  // env pointer
-#if X64
+#else
   myproc()->tf->rdi = argc;
   myproc()->tf->rsi = sp - (argc+1+envc+1)*sizeof(uintp);
   myproc()->tf->rdx = sp - (envc+1)*sizeof(uintp);
 #endif
 
-  sp -= (4+argc+1+envc+1) * sizeof(uintp);
-  if(copyout(pgdir, sp, ustack, (4+argc+1+envc+1)*sizeof(uintp)) < 0)
+  sp -= (SPIDX+argc+1+envc+1) * sizeof(uintp);
+  if(copyout(pgdir, sp, ustack, (SPIDX+argc+1+envc+1)*sizeof(uintp)) < 0)
     goto bad;
 
   // Save program name for debugging.

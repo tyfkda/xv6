@@ -187,7 +187,7 @@ void            seginit(void);
 void            kvmalloc(void);
 pde_t*          setupkvm(void);
 char*           uva2ka(pde_t*, char*);
-int             allocuvm(pde_t*, uint, uint);
+int             allocuvm(pde_t*, uintp, uintp);
 int             deallocuvm(pde_t*, uintp, uintp);
 void            freevm(pde_t*);
 void            inituvm(pde_t*, char*, uint, uintp);
@@ -196,7 +196,7 @@ pde_t*          copyuvm(pde_t*, uintp, uintp, uintp, uintp);
 void            switchuvm(struct proc*);
 void            switchkvm(void);
 int             copyout(pde_t*, uint, const void*, uint);
-void            setpteflags(pde_t*, uintp, uintp, int);
+void            setpteflags(pde_t*, uintp, uintp, uintp);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

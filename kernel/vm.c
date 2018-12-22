@@ -226,7 +226,7 @@ loaduvm(pde_t *pgdir, char *addr, struct inode *ip, uint offset, uint sz)
 // Allocate page tables and physical memory to grow process from oldsz to
 // newsz, which need not be page aligned.  Returns new size or 0 on error.
 int
-allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
+allocuvm(pde_t *pgdir, uintp oldsz, uintp newsz)
 {
   char *mem;
   uintp a;
@@ -304,7 +304,7 @@ freevm(pde_t *pgdir)
 }
 
 void
-setpteflags(pde_t *pgdir, uintp start, uintp end, int perm)
+setpteflags(pde_t *pgdir, uintp start, uintp end, uintp perm)
 {
   perm |= PTE_P;
   for(uintp p = PGROUNDDOWN(start); p < end; p += PGSIZE) {

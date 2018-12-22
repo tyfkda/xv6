@@ -98,17 +98,20 @@ execelf(const char *progname, const char* const *argv, const char *envp[],
   }
   ustack[SPIDX+argc] = 0;
 
-  for(envc = 0; envp[envc] != 0; ++envc) {
-    if(envc >= MAXENV)
-      goto bad;
-    const char* env = envp[envc];
-    size_t len = strlen(env);
-    sp -= len + 1;
-    if (copyout(pgdir, sp, env, len + 1) < 0)
-      goto bad;
+  envc = 0;
+  if (envp != 0) {
+    for(; envp[envc] != 0; ++envc) {
+      if(envc >= MAXENV)
+        goto bad;
+      const char* env = envp[envc];
+      size_t len = strlen(env);
+      sp -= len + 1;
+      if (copyout(pgdir, sp, env, len + 1) < 0)
+        goto bad;
 
-    // store the address of a variable
-    ustack[SPIDX + argc + 1 + envc] = sp;
+      // store the address of a variable
+      ustack[SPIDX + argc + 1 + envc] = sp;
+    }
   }
   ustack[SPIDX + argc + 1 + envc] = 0;
 

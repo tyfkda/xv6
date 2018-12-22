@@ -1,4 +1,5 @@
 # Initial process execs /init.
+# This code runs in user space.
 
 #include "syscall.h"
 #include "traps.h"
@@ -9,7 +10,7 @@
 start:
   mov $init, %rdi
   mov $argv, %rsi
-  mov $envp, %rdx
+  mov $0, %rdx  // envp
   mov $SYS_execve, %rax
   int $T_SYSCALL
 
@@ -23,18 +24,8 @@ exit:
 init:
   .string "/bin/init\0"
 
-# char init_env[] = "PATH=/bin\0";
-init_env:
-  .string "PATH=/bin\0"
-
 # char *argv[] = { init, 0 };
 .p2align 2
 argv:
   .quad init
-  .quad 0
-
-# char *envp[] = { init_env, 0 };
-.p2align 2
-envp:
-  .quad init_env
   .quad 0

@@ -456,17 +456,19 @@ sys_execve(void)
       return -1;
   }
 
-  for(i=0;; i++){
-    if(i >= MAXENV)
-      return -1;
-    if(fetchuintp(uenvp+sizeof(uintp)*i, &uenv) < 0)
-      return -1;
-    if(uenv == 0){
-      break;
+  if (uenvp != 0) {
+    for(i=0;; i++){
+      if(i >= MAXENV)
+        return -1;
+      if(fetchuintp(uenvp+sizeof(uintp)*i, &uenv) < 0)
+        return -1;
+      if(uenv == 0){
+        break;
+      }
+      const char* v;
+      if(fetchstr(uenv, &v) < 0)
+         return -1;
     }
-    const char* v;
-    if(fetchstr(uenv, &v) < 0)
-       return -1;
   }
 
   return execve(path, (const char**)uargv, (const char**)uenvp);

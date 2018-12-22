@@ -11,10 +11,11 @@
 extern void _sysexit(int);
 
 char *argv[] = { "/bin/sh", 0 };
+char *environ[] = { "PATH=/bin", 0 };
 
-void runsh(int dev, const char* devname, char** environ) __attribute__((noreturn));
+void runsh(int dev, const char* devname) __attribute__((noreturn));
 void
-runsh(int dev, const char* devname, char** environ)
+runsh(int dev, const char* devname)
 {
   int pid, wpid;
 
@@ -43,7 +44,7 @@ runsh(int dev, const char* devname, char** environ)
 }
 
 void
-_start(int argc, char* argv[], char** environ)
+_start(int argc, char* argv[])
 {
   static const char* devnames[] = {
     "console",
@@ -57,7 +58,7 @@ _start(int argc, char* argv[], char** environ)
       exit(1);
     }
     if (pid == 0)
-      runsh(i + 1, devnames[i], environ);
+      runsh(i + 1, devnames[i]);
   }
   for (int i = 0; i < 2; ++i) {
     wait(NULL);

@@ -8,7 +8,7 @@
 # exec(init, argv)
 .globl start
 start:
-  pushl $envp
+  pushl $0  // envp
   pushl $argv
   pushl $init
   pushl $0  // where caller pc would be
@@ -25,18 +25,8 @@ exit:
 init:
   .string "/bin/init\0"
 
-# char init_env[] = "PATH=/bin\0";
-init_env:
-  .string "PATH=/bin\0"
-
 # char *argv[] = { init, 0 };
 .p2align 2
 argv:
   .long init
-  .long 0
-
-# char *envp[] = { init_env, 0 };
-.p2align 2
-envp:
-  .long init_env
   .long 0

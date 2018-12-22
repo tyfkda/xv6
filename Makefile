@@ -38,7 +38,6 @@ OBJS := \
 	obj/knl/proc.o\
 	obj/knl/sleeplock.o\
 	obj/knl/spinlock.o\
-	obj/knl/sprintf.o\
 	obj/knl/swtch$(BITS).o\
 	obj/knl/syscall.o\
 	obj/knl/sysfile.o\

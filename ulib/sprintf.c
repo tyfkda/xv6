@@ -1,6 +1,6 @@
-#include "commonsrc.h"
-#include "sprintf.h"
 #include "stdint.h"  // uintptr_t
+#include "stdio.h"
+#include "string.h"
 
 #define NULL  ((void*)0)
 #define MIN(a, b)  ((a) < (b) ? (a) : (b))

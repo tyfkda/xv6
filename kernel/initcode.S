@@ -4,6 +4,8 @@
 #include "syscall.h"
 #include "traps.h"
 
+# Store load address at the top.
+  .long .
 
 # exec(init, argv)
 .globl start

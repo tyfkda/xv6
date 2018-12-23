@@ -122,7 +122,8 @@ userinit(void)
 {
   struct proc *p;
   extern char _binary_out_initcode_start[], _binary_out_initcode_size[];
-  const uintp START_ADDRESS = 0x10000;
+
+  uintp start_addr = *(uintp*)_binary_out_initcode_start;  // Extract start address from data.
 
   p = allocproc();
 
@@ -130,7 +131,7 @@ userinit(void)
   if((p->pgdir = setupkvm()) == 0)
     panic("userinit: out of memory?");
   inituvm(p->pgdir, _binary_out_initcode_start, (uintp)_binary_out_initcode_size,
-          START_ADDRESS);
+          start_addr);
   memset(p->tf, 0, sizeof(*p->tf));
   p->tf->cs = (SEG_UCODE << 3) | DPL_USER;
   p->tf->ds = (SEG_UDATA << 3) | DPL_USER;
@@ -139,10 +140,10 @@ userinit(void)
   p->tf->ss = p->tf->ds;
 #endif
   p->tf->eflags = FL_IF;
-  p->tf->eip = START_ADDRESS;  // beginning of initcode.S: entry point = start address.
+  p->tf->eip = start_addr + sizeof(uintp);  // beginning of initcode.S: entry point = start address + sizeof(uintp).
   p->tf->esp = USTACKBOTTOM;
-  p->textstart = START_ADDRESS;
-  p->textend = START_ADDRESS + PGSIZE;
+  p->textstart = start_addr;
+  p->textend = start_addr + PGSIZE;
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");

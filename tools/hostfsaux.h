@@ -9,6 +9,7 @@ int host_readopen(const char *path);
 int host_writeopen(const char *path);
 int host_readwriteopen(const char *path);
 int host_createopen(const char *path);
+int host_isfile(const char *path);
 size_t host_read(int fd, void *buf, size_t size);
 size_t host_write(int fd, const void *buf, size_t size);
 off_t host_lseek(int fd, off_t offset, int whence);

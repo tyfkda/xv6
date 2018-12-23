@@ -1,6 +1,7 @@
 #include "hostfsaux.h"
 #include <dirent.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <sys/stat.h>
 
 int host_readopen(const char *path) {
@@ -17,6 +18,17 @@ int host_readwriteopen(const char *path) {
 
 int host_createopen(const char *path) {
   return open(path, O_RDWR|O_CREAT, 0666);
+}
+
+int host_isfile(const char *path) {
+  struct stat st;
+  int res;
+  res = stat(path, &st);
+  if (res < 0) {
+    perror("host_isfile");
+    return 0;
+  }
+  return S_ISREG(st.st_mode);
 }
 
 size_t host_read(int fd, void *buf, size_t size) {

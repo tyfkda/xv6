@@ -403,7 +403,7 @@ static void putdirent(uint parent, uint inum, const char *name) {
   // Find space.
   struct dinode din;
   rinode(parent, &din);
-  struct dirent de;
+  struct ddirent de;
   for(uint off = 0; off < din.size; off += sizeof(de)){
     if(readi(&din, (char*)&de, off, sizeof(de)) != sizeof(de))
       panic("putdirent read");
@@ -540,7 +540,7 @@ static int
 isdirempty(struct dinode *dp)
 {
   int off;
-  struct dirent de;
+  struct ddirent de;
 
   for(off=2*sizeof(de); off<dp->size; off+=sizeof(de)){
     if(readi(dp, (char*)&de, off, sizeof(de)) != sizeof(de))
@@ -600,7 +600,7 @@ int
 dirlookup(struct dinode *din, const char *name, uint* poff)
 {
   uint off;
-  struct dirent de;
+  struct ddirent de;
 
   //if(dp->type != T_DIR)
   //  panic("dirlookup not DIR");
@@ -701,7 +701,7 @@ void doLs(const char* path) {
   case T_DIR:
     {
       uint off;
-      struct dirent de;
+      struct ddirent de;
       for(off = 0; off < ip.size; off += sizeof(de)){
         if(readi(&ip, (char*)&de, off, sizeof(de)) != sizeof(de))
           panic("dirlookup read");
@@ -847,7 +847,7 @@ void doRm(const char* path) {
     exit(1);
   }
 
-  struct dirent de;
+  struct ddirent de;
   memset(&de, 0, sizeof(de));
   if(writei(parent, &dp, (char*)&de, off, sizeof(de)) != sizeof(de))
     panic("unlink: writei");

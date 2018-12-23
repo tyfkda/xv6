@@ -18,6 +18,9 @@
 # define static_assert(a, b) do { switch (0) case 0: case (a): ; } while (0)
 #endif // static_assert
 
+#define FSSIZE       1000  // size of file system in blocks
+#define NINODES 200
+
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
 #ifndef FALSE
@@ -29,10 +32,15 @@
 
 #define DS  ('/')  // Directory separator
 
+#define DIVROUNDUP(x, n)  (((x) + (n) - 1) / (n))
+
+const int nlog = LOGSIZE;
+
 void iupdate(struct dinode *ip, uint inum);
 
 typedef enum {
   UNKNOWN = -1,
+  CREATE,
   LS,
   PUSH,
   PULL,
@@ -41,6 +49,7 @@ typedef enum {
 } SUBCMD;
 
 static const char* kSubCommands[] = {
+  "create",
   "ls",
   "push",
   "pull",
@@ -183,6 +192,22 @@ static void
 bfree(uint b)
 {
   wbmap(b, 0);
+}
+
+static void
+bfill(int used)
+{
+  uchar buf[BSIZE];
+  int i;
+
+  //printf("bfill: first %d blocks have been allocated\n", used);
+  assert(used < BSIZE*8);
+  bzero(buf, BSIZE);
+  for(i = 0; i < used; i++){
+    buf[i/8] |= 0x1 << (i % 8);
+  }
+  //printf("bfill: write bitmap block at sector %d\n", sb.bmapstart);
+  wsect(sb.bmapstart, buf);
 }
 
 // Inode content
@@ -891,6 +916,74 @@ void doPush(const char* srcPath, const char* dstPath) {
   putfile(parent, srcPath);
 }
 
+static void setup_superblock(int ninodes, int fssize) {
+  const int nbitmap = DIVROUNDUP(fssize, BSIZE * 8);
+  int nmeta;    // Number of meta blocks (boot, sb, nlog, inode, bitmap)
+  int nblocks;  // Number of data blocks
+  int ninodeblocks;
+
+  ninodeblocks = DIVROUNDUP(ninodes, IPB);
+
+  // 1 fs block = 1 disk sector
+  nmeta = 2 + nlog + ninodeblocks + nbitmap;
+
+  if ( nmeta > fssize ) {
+    fprintf(stderr, "nr-inodes: %u is too big.\n", ninodes);
+    exit(1);
+  }
+
+  nblocks = fssize - nmeta;
+
+  sb.size = xint(fssize);
+  sb.nblocks = xint(nblocks);
+  sb.ninodes = xint(ninodes);
+  sb.nlog = xint(nlog);
+  sb.logstart = xint(2);
+  sb.inodestart = xint(2 + nlog);
+  sb.bmapstart = xint(2 + nlog + ninodeblocks);
+
+  //printf("nmeta %d (boot, super, log blocks %u inode blocks %u(%u inodes), bitmap blocks %u) blocks %d total %d\n",
+  //       nmeta, nlog, ninodeblocks, ninodes, nbitmap, nblocks, fssize);
+}
+
+static void clear_all_sectors(int fssize) {
+  char zeroes[BSIZE];
+  int i;
+
+  memset(zeroes, 0, sizeof(zeroes));
+  for(i = 0; i < fssize; i++)
+    wsect(i, zeroes);
+}
+
+void createFs(const char*imgFn) {
+  fsfd = host_createopen(imgFn);
+  if (fsfd < 0) {
+    perror(imgFn);
+    exit(1);
+  }
+
+  setup_superblock(NINODES, FSSIZE);
+
+  clear_all_sectors(FSSIZE);
+
+  char buf[BSIZE];
+  memset(buf, 0, sizeof(buf));
+  memmove(buf, &sb, sizeof(sb));
+  wsect(1, buf);
+
+  // Fill meta blocks to be used
+  const int ninodeblocks = DIVROUNDUP(NINODES, IPB);
+  const int nbitmap = DIVROUNDUP(FSSIZE, BSIZE * 8);
+  int nmeta = xint(sb.logstart) + xint(sb.nlog) + xint(ninodeblocks) + nbitmap;
+  bfill(nmeta);
+
+  int rootino = iallocdir(ROOTINO, NULL);
+  assert(rootino == ROOTINO);
+
+  host_close(fsfd);
+  fsfd = -1;
+}
+
 int main(int argc, char *argv[]) {
   static_assert(sizeof(int) == 4, "Integers must be 4 bytes!");
 
@@ -903,6 +996,9 @@ int main(int argc, char *argv[]) {
   const char* subcmd = argv[2];
 
   switch (getSubcommand(subcmd)) {
+  case CREATE:
+    createFs(imgFn);
+    break;
   case LS:
     setupImgFs(imgFn, FALSE);
     if (argc <= 3) {

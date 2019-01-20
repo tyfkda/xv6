@@ -334,8 +334,6 @@ sh(FILE* fp)
       runcmd(parsecmd(buf));
     wait(&exitcode);
     putLastExitCode(exitcode);
-    if (tty)
-      fprintf(stderr, "(exitcode = %d)\n", exitcode);
   }
 }
 

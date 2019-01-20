@@ -280,9 +280,9 @@ copyfsdata:
 	@mkdir -p fs
 	cp -upr fsdata/* fs/
 
-fs.img: out/mkfs $(UPROGS) copyfsdata
-	out/mkfs $@ init
-	out/mkfs $@ put fs/* /
+fs.img: out/fsutil $(UPROGS) copyfsdata
+	out/fsutil $@ create
+	out/fsutil $@ push fs/* /
 
 -include obj/*/*.d
 

@@ -14,20 +14,25 @@ SECTIONS {
 
         . = ALIGN(16);
         __preinit_array_start = .;
-        *(.preinit_array)
+        KEEP (*(.preinit_array))
         __preinit_array_end = .;
 
         __init_array_start = .;
-        *(SORT(.init_array.*))
-        *(.init_array)
+        KEEP (*(SORT(.init_array.*)))
+        KEEP (*(.init_array))
         __init_array_end = .;
 
         __fini_array_start = .;
-        *(SORT(.fini_array.*))
-        *(.fini_array)
+        KEEP (*(SORT(.fini_array.*)))
+        KEEP (*(.fini_array))
         __fini_array_end = .;
         . = ALIGN(16);
     } > rom
+
+    .fini           :
+    {
+        KEEP (*(SORT_NONE(.fini)))
+    }
 
     .data : {
         *(.data)

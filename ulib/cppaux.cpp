@@ -16,9 +16,11 @@ void __cxa_atexit() {
   // Dummy implementation
 }
 
+#if 0
 void __dso_handle() {
   // Dummy implementation
 }
+#endif
 
 void __gxx_personality_v0() {
   // Dummy implementation

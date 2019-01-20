@@ -234,6 +234,13 @@ obj/ulib/ulib.a:	$(ULIBOBJS)
 
 APPLS = ulib/xv6app.ls
 
+fs/bin/cpptest: obj/user/cpptest.o obj/ulib/ulib.a
+	@mkdir -p fs/bin out
+	$(CXX) -fno-pic -fno-pie -no-pie -Wl,-T,$(APPLS) -o $@ $^
+	$(OBJDUMP) -S $@ > out/cpptest.asm
+	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/cpptest.sym
+	strip $@
+
 fs/bin/%: obj/user/%.o obj/ulib/ulib.a
 	@mkdir -p fs/bin out
 	$(LD) $(LDFLAGS) -T $(APPLS) -o $@ $^

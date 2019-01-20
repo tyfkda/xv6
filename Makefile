@@ -241,10 +241,6 @@ fs/bin/%: obj/user/%.o obj/ulib/ulib.a
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/$*.sym
 	strip $@
 
-out/mkfs: tools/mkfs.c tools/hostfsaux.c tools/hostfsaux.h kernel/fs.h
-	@mkdir -p out
-	gcc -Werror -Wall -o $@ $< tools/hostfsaux.c
-
 out/fsutil: tools/fsutil.c tools/hostfsaux.c tools/hostfsaux.h
 	@mkdir -p out
 	gcc -Werror -Wall -iquote include -o $@ $< tools/hostfsaux.c
@@ -280,9 +276,9 @@ copyfsdata:
 	@mkdir -p fs
 	cp -upr fsdata/* fs/
 
-fs.img: out/mkfs $(UPROGS) copyfsdata
-	out/mkfs $@ init
-	out/mkfs $@ put fs/* /
+fs.img: out/fsutil $(UPROGS) copyfsdata
+	out/fsutil $@ create
+	out/fsutil $@ push fs/* /
 
 -include obj/*/*.d
 

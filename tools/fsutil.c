@@ -18,6 +18,9 @@
 # define static_assert(a, b) do { switch (0) case 0: case (a): ; } while (0)
 #endif // static_assert
 
+#define FSSIZE       1000  // size of file system in blocks
+#define NINODES 200
+
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
 #ifndef FALSE
@@ -29,10 +32,15 @@
 
 #define DS  ('/')  // Directory separator
 
+#define DIVROUNDUP(x, n)  (((x) + (n) - 1) / (n))
+
+const int nlog = LOGSIZE;
+
 void iupdate(struct dinode *ip, uint inum);
 
 typedef enum {
   UNKNOWN = -1,
+  CREATE,
   LS,
   PUSH,
   PULL,
@@ -41,6 +49,7 @@ typedef enum {
 } SUBCMD;
 
 static const char* kSubCommands[] = {
+  "create",
   "ls",
   "push",
   "pull",
@@ -183,6 +192,22 @@ static void
 bfree(uint b)
 {
   wbmap(b, 0);
+}
+
+static void
+bfill(int used)
+{
+  uchar buf[BSIZE];
+  int i;
+
+  //printf("bfill: first %d blocks have been allocated\n", used);
+  assert(used < BSIZE*8);
+  bzero(buf, BSIZE);
+  for(i = 0; i < used; i++){
+    buf[i/8] |= 0x1 << (i % 8);
+  }
+  //printf("bfill: write bitmap block at sector %d\n", sb.bmapstart);
+  wsect(sb.bmapstart, buf);
 }
 
 // Inode content
@@ -791,40 +816,43 @@ void doPull(const char* srcPath, const char* dstPath) {
   free(contents);
 }
 
+int doMkdirIn(int parent, const char* name) {
+  struct dinode din;
+  rinode(parent, &din);
+  if (din.type != T_DIR) {
+    fprintf(stderr, "%s is not a directory\n", name);  // TODO: Check length.
+    exit(1);
+  }
+
+  int next = dirlookup(&din, name, NULL);
+  if (next == -1) {
+    next = iallocdir(parent, name);
+    if (next == -1) {
+      fprintf(stderr, "mkdir [%s] failed.\n", name);
+      exit(1);
+    }
+  } else {
+    rinode(next, &din);
+    if (din.type != T_DIR) {
+      fprintf(stderr, "%s is not a directory\n", name);  // TODO: Check length.
+      exit(1);
+    }
+  }
+  return next;
+}
+
 void doMkdir(const char* path) {
   // like -p option, automatically create directory recursively.
 
   int inum = ROOTINO;
   char name[DIRSIZ] = {'\0'};
+
   while ((path = skipelem(path, name)) != 0) {
-    struct dinode din;
-    rinode(inum, &din);
-
-    if (din.type != T_DIR) {
-      fprintf(stderr, "%s is not a directory\n", name);  // TODO: Check length.
-      exit(1);
-    }
-
-    int next = dirlookup(&din, name, NULL);
-    if (next  == -1) {
-      next = iallocdir(inum, name);
-      if (next == -1) {
-        fprintf(stderr, "mkdir [%s] failed.\n", name);
-        exit(1);
-      }
-    }
-    inum = next;
+    inum = doMkdirIn(inum, name);
   }
 }
 
-void doRm(const char* path) {
-  char name[DIRSIZ];
-  int parent = nameiparent(path, name);
-  if (parent == -1) {
-    fprintf(stderr, "rm: Cannot find path: %s\n", path);
-    exit(1);
-  }
-
+void doRmIn(int parent, const char* name, const char* path) {
   // Cannot unlink "." or "..".
   if (namecmp(name, ".") == 0 || namecmp(name, "..") == 0) {
     fprintf(stderr, "rm: Cannot remove path: %s\n", path);
@@ -860,6 +888,48 @@ void doRm(const char* path) {
   iupdate(&ip, inum);
 }
 
+void doRm(const char* path) {
+  char name[DIRSIZ];
+  int parent = nameiparent(path, name);
+  if (parent == -1) {
+    fprintf(stderr, "rm: Cannot find path: %s\n", path);
+    exit(1);
+  }
+
+  doRmIn(parent, name, path);
+}
+
+void doPushRecur(int parent, const char* name, const char* srcPath) {
+  if (host_isfile(srcPath)) {
+    struct dinode din;
+    rinode(parent, &din);
+    int inum = dirlookup(&din, name, NULL);
+    if (inum != -1) {
+      doRmIn(parent, name, name);
+    }
+
+    putfile(parent, srcPath);
+  } else {  // Directory.
+    int dstIno = doMkdirIn(parent, name);
+
+    HOSTDIR *dir = host_opendir(srcPath);
+    if (dir == NULL) {
+      perror(srcPath);
+      exit(1);
+    }
+
+    const char *entry;
+    while ((entry = host_readdir(dir)) != NULL) {
+      if (strcmp(entry, ".") == 0 || strcmp(entry, "..") == 0)
+        continue;
+      char subPath[128];
+      snprintf(subPath, sizeof(subPath), "%s/%s", srcPath, entry);
+      doPushRecur(dstIno, entry, subPath);
+    }
+    host_closedir(dir);
+  }
+}
+
 void doPush(const char* srcPath, const char* dstPath) {
   char dstPathBuf[128];
 
@@ -881,14 +951,75 @@ void doPush(const char* srcPath, const char* dstPath) {
     exit(1);
   }
 
-  struct dinode din;
-  rinode(parent, &din);
-  int inum = dirlookup(&din, name, NULL);
-  if (inum != -1) {
-    doRm(dstPath);
+  doPushRecur(parent, name, srcPath);
+}
+
+static void setup_superblock(int ninodes, int fssize) {
+  const int nbitmap = DIVROUNDUP(fssize, BSIZE * 8);
+  int nmeta;    // Number of meta blocks (boot, sb, nlog, inode, bitmap)
+  int nblocks;  // Number of data blocks
+  int ninodeblocks;
+
+  ninodeblocks = DIVROUNDUP(ninodes, IPB);
+
+  // 1 fs block = 1 disk sector
+  nmeta = 2 + nlog + ninodeblocks + nbitmap;
+
+  if ( nmeta > fssize ) {
+    fprintf(stderr, "nr-inodes: %u is too big.\n", ninodes);
+    exit(1);
   }
 
-  putfile(parent, srcPath);
+  nblocks = fssize - nmeta;
+
+  sb.size = xint(fssize);
+  sb.nblocks = xint(nblocks);
+  sb.ninodes = xint(ninodes);
+  sb.nlog = xint(nlog);
+  sb.logstart = xint(2);
+  sb.inodestart = xint(2 + nlog);
+  sb.bmapstart = xint(2 + nlog + ninodeblocks);
+
+  //printf("nmeta %d (boot, super, log blocks %u inode blocks %u(%u inodes), bitmap blocks %u) blocks %d total %d\n",
+  //       nmeta, nlog, ninodeblocks, ninodes, nbitmap, nblocks, fssize);
+}
+
+static void clear_all_sectors(int fssize) {
+  char zeroes[BSIZE];
+  int i;
+
+  memset(zeroes, 0, sizeof(zeroes));
+  for(i = 0; i < fssize; i++)
+    wsect(i, zeroes);
+}
+
+void createFs(const char*imgFn) {
+  fsfd = host_createopen(imgFn);
+  if (fsfd < 0) {
+    perror(imgFn);
+    exit(1);
+  }
+
+  setup_superblock(NINODES, FSSIZE);
+
+  clear_all_sectors(FSSIZE);
+
+  char buf[BSIZE];
+  memset(buf, 0, sizeof(buf));
+  memmove(buf, &sb, sizeof(sb));
+  wsect(1, buf);
+
+  // Fill meta blocks to be used
+  const int ninodeblocks = DIVROUNDUP(NINODES, IPB);
+  const int nbitmap = DIVROUNDUP(FSSIZE, BSIZE * 8);
+  int nmeta = xint(sb.logstart) + xint(sb.nlog) + xint(ninodeblocks) + nbitmap;
+  bfill(nmeta);
+
+  int rootino = iallocdir(ROOTINO, NULL);
+  assert(rootino == ROOTINO);
+
+  host_close(fsfd);
+  fsfd = -1;
 }
 
 int main(int argc, char *argv[]) {
@@ -903,6 +1034,9 @@ int main(int argc, char *argv[]) {
   const char* subcmd = argv[2];
 
   switch (getSubcommand(subcmd)) {
+  case CREATE:
+    createFs(imgFn);
+    break;
   case LS:
     setupImgFs(imgFn, FALSE);
     if (argc <= 3) {
@@ -914,16 +1048,21 @@ int main(int argc, char *argv[]) {
     break;
   case PUSH:
     {
-      if (argc < 4 || argc > 5) {
+      if (argc < 4) {
         fprintf(stderr, "push: <src path (in local)> [dst path (in image)]\n");
         exit(1);
       }
 
-      const char* src = argv[3];
-      const char* dst = argc > 4 ? argv[4] : ".";
+      int srcLast = argc;
+      const char* dst = "/";
+      if (argc > 4) {
+        --srcLast;
+        dst = argv[srcLast];
+      }
 
       setupImgFs(imgFn, TRUE);
-      doPush(src, dst);
+      for (int i = 3; i < srcLast; ++i)
+        doPush(argv[i], dst);
     }
     break;
   case PULL:

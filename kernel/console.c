@@ -441,7 +441,7 @@ procescseq(uchar c)
           strncpy(buf, "\x1b[", sizeof(buf));
           char* p = putint(buf + 2, pos / SCRW + 1);
           *p++ = ';';
-          p = putint(buf + 2, pos / SCRW + 1);
+          p = putint(p, pos % SCRW + 1);
           *p++ = 'R';
           inputwrite(&s_input, buf, p - buf);
         }

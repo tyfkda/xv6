@@ -19,7 +19,7 @@
 char buf[8192];
 
 static void panic(const char *msg) {
-  fprintf(stderr, msg);
+  fprintf(stderr, "%s\n", msg);
   exit(1);
 }
 

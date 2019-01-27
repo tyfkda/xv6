@@ -12,7 +12,10 @@ int
 readelfhdr(struct inode *ip, struct elfhdr *elf)
 {
   return readi(ip, elf, 0, sizeof(*elf)) == sizeof(*elf)
-      && elf->magic == ELF_MAGIC;
+    && elf->e_ident[0] == ELFMAG0
+    && elf->e_ident[1] == ELFMAG1
+    && elf->e_ident[2] == ELFMAG2
+    && elf->e_ident[3] == ELFMAG3;
 }
 
 int
@@ -41,38 +44,38 @@ execelf(const char *progname, const char* const *argv, const char *envp[],
 
   // Load program into memory.
   textstart = textend = datastart = dataend = 0;
-  for(i=0, off=elf->phoff; i<elf->phnum; i++, off+=sizeof(ph)){
+  for(i=0, off=elf->e_phoff; i<elf->e_phnum; i++, off+=sizeof(ph)){
     if(readi(ip, &ph, off, sizeof(ph)) != sizeof(ph))
       goto bad;
-    if(ph.type != ELF_PROG_LOAD)
+    if(ph.p_type != PT_LOAD)
       continue;
-    if(ph.memsz < ph.filesz)
+    if(ph.p_memsz < ph.p_filesz)
       goto bad;
-    if(ph.vaddr % PGSIZE != 0)
+    if(ph.p_vaddr % PGSIZE != 0)
       goto bad;
-    if(ph.vaddr + ph.memsz < ph.vaddr)
+    if(ph.p_vaddr + ph.p_memsz < ph.p_vaddr)
       goto bad;
 
     uintp *psz;
-    if (ph.flags & ELF_PROG_FLAG_EXEC) {  // Executable: .text
+    if (ph.p_flags & PF_X) {  // Executable: .text
       if (textend != 0)
         goto bad;
-      textstart = textend = ph.vaddr;
+      textstart = textend = ph.p_vaddr;
       psz = &textend;
     } else {  // Other: .data
       if (dataend != 0)
         goto bad;
-      datastart = dataend = ph.vaddr;
+      datastart = dataend = ph.p_vaddr;
       psz = &dataend;
     }
 
     uintp start = *psz, end;
-    if((*psz = end = allocuvm(pgdir, start, ph.vaddr + ph.memsz)) == 0)
+    if((*psz = end = allocuvm(pgdir, start, ph.p_vaddr + ph.p_memsz)) == 0)
       goto bad;
-    if(loaduvm(pgdir, (char*)ph.vaddr, ip, ph.off, ph.filesz) < 0)
+    if(loaduvm(pgdir, (char*)ph.p_vaddr, ip, ph.p_offset, ph.p_filesz) < 0)
       goto bad;
 
-    if (!(ph.flags & ELF_PROG_FLAG_WRITE)) {
+    if (!(ph.p_flags & PF_W)) {
       setpteflags(pgdir, start, end, PTE_U);  // Drop PTE_W flag.
     }
   }
@@ -145,7 +148,7 @@ execelf(const char *progname, const char* const *argv, const char *envp[],
   curproc->textend = textend;
   curproc->datastart = datastart;
   curproc->dataend = dataend;
-  curproc->tf->eip = elf->entry;  // main
+  curproc->tf->eip = elf->e_entry;  // main
   curproc->tf->esp = sp;
   switchuvm(curproc);
   freevm(oldpgdir);

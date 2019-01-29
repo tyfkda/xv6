@@ -253,6 +253,9 @@ out/fsutil: tools/fsutil.c tools/hostfsaux.c tools/hostfsaux.h
 .PRECIOUS: obj/ulib/%.o, obj/user/%.o
 
 UPROGS=\
+	fs/bin/hello\
+	fs/bin/gen_hello\
+	fs/bin/gen_hello2\
 	fs/bin/cat\
 	fs/bin/cp\
 	fs/bin/cpptest\

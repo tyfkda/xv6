@@ -5,6 +5,8 @@ extern "C" {
 #endif
 
 int isdigit(int);
+int isalpha(int);
+int isalnum(int);
 int isprint(int);
 int isspace(int);
 

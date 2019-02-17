@@ -2,11 +2,367 @@
 
 #include "ctype.h"
 #include "fcntl.h"
+#include "stdbool.h"
 #include "stdio.h"
 #include "stdlib.h"
 #include "string.h"
 #include "sys/wait.h"
+#include "termios.h"
 #include "unistd.h"
+
+bool setRawMode(bool enable, int fd) {
+  static struct termios orig_termios;
+  static bool termios_saved;
+  static bool rawmode;
+
+  if (enable) {
+    struct termios raw;
+
+    if (!isatty(fd))
+      return false;
+    if (!termios_saved) {
+      if (tcgetattr(fd, &orig_termios) == -1)
+        return false;
+      termios_saved = true;
+    }
+
+    raw = orig_termios;  /* modify the original mode */
+    /* input modes: no break, no CR to NL, no parity check, no strip char,
+     * no start/stop output control. */
+    raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+    /* output modes - disable post processing */
+    raw.c_oflag &= ~OPOST;
+    /* control modes - set 8 bit chars */
+    raw.c_cflag |= CS8;
+    /* local modes - choing off, canonical off, no extended functions,
+     * no signal chars (^Z,^C) */
+    raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
+    /* control chars - set return condition: min number of bytes and timer. */
+    //raw.c_cc[VMIN] = 0; /* Return each byte, or zero for timeout. */
+    //raw.c_cc[VTIME] = 1; /* 100 ms timeout (unit is tens of second). */
+    raw.c_cc[VMIN] = 1; /* Return each byte, or zero for timeout. */
+    raw.c_cc[VTIME] = 0; /* 100 ms timeout (unit is tens of second). */
+
+    /* put terminal in raw mode after flushing */
+    if (tcsetattr(fd,TCSAFLUSH,&raw) < 0)
+      return false;
+    rawmode = true;
+    return true;
+  } else {
+    if (rawmode && termios_saved) {
+      tcsetattr(fd, TCSAFLUSH, &orig_termios);
+      rawmode = false;
+    }
+    return true;
+  }
+}
+
+// ================================================
+// Ring buffer
+
+typedef struct {
+  const void** buf;
+  unsigned int capa;
+  unsigned int r;
+  unsigned int w;
+} RingBuf;
+
+bool init_ringbuf(RingBuf *rb, unsigned int capa) {
+  const void ** buf = malloc(sizeof(void*) * capa);
+  if (buf == NULL)
+    return false;
+
+  rb->buf = buf;
+  rb->capa = capa;
+  rb->r = rb->w = 0;
+  return true;
+}
+
+int ringbuf_count(RingBuf *rb) {
+  return rb->w - rb->r;
+}
+
+bool ringbuf_full(RingBuf *rb) {
+  return rb->w - rb->r >= rb->capa;
+}
+
+const void *ringbuf_get(RingBuf *rb, int i) {
+  return rb->buf[(rb->w - i - 1) % rb->capa];
+}
+
+void ringbuf_put(RingBuf *rb, const void *value) {
+  unsigned int capa = rb->capa;
+  unsigned int w = rb->w, r = rb->r;
+  rb->buf[w % capa] = value;
+  ++w;
+  if (w - r > capa) {
+    r = w - capa;
+    //if (r >= capa) {
+    //  r -= capa;
+    //  w -= capa;
+    //}
+    rb->r = r;
+  }
+  rb->w = w;
+}
+
+// ================================================
+// Readline
+
+#define OUTCAPA  (128)
+#define MAX_HISTORY  (128)
+
+#define C(x)  ((x)-'@')  // Control-x
+
+typedef struct {
+  char outbuf[OUTCAPA];
+  int outp;
+
+  RingBuf history;
+
+  char *buf;
+  size_t capa;
+
+  int ifd, ofd;
+  int p, n;
+} ReadLine;
+
+ReadLine rl;
+
+void init_readline(int ifd, int ofd) {
+  rl.ifd = ifd;
+  rl.ofd = ofd;
+
+  rl.outp = 0;
+  init_ringbuf(&rl.history, MAX_HISTORY);
+  rl.buf = NULL;
+  rl.capa = 0;
+  rl.p = rl.n = 0;
+}
+
+static void rl_add_history(const char *input) {
+  const char *dup = strdup(input);
+  if (dup == NULL)
+    return;
+
+  RingBuf *history = &rl.history;
+  if (ringbuf_full(history)) {
+    char *last = (char*)ringbuf_get(history, ringbuf_count(history) - 1);
+    free(last);
+  }
+
+  ringbuf_put(history, dup);
+}
+
+static int readc(int fd, bool use_raw_mode) {
+  if (use_raw_mode) {
+    ssize_t nread;
+    unsigned char c;
+    while ((nread = read(fd, &c, 1)) == 0)
+      ;
+    return nread == -1 ? -1 : c;
+  } else {
+    unsigned char c;
+    int nread = read(fd, &c, 1);
+    return nread == 1 ? c : -1;
+  }
+}
+
+static void flush() {
+  if (rl.outp <= 0)
+    return;
+  write(rl.ofd, rl.outbuf, rl.outp);
+  rl.outp = 0;
+}
+
+static void out(char c) {
+  rl.outbuf[rl.outp++] = c;
+  if (rl.outp >= OUTCAPA)
+    flush();
+}
+
+static void extend(size_t n, char **pp, size_t *pcapa) {
+  if (n <= *pcapa)
+    return;
+  char *p = realloc(*pp, n);
+  if (p == NULL) {
+    fprintf(stderr, "malloc failed\n");
+    exit(1);
+  }
+  *pp = p;
+  *pcapa = n;
+}
+
+void rl_move_to_start(void) {
+  for (int i = 0; i < rl.p; ++i)
+    out('\b');
+  rl.p = 0;
+}
+
+void rl_move_to_last(void) {
+  if (rl.p < rl.n) {
+    for (int i = rl.p; i < rl.n; ++i)
+      out(rl.buf[i]);
+    rl.p = rl.n;
+  }
+}
+
+void rl_delete(void) {
+  if (rl.p < rl.n) {
+    --rl.n;
+    int m = rl.n - rl.p;
+    if (m > 0) {
+      memmove(&rl.buf[rl.p], &rl.buf[rl.p + 1], m);
+      for (int i = rl.p; i < rl.n; ++i)
+        out(rl.buf[i]);
+    }
+    out(' ');
+    for (int i = -1; i < m; ++i)
+      out('\b');
+  }
+}
+
+void rl_backspace(void) {
+  if (rl.p <= 0)
+    return;
+  out('\b');
+  --rl.p;
+  rl_delete();
+}
+
+void rl_kill_after(void) {
+  int m = rl.n - rl.p;
+  if (m > 0) {
+    for (int i = 0; i < m; ++i)
+      out(' ');
+    for (int i = 0; i < m; ++i)
+      out('\b');
+    rl.n = rl.p;
+  }
+}
+
+void rl_clear_input(void) {
+  rl_move_to_start();
+  rl_kill_after();
+}
+
+void rl_putc(char c) {
+  extend(rl.n + 1, &rl.buf, &rl.capa);
+  int m = rl.n - rl.p;
+  if (m > 0) {
+    memmove(&rl.buf[rl.p + 1], &rl.buf[rl.p], m);
+  }
+  rl.buf[rl.p] = c;
+
+  ++rl.n;
+  for (int i = rl.p; i < rl.n; ++i)
+    out(rl.buf[i]);
+  ++rl.p;
+  for (int i = 0; i < m; ++i)
+    out('\b');
+}
+
+void rl_set_input(const char *input) {
+  rl_clear_input();
+  for (const char *p = input; *p != '\0'; ++p)
+    rl_putc(*p);
+}
+
+ssize_t readline(char **lineptr, size_t *pcapa, bool use_raw_mode) {
+  rl.buf = *lineptr;
+  rl.capa = *pcapa;
+  rl.p = rl.n = 0;
+  int his_index = -1;
+
+  if (use_raw_mode && !setRawMode(true, rl.ifd)) {
+    fprintf(stderr,"Failed to set raw mode\n");
+    exit(1);
+  }
+
+  for (;;) {
+    flush();
+    int c = readc(rl.ifd, use_raw_mode);
+    switch (c) {
+    case -1:
+      return -1;
+
+    case C('C'):
+      return -1;
+
+    case C('B'):
+      if (rl.p > 0) {
+        out('\b');
+        --rl.p;
+      }
+      continue;
+
+    case C('F'):
+      if (rl.p < rl.n) {
+        out(rl.buf[rl.p]);
+        ++rl.p;
+      }
+      continue;
+
+    case C('A'):  // Beginning of line
+      rl_move_to_start();
+      continue;
+
+    case C('E'):  // End of line
+      rl_move_to_last();
+      continue;
+
+    case C('K'):  // Kill
+      rl_kill_after();
+      continue;
+
+    case C('H'): case '\x7f':  // Backspace
+      rl_backspace();
+      continue;
+
+    case C('D'):  // Delete
+      rl_delete();
+      continue;
+
+    case '\r': case '\n':
+      extend(rl.n + 1, &rl.buf, &rl.capa);
+      rl.buf[rl.n] = '\0';
+      write(rl.ofd, "\r\n", 2);
+      if (rl.n > 0 && rl.buf[0] != ' ')
+        rl_add_history(rl.buf);
+      *lineptr = rl.buf;
+      *pcapa = rl.capa;
+      if (use_raw_mode)
+        setRawMode(false, rl.ifd);
+      return rl.n;
+
+    case C('P'):  // Prev history
+      if (his_index + 1 < ringbuf_count(&rl.history)) {
+        ++his_index;
+        rl_set_input(ringbuf_get(&rl.history, his_index));
+      }
+      continue;
+
+    case C('N'):  // Next history
+      if (his_index > -1) {
+        --his_index;
+        if (his_index < 0)
+          rl_clear_input();
+        else
+          rl_set_input(ringbuf_get(&rl.history, his_index));
+      }
+      continue;
+
+    default:
+      break;
+    }
+
+    if (c >= ' ') {
+      rl_putc(c);
+    }
+  }
+}
+
+// ================================================
 
 // Parsed command representation
 #define EXEC  1
@@ -302,10 +658,10 @@ runcmd(struct cmd *cmd)
 }
 
 int
-getcmd(FILE* fp, char *buf, int nbuf)
+getcmd(FILE* fp, char **linebuf, size_t *pcapa, bool raw_mode)
 {
-  memset(buf, 0, nbuf);
-  if (fgets(buf, nbuf, fp) == 0)  // EOF
+  ssize_t r = readline(linebuf, pcapa, raw_mode);
+  if (r < 0)
     return -1;
   return 0;
 }
@@ -314,18 +670,19 @@ void
 sh(FILE* fp)
 {
   int tty = isatty(fileno(fp));
-  char buf[100];
+  char *buf = NULL;
+  size_t bufcapa = 0;
   int exitcode;
 
   // Read and run input commands.
   for (;;) {
     if (tty)
       fprintf(stderr, "$ ");
-    if (getcmd(fp, buf, sizeof(buf)) < 0)
+    if (getcmd(fp, &buf, &bufcapa, tty) < 0)
       break;
     if(strncmp(buf, "cd ", 3) == 0){
       // Chdir must be called by the parent, not the child.
-      buf[strlen(buf)-1] = '\0';  // chop \n
+      //buf[strlen(buf)-1] = '\0';  // chop \n
       if(chdir(buf+3) < 0)
         fprintf(stderr, "cannot cd %s\n", buf+3);
       continue;
@@ -335,6 +692,10 @@ sh(FILE* fp)
     wait(&exitcode);
     putLastExitCode(exitcode);
   }
+}
+
+void onexit(void) {
+  setRawMode(false, STDIN_FILENO);
 }
 
 int
@@ -351,6 +712,10 @@ main(int argc, char* argv[])
   }
 
   if (argc < 2) {
+    atexit(onexit);
+
+    init_readline(STDIN_FILENO, STDOUT_FILENO);
+
     sh(stdin);
   } else {
     for (int i = 1; i < argc; ++i) {
@@ -360,6 +725,9 @@ main(int argc, char* argv[])
         sprintf(buf, "Cannot open: %s", argv[i]);
         panic(buf);
       }
+
+      init_readline(fileno(fp), STDOUT_FILENO);
+
       sh(fp);
       fclose(fp);
     }

@@ -215,6 +215,7 @@ ULIBOBJS = \
 	obj/ulib/errno.o\
 	obj/ulib/exec.o\
 	obj/ulib/exit.o\
+	obj/ulib/libgen.o\
 	obj/ulib/localtime.o\
 	obj/ulib/perror.o\
 	obj/ulib/printf.o\

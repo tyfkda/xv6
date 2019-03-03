@@ -184,6 +184,9 @@ static void out(char c) {
 static void extend(size_t n, char **pp, size_t *pcapa) {
   if (n <= *pcapa)
     return;
+  const int MIN = 16;
+  if (n - *pcapa < MIN)
+    n = *pcapa + MIN;
   char *p = realloc(*pp, n);
   if (p == NULL) {
     fprintf(stderr, "malloc failed\n");

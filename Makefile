@@ -272,6 +272,7 @@ UPROGS=\
 	fs/bin/stressfs\
 	fs/bin/usertests\
 	fs/bin/wc\
+	fs/bin/xxd\
 	fs/bin/zombie\
 
 copyfsdata:

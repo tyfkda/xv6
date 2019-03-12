@@ -96,6 +96,14 @@ fgetc(FILE* fp)
 }
 
 int
+fputc(int c, FILE* fp)
+{
+  unsigned char b = c;
+  int len = write(fp->fd, &b, 1);
+  return len == 1 ? c : EOF;
+}
+
+int
 getc(FILE* fp)
 {
   return fgetc(fp);

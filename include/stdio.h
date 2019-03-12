@@ -31,6 +31,7 @@ int fileno(const FILE *);
 int getc(FILE* fp);
 int getchar(void);
 int fgetc(FILE* fp);
+int fputc(int c, FILE* fp);
 char* gets_s(char*, size_t max);
 char* fgets(char*, size_t max, FILE* fp);
 int putchar(int);

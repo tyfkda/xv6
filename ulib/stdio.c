@@ -1,9 +1,19 @@
 #include "fcntl.h"
-#include "file_def.h"
 #include "stdio.h"
 #include "stdlib.h"
 #include "string.h"
 #include "unistd.h"
+
+struct FILE {
+  int fd;
+};
+
+static FILE _stdin = {0};
+static FILE _stdout = {1};
+static FILE _stderr = {2};
+FILE *stdin = &_stdin;
+FILE *stdout = &_stdout;
+FILE *stderr = &_stderr;
 
 int fileno(const FILE *fp) {
   return fp->fd;

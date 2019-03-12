@@ -1,14 +1,6 @@
-#include "file_def.h"
 #include "stdio.h"
 #include "string.h"
 #include "unistd.h"
-
-static FILE _stdin = {0};
-static FILE _stdout = {1};
-static FILE _stderr = {2};
-FILE *stdin = &_stdin;
-FILE *stdout = &_stdout;
-FILE *stderr = &_stderr;
 
 int
 vsprintf(char *out, const char *fmt, va_list ap)
@@ -25,7 +17,7 @@ vfprintf(FILE* fp, const char* fmt, va_list ap)
   int len;
 
   len = vsnprintf(buf, sizeof(buf), fmt, ap);
-  return write(fp->fd, buf, len);
+  return write(fileno(fp), buf, len);
 }
 
 // Print to the stdout. Only understands %d, %x, %p, %s.

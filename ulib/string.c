@@ -52,12 +52,12 @@ strtol(const char *p, char **pp, int base)
   } else {
     for (;;) {
       char c = *p++;
-      if ('0' <= c && c < '9')
+      if ('0' <= c && c <= '9')
         result = result * base + (c - '0');
       else if ('A' <= c && c < ('A' - 10 + base))
-        result = result * base + (c - 'A');
+        result = result * base + (c - 'A' + 10);
       else if ('a' <= c && c < ('a' - 10 + base))
-        result = result * base + (c - 'a');
+        result = result * base + (c - 'a' + 10);
       else
         break;
     }

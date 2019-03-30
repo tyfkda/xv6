@@ -15,5 +15,5 @@
 #define NBUF         (MAXOPBLOCKS*3)  // size of disk block cache
 
 #define USTACKBOTTOM  (0x10000000)  // Use stack bottom address
-#define USTACKSIZE    (0x1000)      // Use stack size
+#define USTACKSIZE    (0x4000)      // Use stack size
 #define USTACKTOP     (USTACKBOTTOM - USTACKSIZE)

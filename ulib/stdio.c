@@ -75,6 +75,10 @@ int fclose(FILE* fp) {
   return 0;
 }
 
+long ftell(FILE *fp) {
+  return lseek(fp->fd, 0, SEEK_CUR);
+}
+
 size_t
 fwrite(const void* buffer, size_t size, size_t count, FILE* fp)
 {

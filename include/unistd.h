@@ -1,5 +1,7 @@
 #pragma once
 
+#include "stddef.h"  // size_t
+
 #define STDIN_FILENO   (0)
 #define STDOUT_FILENO  (1)
 #define STDERR_FILENO  (2)
@@ -46,6 +48,7 @@ int isatty(int fd);
 
 // ulib.c
 int stat(const char*, struct stat*);
+char *getcwd(char *buffer, size_t size);
 
 int ftruncate(int fd, unsigned int length);
 

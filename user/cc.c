@@ -3672,6 +3672,8 @@ const int FRAME_ALIGN = 8;
 const int MAX_ARGS = 6;
 const int WORD_SIZE = /*sizeof(void*)*/ 8;
 
+#define ADD_ASM(...)  // ignore
+
 #define CURIP(ofs)  (instruction_pointer + ofs)
 #include "x86_64.h"
 

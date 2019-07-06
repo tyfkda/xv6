@@ -280,6 +280,14 @@ UPROGS=\
 	fs/bin/xxd\
 	fs/bin/zombie\
 
+fs/bin/cc: obj/user/cc.o obj/ulib/ulib.a
+	@mkdir -p fs/bin out
+	$(LD) $(LDFLAGS) -T $(APPLS) -o $@ $^
+	$(OBJDUMP) -S $@ > out/cc.asm
+	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/cc.sym
+	strip --strip-all $@
+	objcopy --remove-section .eh_frame --remove-section .comment --remove-section .text.unlikely $@
+
 copyfsdata:
 	@mkdir -p fs
 	cp -upr fsdata/* fs/

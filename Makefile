@@ -107,6 +107,7 @@ CFLAGS = -fno-pic -static -fno-builtin -fno-strict-aliasing -Wall -MD -ggdb -Wer
 CFLAGS += -ffreestanding -fno-common -nostdlib -Iinclude -gdwarf-2 $(XFLAGS) $(OPT)
 CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
 CFLAGS += -nostdinc
+CFLAGS += -D__XV6
 CXXFLAGS = $(CFLAGS) -fno-rtti
 ASFLAGS = -fno-pic -gdwarf-2 -Wa,-divide -Iinclude $(XFLAGS)
 
@@ -255,6 +256,8 @@ out/fsutil: tools/fsutil.c tools/hostfsaux.c tools/hostfsaux.h
 .PRECIOUS: obj/ulib/%.o, obj/user/%.o
 
 UPROGS=\
+	fs/bin/cpp\
+	fs/bin/cc\
 	fs/bin/cat\
 	fs/bin/cp\
 	fs/bin/cpptest\

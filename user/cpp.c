@@ -97,7 +97,8 @@ char *abspath(const char *root, const char *path) {
 }
 
 char *abspath_cwd(const char *dir, const char *path) {
-  char *cwd = getcwd(NULL, 0);
+  void *mem = malloc(512);
+  char *cwd = getcwd(mem, 0);
   char *root = abspath(cwd, dir);
   free(cwd);
   return abspath(root, path);

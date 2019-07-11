@@ -17,8 +17,8 @@ union header {
 
 typedef union header Header;
 
-static Header base;
-static Header *freep;
+static Header base = {.s={.ptr=&base, .size=0}};
+static Header *freep = &base;
 
 void
 free(void *ap)
@@ -69,10 +69,11 @@ malloc(size_t nbytes)
   size_t nunits;
 
   nunits = (nbytes + sizeof(Header) - 1)/sizeof(Header) + 1;
-  if((prevp = freep) == 0){
-    base.s.ptr = freep = prevp = &base;
-    base.s.size = 0;
-  }
+  //if(freep == NULL){
+  //  base.s.ptr = freep = &base;
+  //  base.s.size = 0;
+  //}
+  prevp = freep;
   for(p = prevp->s.ptr; ; prevp = p, p = p->s.ptr){
     if(p->s.size >= nunits){
       if(p->s.size == nunits)

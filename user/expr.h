@@ -5,67 +5,25 @@
 #include <stdio.h>  // FILE
 #include <sys/types.h>  // ssize_t
 
-typedef struct Vector Vector;
 typedef struct Map Map;
+typedef struct Scope Scope;
 typedef struct Token Token;
+typedef struct Type Type;
+typedef struct VarInfo VarInfo;
+typedef struct Vector Vector;
+enum eType;
+
+// Num
+
+typedef union {
+  intptr_t ival;
+} Num;
 
 // Type
 
-enum eType {
-  TY_VOID,
-  TY_CHAR,  // Small number type should be earlier.
-  TY_SHORT,
-  TY_INT,
-  TY_LONG,
-  TY_ENUM,
-  TY_PTR,
-  TY_ARRAY,
-  TY_FUNC,
-  TY_STRUCT,
-  TY_UNION,
-};
-
-typedef struct {
-  Vector *members;  // <VarInfo*>
-  ssize_t size;
-  int align;
-  bool is_union;
-} StructInfo;
-
-typedef struct Type {
-  enum eType type;
-  union {
-    struct {  // Pointer or array.
-      const struct Type *ptrof;
-      size_t length;  // of array. -1 represents length is not specified (= []).
-    } pa;
-    struct {
-      const struct Type *ret;
-      Vector *params;  // <VarInfo*>
-      bool vaargs;
-    } func;
-    struct {
-      const char *name;
-      StructInfo *info;
-    } struct_;  // and union.
-  } u;
-} Type;
-
-extern const Type tyChar;
-extern const Type tyShort;
-extern const Type tyInt;
-extern const Type tyLong;
-extern const Type tyEnum;
-extern const Type tyVoid;
-#define tyBool  tyInt
-#define tySize  tyLong
-
 void ensure_struct(Type *type, const Token *token);
-Type* arrayof(const Type *type, size_t length);
-bool same_type(const Type *type1, const Type *type2);
-bool is_number(enum eType type);
 
-void dump_type(FILE *fp, const Type *type);
+// Initializer
 
 typedef struct Initializer {
   enum { vSingle, vMulti, vDot } type;  // vSingle: 123, vMulti: {...}, vDot: .x=123
@@ -81,51 +39,14 @@ typedef struct Initializer {
 
 Initializer **flatten_initializer(const Type *type, Initializer *init);
 
-// Varible flags.
-enum {
-  VF_CONST = 1 << 0,
-  VF_STATIC = 1 << 1,
-  VF_EXTERN = 1 << 2,
-  VF_UNSIGNED = 1 << 3,
-};
-
-typedef struct {
-  const char *name;
-  const Type *type;
-  int flag;
-  union {
-    struct {  // For global.
-      Initializer *init;
-    } g;
-    struct {  // For local.
-      const char *label;  // For static variable to refer value in global.
-    } l;
-  } u;
-
-  // For codegen.
-  int offset;
-} VarInfo;
-
-extern Map *struct_map;  // <char*, StructInfo*>
 extern Map *typedef_map;  // <char*, Type*>
-
-// Scope
-
-typedef struct Scope {
-  struct Scope *parent;
-  Vector *vars;
-
-  // For codegen.
-  int size;
-} Scope;
-
-VarInfo *scope_find(Scope *scope, const char *name);
 
 // Defun
 
 typedef struct {
   const Type *type;
   const char *name;
+  Vector *params;  // <VarInfo*>
   Scope *top_scope;
   Vector *stmts;
   Vector *all_scopes;
@@ -140,14 +61,13 @@ Scope *enter_scope(Defun *defun, Vector *vars);
 void exit_scope(void);
 VarInfo *add_cur_scope(const Token *ident, const Type *type, int flag);
 
+extern Scope *curscope;
+
 // Expr
 
 enum ExprType {
   // Literals
-  EX_CHAR,
-  EX_SHORT,
-  EX_INT,
-  EX_LONG,
+  EX_NUM,
   EX_STR,
 
   EX_VARREF,
@@ -199,7 +119,7 @@ typedef struct Expr {
   const Type *valType;
   const Token *token;
   union {
-    intptr_t value;
+    Num num;
     struct {
       const char *buf;
       size_t size;  // Include last '\0'.
@@ -317,34 +237,24 @@ typedef struct Node {
 
 Vector *parse_program(void);
 
-// Variables
-
-int var_find(Vector *vartbl, const char *name);
-VarInfo *var_add(Vector *lvars, const Token *ident, const Type *type, int flag);
-
-extern Map *gvar_map;
-
-VarInfo *find_global(const char *name);
-VarInfo *define_global(const Type *type, int flag, const Token *ident, const char *name);
-
 //
 
-bool is_struct_or_union(enum eType type);
 void not_void(const Type *type);
 bool can_cast(const Type *dst, const Type *src, Expr *src_expr, bool is_explicit);
-Type* new_func_type(const Type *ret, const Vector *params, bool vaargs);
 
 const Type *parse_raw_type(int *pflag);
 const Type *parse_type_modifier(const Type* type);
 const Type *parse_type_suffix(const Type *type);
 const Type *parse_full_type(int *pflag, Token **pident);
 
-Expr *new_expr_numlit(enum ExprType exprtype, const Token *token, intptr_t val);
+Expr *new_expr(enum ExprType type, const Type *valType, const Token *token);
+Expr *new_expr_numlit(const Type *type, const Token *token, const Num *num);
 Expr *new_expr_bop(enum ExprType type, const Type *valType, const Token *token, Expr *lhs, Expr *rhs);
 Expr *new_expr_deref(const Token *token, Expr *sub);
 Expr *add_expr(const Token *tok, Expr *lhs, Expr *rhs, bool keep_left);
 Expr *new_expr_varref(const char *name, const Type *type, bool global, const Token *token);
 Expr *new_expr_member(const Token *token, const Type *valType, Expr *target, const Token *acctok, const Token *ident, int index);
+Expr *new_expr_sizeof(const Token *token, const Type *type, Expr *sub);
 Vector *funparams(bool *pvaargs);
 bool parse_var_def(const Type **prawType, const Type** ptype, int *pflag, Token **pident);
 Expr *parse_const(void);
@@ -352,4 +262,5 @@ Expr *parse_assign(void);
 Expr *parse_expr(void);
 Expr *analyze_expr(Expr *expr, bool keep_left);
 Expr *new_expr_cast(const Type *type, const Token *token, Expr *sub, bool is_explicit);
+bool check_cast(const Type *dst, const Type *src, Expr *src_expr, bool is_explicit);
 bool is_const(Expr *expr);

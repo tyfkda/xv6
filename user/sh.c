@@ -282,17 +282,59 @@ ssize_t readline(char **lineptr, size_t *pcapa, bool use_raw_mode) {
     exit(1);
   }
 
+  char buf[16];
+  int buf_count = 0;
+  bool escape = false;
+
   for (;;) {
     flush();
     int c = readc(rl.ifd, use_raw_mode);
+    if (escape) {
+      buf[buf_count++] = c;
+      if (buf[1] == '[') {
+        if (buf_count <= 1)
+          continue;
+        if (buf_count <= sizeof(buf)) {
+          switch (c) {
+          case 'A':  // CUU: CUrsor Upward.
+            escape = false;
+            goto L_cursor_up;
+          case 'B':  // CUD: CUrsor Downward.
+            escape = false;
+            goto L_cursor_down;
+          case 'C':  // CUF: CUrsor Forward.
+            escape = false;
+            goto L_cursor_right;
+          case 'D':  // CUB: CUrsor Backward.
+            escape = false;
+            goto L_cursor_left;
+          default:
+            if ((c < 'A'|| c > 'Z') && (c < 'a' || c > 'z') &&
+                buf_count < sizeof(buf)) {
+              continue;
+            }
+            break;
+          }
+        }
+        escape = false;
+      }
+    }
+
     switch (c) {
     case -1:
       return -1;
+
+    case '\x1b':
+      buf[0] = c;
+      buf_count = 1;
+      escape = true;
+      break;
 
     case C('C'):
       return -1;
 
     case C('B'):
+  L_cursor_left:
       if (rl.p > 0) {
         out('\b');
         --rl.p;
@@ -300,6 +342,7 @@ ssize_t readline(char **lineptr, size_t *pcapa, bool use_raw_mode) {
       continue;
 
     case C('F'):
+  L_cursor_right:
       if (rl.p < rl.n) {
         out(rl.buf[rl.p]);
         ++rl.p;
@@ -339,6 +382,7 @@ ssize_t readline(char **lineptr, size_t *pcapa, bool use_raw_mode) {
       return rl.n;
 
     case C('P'):  // Prev history
+  L_cursor_up:
       if (his_index + 1 < ringbuf_count(&rl.history)) {
         ++his_index;
         rl_set_input(ringbuf_get(&rl.history, his_index));
@@ -346,6 +390,7 @@ ssize_t readline(char **lineptr, size_t *pcapa, bool use_raw_mode) {
       continue;
 
     case C('N'):  // Next history
+  L_cursor_down:
       if (his_index > -1) {
         --his_index;
         if (his_index < 0)

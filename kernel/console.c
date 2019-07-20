@@ -311,10 +311,24 @@ procescseq(uchar c)
 {
   cons.buf[cons.bufCount++] = c;
   if (cons.buf[1] == '[') {
+    if (cons.bufCount <= 1)
+      return;
     switch (c) {
     case '?':
       //cons.question = TRUE;
       return;
+    case 'A':
+      // CUU: CUrsor Upward.
+      {
+        int d = atoi((char*)&cons.buf[2]);
+        int pos = getCursorPos();
+        int y = pos / SCRW;
+        int ny = y - d;
+        if (ny < 0)
+          ny = 0;
+        setCursorPos(pos - (y - ny) * SCRW);
+      }
+      break;
     case 'B':
       // CUD: CUrsor Downward.
       {
@@ -329,6 +343,18 @@ procescseq(uchar c)
       break;
     case 'C':
       // CUF: CUrsor Forward.
+      {
+        int f = atoi((char*)&cons.buf[2]);
+        int pos = getCursorPos();
+        int x = pos % SCRW;
+        int nx = x + f;
+        if (nx > SCRW - 1)
+          nx = SCRW - 1;
+        setCursorPos(pos - x + nx);
+      }
+      break;
+    case 'D':
+      // CUB: CUrsor Backward.
       {
         int f = atoi((char*)&cons.buf[2]);
         int pos = getCursorPos();
@@ -453,16 +479,15 @@ procescseq(uchar c)
           cons.bufCount < sizeof(cons.buf)) {
         return;  // Continue.
       }
-
-      // Unhandled: emit buffered characters and quit escape sequence.
-      for (int i = 0; i < cons.bufCount; ++i) {
-        consputc(cons.buf[i]);
-      }
       break;
     }
   }
 
-  // Quit escape sequence.
+  // Unhandled: emit buffered characters and quit escape sequence.
+  for (int i = 0; i < cons.bufCount; ++i) {
+    consputc(cons.buf[i]);
+  }
+
   cons.escape = 0;
   cons.bufCount = 0;
 }

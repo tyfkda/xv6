@@ -220,6 +220,7 @@ ULIBOBJS = \
 	obj/ulib/localtime.o\
 	obj/ulib/perror.o\
 	obj/ulib/printf.o\
+	obj/ulib/qsort.o\
 	obj/ulib/setjmp$(BITS).o\
 	obj/ulib/sprintf.o\
 	obj/ulib/stdio.o\

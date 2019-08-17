@@ -257,7 +257,9 @@ out/fsutil: tools/fsutil.c tools/hostfsaux.c tools/hostfsaux.h
 
 UPROGS=\
 	fs/bin/cpp\
-	fs/bin/cc\
+	fs/bin/cc1\
+	fs/bin/as\
+	fs/bin/xcc\
 	fs/bin/cat\
 	fs/bin/cp\
 	fs/bin/cpptest\
@@ -280,11 +282,11 @@ UPROGS=\
 	fs/bin/xxd\
 	fs/bin/zombie\
 
-fs/bin/cc: obj/user/cc.o obj/ulib/ulib.a
+fs/bin/cc1: obj/user/cc1.o obj/ulib/ulib.a
 	@mkdir -p fs/bin out
 	$(LD) $(LDFLAGS) -T $(APPLS) -o $@ $^
-	$(OBJDUMP) -S $@ > out/cc.asm
-	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/cc.sym
+	$(OBJDUMP) -S $@ > out/cc1.asm
+	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > out/cc1.sym
 	strip --strip-all $@
 	objcopy --remove-section .eh_frame --remove-section .comment --remove-section .text.unlikely $@
 

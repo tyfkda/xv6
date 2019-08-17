@@ -5,13 +5,12 @@
 #include <stdio.h>  // FILE
 #include <sys/types.h>  // ssize_t
 
+typedef struct Expr Expr;
 typedef struct Map Map;
 typedef struct Scope Scope;
 typedef struct Token Token;
 typedef struct Type Type;
-typedef struct VarInfo VarInfo;
 typedef struct Vector Vector;
-enum eType;
 
 // Num
 
@@ -19,36 +18,38 @@ typedef union {
   intptr_t ival;
 } Num;
 
-// Type
-
-void ensure_struct(Type *type, const Token *token);
-
 // Initializer
 
 typedef struct Initializer {
-  enum { vSingle, vMulti, vDot } type;  // vSingle: 123, vMulti: {...}, vDot: .x=123
+  enum { vSingle, vMulti, vDot, vArr } type;  // vSingle: 123, vMulti: {...}, vDot: .x=123, vArr: [n]=123
   union {
-    struct Expr *single;
+    Expr *single;
     Vector *multi;  // <Initializer*>
     struct {
       const char *name;
       struct Initializer *value;
     } dot;
+    struct {
+      Expr *index;
+      struct Initializer *value;
+    } arr;
   } u;
 } Initializer;
-
-Initializer **flatten_initializer(const Type *type, Initializer *init);
 
 extern Map *typedef_map;  // <char*, Type*>
 
 // Defun
 
-typedef struct {
-  const Type *type;
+typedef struct Defun {
+  const Type *rettype;
   const char *name;
   Vector *params;  // <VarInfo*>
+  Vector *stmts;  // NULL => Prototype definition.
+  int flag;
+  bool vaargs;
+
+  const Type *type;
   Scope *top_scope;
-  Vector *stmts;
   Vector *all_scopes;
   Map *labels;
   Vector *gotos;
@@ -56,12 +57,6 @@ typedef struct {
   // For codegen.
   const char *ret_label;
 } Defun;
-
-Scope *enter_scope(Defun *defun, Vector *vars);
-void exit_scope(void);
-VarInfo *add_cur_scope(const Token *ident, const Type *type, int flag);
-
-extern Scope *curscope;
 
 // Expr
 
@@ -130,32 +125,32 @@ typedef struct Expr {
     } varref;
 
     struct {
-      struct Expr *lhs;
-      struct Expr *rhs;
+      Expr *lhs;
+      Expr *rhs;
     } bop;
     struct {
-      struct Expr *sub;
+      Expr *sub;
     } unary;
     struct {
-      struct Expr *sub;
+      Expr *sub;
     } cast;
     struct {
-      struct Expr *cond;
-      struct Expr *tval;
-      struct Expr *fval;
+      Expr *cond;
+      Expr *tval;
+      Expr *fval;
     } ternary;
     struct {
-      struct Expr *target;
+      Expr *target;
       const Token *acctok;  // TK_DOT(.) or TK_ARROW(->)
       const Token *ident;
       int index;
     } member;
     struct {
       const Type *type;
-      struct Expr *sub;
+      Expr *sub;
     } sizeof_;
     struct {
-      struct Expr *func;
+      Expr *func;
       Vector *args;  // <Expr*>
     } funcall;
     struct {
@@ -163,79 +158,6 @@ typedef struct Expr {
     } comma;
   } u;
 } Expr;
-
-// Node
-
-enum NodeType {
-  ND_EXPR,
-  ND_DEFUN,
-  ND_BLOCK,
-  ND_IF,
-  ND_SWITCH,
-  ND_WHILE,
-  ND_DO_WHILE,
-  ND_FOR,
-  ND_BREAK,
-  ND_CONTINUE,
-  ND_RETURN,
-  ND_CASE,
-  ND_DEFAULT,
-  ND_GOTO,
-  ND_LABEL,
-};
-
-typedef struct Node {
-  enum NodeType type;
-  union {
-    Expr *expr;
-    Defun *defun;
-    struct {
-      Scope *scope;
-      Vector *nodes;
-    } block;
-    struct {
-      struct Expr *cond;
-      struct Node *tblock;
-      struct Node *fblock;
-    } if_;
-    struct {
-      struct Expr *value;
-      struct Node *body;
-      Vector *case_values;
-      bool has_default;
-    } switch_;
-    struct {
-      intptr_t value;
-    } case_;
-    struct {
-      struct Expr *cond;
-      struct Node *body;
-    } while_;
-    struct {
-      struct Node *body;
-      struct Expr *cond;
-    } do_while;
-    struct {
-      struct Expr *pre;
-      struct Expr *cond;
-      struct Expr *post;
-      struct Node *body;
-    } for_;
-    struct {
-      const Token *tok;
-      const char *ident;
-    } goto_;
-    struct {
-      const char *name;
-      struct Node *stmt;
-    } label;
-    struct {
-      struct Expr *val;
-    } return_;
-  } u;
-} Node;
-
-Vector *parse_program(void);
 
 //
 
@@ -255,7 +177,7 @@ Expr *add_expr(const Token *tok, Expr *lhs, Expr *rhs, bool keep_left);
 Expr *new_expr_varref(const char *name, const Type *type, bool global, const Token *token);
 Expr *new_expr_member(const Token *token, const Type *valType, Expr *target, const Token *acctok, const Token *ident, int index);
 Expr *new_expr_sizeof(const Token *token, const Type *type, Expr *sub);
-Vector *funparams(bool *pvaargs);
+Vector *parse_funparams(bool *pvaargs);
 bool parse_var_def(const Type **prawType, const Type** ptype, int *pflag, Token **pident);
 Expr *parse_const(void);
 Expr *parse_assign(void);

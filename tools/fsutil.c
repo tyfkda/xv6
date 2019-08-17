@@ -18,7 +18,7 @@
 # define static_assert(a, b) do { switch (0) case 0: case (a): ; } while (0)
 #endif // static_assert
 
-#define FSSIZE       1000  // size of file system in blocks
+#define FSSIZE       2000  // size of file system in blocks
 #define NINODES 200
 
 #define min(a, b) ((a) < (b) ? (a) : (b))

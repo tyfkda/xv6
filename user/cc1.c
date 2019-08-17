@@ -113,7 +113,7 @@ void lex_error(const char *p, const char* fmt, ...) {
 void parse_error(const Token *token, const char* fmt, ...) {
   if (token == NULL)
     token = fetch_token();
-  if (token != NULL) {
+  if (token != NULL && token->line != NULL) {
     fprintf(stderr, "%s(%d): ", token->line->filename, token->line->lineno);
   }
 
@@ -123,7 +123,8 @@ void parse_error(const Token *token, const char* fmt, ...) {
   va_end(ap);
   fprintf(stderr, "\n");
 
-  show_error_line(token->line->buf, token->begin);
+  if (token != NULL && token->line != NULL && token->begin != NULL)
+    show_error_line(token->line->buf, token->begin);
 
   exit(1);
 }
@@ -190,6 +191,43 @@ const char *get_lex_p(void) {
   return lexer.p;
 }
 
+static int scan_linemarker(const char *line, long *pnum, char **pfn, int *pflag) {
+  const char *p = line;
+  if (p[0] != '#' || p[1] != ' ')
+    return 0;
+  p += 2;
+
+  int n = 0;
+  const char *next = p;
+  long num = strtol(next, (char**)&next, 10);
+  if (next > p) {
+    ++n;
+    *pnum = num;
+    p = next;
+
+    if (p[0] == ' ' && p[1] == '"') {
+      p += 2;
+      const char *q = strchr(p, '"');
+      if (q != NULL) {
+        ++n;
+        *pfn = strndup_(p, q - p);
+        p = q + 1;
+
+        if (p[0] == ' ') {
+          p += 1;
+          next = p;
+          int flag = strtol(next, (char**)&next, 10);
+          if (next > p) {
+            ++n;
+            *pflag = flag;
+          }
+        }
+      }
+    }
+  }
+  return n;
+}
+
 static void read_next_line(void) {
   if (lexer.fp == NULL) {
     lexer.p = NULL;
@@ -199,14 +237,30 @@ static void read_next_line(void) {
 
   char *line = NULL;
   size_t capa = 0;
-  ssize_t len = getline_(&line, &capa, lexer.fp, 0);
-  if (len == EOF) {
-    lexer.p = NULL;
-    lexer.line = NULL;
-    return;
-  }
-  while (len > 0 && line[len - 1] == '\\') {  // Continue line.
-    len = getline_(&line, &capa, lexer.fp, len - 1);  // -1 for overwrite on '\'
+  ssize_t len;
+  for (;;) {
+    len = getline_(&line, &capa, lexer.fp, 0);
+    if (len == EOF) {
+      lexer.p = NULL;
+      lexer.line = NULL;
+      return;
+    }
+    while (len > 0 && line[len - 1] == '\\') {  // Continue line.
+      len = getline_(&line, &capa, lexer.fp, len - 1);  // -1 for overwrite on '\'
+    }
+
+    if (line[0] != '#')
+      break;
+
+    // linemarkers: # linenum filename flags
+    long num = -1;
+    char *fn;
+    int flag = -1;
+    int n = scan_linemarker(line, &num, &fn, &flag);
+    if (n >= 2) {
+      lexer.lineno = num - 1;
+      lexer.filename = fn;
+    }
   }
 
   Line *p = malloc(sizeof(*line));
@@ -292,16 +346,38 @@ static Token *read_num(const char **pp) {
 
 char *read_ident(const char **pp) {
   const char *p = *pp;
-  if (isalpha(*p) || *p == '_') {
-    const char *q;
-    for (q = p + 1; ; ++q) {
-      if (!(isalnum(*q) || *q == '_'))
-        break;
-    }
-    *pp = q;
-    return strndup_(p, q - p);
+  if (!isalpha(*p) && *p != '_')
+    return NULL;
+
+  const char *q;
+  for (q = p + 1; ; ++q) {
+    if (!(isalnum(*q) || *q == '_'))
+      break;
   }
-  return NULL;
+  *pp = q;
+  return strndup_(p, q - p);
+}
+
+static Token *read_char(const char **pp) {
+  const char *p = *pp;
+  const char *begin = p++;
+  char c = *p;
+  if (c == '\'')
+    lex_error(p, "Empty character");
+  if (c == '\\') {
+    c = *(++p);
+    if (c == '\0')
+      lex_error(p, "Character not closed");
+    c = backslash(c);
+  }
+  if (*(++p) != '\'')
+    lex_error(p, "Character not closed");
+
+  ++p;
+  Token *tok = alloc_token(TK_CHARLIT, begin, p);
+  tok->u.value = c;
+  *pp = p;
+  return tok;
 }
 
 static Token *read_string(const char **pp) {
@@ -377,61 +453,36 @@ static Token *get_op_token(const char **pp) {
 }
 
 static Token *get_token(void) {
-  Token *tok = NULL;
+  static Token kEofToken = {.type = TK_EOF};
+
   const char *p = lexer.p;
   if (p == NULL)
-    return alloc_token(TK_EOF, NULL, NULL);
+    return &kEofToken;
 
-  for (;;) {
-    p = skip_whitespace_or_comment(p);
-    if (p == NULL)
-      return alloc_token(TK_EOF, NULL, NULL);
+  p = skip_whitespace_or_comment(p);
+  if (p == NULL)
+    return &kEofToken;
 
-    tok = get_op_token(&p);
-    if (tok != NULL)
-      break;
-
-    if (isdigit(*p)) {
-      tok = read_num(&p);
-      break;
+  Token *tok = NULL;
+  const char *begin = p;
+  char *ident = read_ident(&p);
+  if (ident != NULL) {
+    enum TokenType word = reserved_word(ident);
+    if ((int)word != -1) {
+      free(ident);
+      tok = alloc_token(word, begin, p);
+    } else {
+      tok = alloc_ident(ident, begin, p);
     }
-
-    const char *begin = p;
-    char *ident = read_ident(&p);
-    if (ident != NULL) {
-      enum TokenType word = reserved_word(ident);
-      if ((int)word != -1) {
-        free(ident);
-        tok = alloc_token(word, begin, p);
-      } else {
-        tok = alloc_ident(ident, begin, p);
-      }
-      break;
-    }
-
-    if (*p == '\'') {
-      const char *begin = p++;
-      char c = *p;
-      if (c == '\\') {
-        c = *(++p);
-        if (c == '\0')
-          lex_error(p, "Character not closed");
-        c = backslash(c);
-      }
-      if (*(++p) != '\'')
-        lex_error(p, "Character not closed");
-
-      ++p;
-      tok = alloc_token(TK_CHARLIT, begin, p);
-      tok->u.value = c;
-      break;
-    }
-
-    if (*p == '"') {
-      tok = read_string(&p);
-      break;
-    }
-
+  } else if ((tok = get_op_token(&p)) != NULL) {
+    // Ok.
+  } else if (isdigit(*p)) {
+    tok = read_num(&p);
+  } else if (*p == '\'') {
+    tok = read_char(&p);
+  } else if (*p == '"') {
+    tok = read_string(&p);
+  } else {
     lex_error(p, "Unexpected character `%c'(%d)", *p, *p);
     return NULL;
   }
@@ -486,16 +537,6 @@ bool is_char_type(const Type *type) {
   return type->type == TY_NUM && type->u.numtype == NUM_CHAR;
 }
 
-bool is_struct_or_union(enum eType type) {
-  switch (type) {
-  case TY_STRUCT:
-  case TY_UNION:
-    return true;
-  default:
-    return false;
-  }
-}
-
 bool is_void_ptr(const Type *type) {
   return type->type == TY_PTR && type->u.pa.ptrof->type == TY_VOID;
 }
@@ -527,7 +568,6 @@ bool same_type(const Type *type1, const Type *type2) {
       }
       return true;
     case TY_STRUCT:
-    case TY_UNION:
       {
         if (type1->u.struct_.info != NULL) {
           if (type2->u.struct_.info != NULL)
@@ -665,8 +705,11 @@ VarInfo *define_global(const Type *type, int flag, const Token *ident, const cha
   if (name == NULL)
     name = ident->u.ident;
   VarInfo *varinfo = find_global(name);
-  if (varinfo != NULL && !(varinfo->flag & VF_EXTERN))
+  if (varinfo != NULL && !(varinfo->flag & VF_EXTERN)) {
+    if (flag & VF_EXTERN)
+      return varinfo;
     parse_error(ident, "`%s' already defined", name);
+  }
   varinfo = malloc(sizeof(*varinfo));
   varinfo->name = name;
   varinfo->type = type;
@@ -717,40 +760,6 @@ static Expr *unary(void);
 
 Map *typedef_map;
 
-// Call before accessing struct member to ensure that struct is declared.
-void ensure_struct(Type *type, const Token *token) {
-  assert(type->type == TY_STRUCT || type->type == TY_UNION);
-  if (type->u.struct_.info == NULL) {
-    // TODO: Search from name.
-    StructInfo *sinfo = (StructInfo*)map_get(struct_map, type->u.struct_.name);
-    if (sinfo == NULL)
-      parse_error(token, "Accessing unknown struct(%s)'s member", type->u.struct_.name);
-    type->u.struct_.info = sinfo;
-  }
-}
-
-// Scope
-
-Scope *curscope;
-
-Scope *enter_scope(Defun *defun, Vector *vars) {
-  Scope *scope = new_scope(curscope, vars);
-  curscope = scope;
-  vec_push(defun->all_scopes, scope);
-  return scope;
-}
-
-void exit_scope(void) {
-  assert(curscope != NULL);
-  curscope = curscope->parent;
-}
-
-VarInfo *add_cur_scope(const Token *ident, const Type *type, int flag) {
-  if (curscope->vars == NULL)
-    curscope->vars = new_vector();
-  return var_add(curscope->vars, ident, type, flag);
-}
-
 //
 
 Expr *new_expr(enum ExprType type, const Type *valType, const Token *token) {
@@ -759,89 +768,6 @@ Expr *new_expr(enum ExprType type, const Type *valType, const Token *token) {
   expr->valType = valType;
   expr->token = token;
   return expr;
-}
-
-bool can_cast(const Type *dst, const Type *src, Expr *src_expr, bool is_explicit) {
-  if (same_type(dst, src))
-    return true;
-
-  if (dst->type == TY_VOID)
-    return src->type == TY_VOID || is_explicit;
-  if (src->type == TY_VOID)
-    return false;
-
-  switch (dst->type) {
-  case TY_NUM:
-    switch (src->type) {
-    case TY_NUM:
-      return true;
-    case TY_PTR:
-    case TY_ARRAY:
-    case TY_FUNC:
-      if (is_explicit) {
-        // TODO: Check sizeof(long) is same as sizeof(ptr)
-        return true;
-      }
-      break;
-    default:
-      break;
-    }
-    break;
-  case TY_PTR:
-    switch (src->type) {
-    case TY_NUM:
-      if (src_expr->type == EX_NUM && src_expr->u.num.ival == 0)  // Special handling for 0 to pointer.
-        return true;
-      if (is_explicit)
-        return true;
-      break;
-    case TY_PTR:
-      if (is_explicit)
-        return true;
-      // void* is interchangable with any pointer type.
-      if (dst->u.pa.ptrof->type == TY_VOID || src->u.pa.ptrof->type == TY_VOID)
-        return true;
-      break;
-    case TY_ARRAY:
-      if (is_explicit)
-        return true;
-      if (same_type(dst->u.pa.ptrof, src->u.pa.ptrof) ||
-          can_cast(dst, ptrof(src->u.pa.ptrof), src_expr, is_explicit))
-        return true;
-      break;
-    case TY_FUNC:
-      if (is_explicit)
-        return true;
-      if (dst->u.pa.ptrof->type == TY_FUNC && same_type(dst->u.pa.ptrof, src))
-        return true;
-      break;
-    default:  break;
-    }
-    break;
-  case TY_ARRAY:
-    switch (src->type) {
-    case TY_PTR:
-      if (is_explicit && same_type(dst->u.pa.ptrof, src->u.pa.ptrof))
-        return true;
-      // Fallthrough
-    case TY_ARRAY:
-      if (is_explicit)
-        return true;
-      break;
-    default:  break;
-    }
-    break;
-  default:
-    break;
-  }
-  return false;
-}
-
-bool check_cast(const Type *dst, const Type *src, Expr *src_expr, bool is_explicit) {
-  if (can_cast(dst, src, src_expr, is_explicit))
-    return true;
-  parse_error(NULL, "Cannot convert value from type %d to %d", src->type, dst->type);
-  return false;
 }
 
 bool is_const(Expr *expr) {
@@ -904,20 +830,6 @@ Expr *new_expr_deref(const Token *token, Expr *sub) {
   if (sub->valType->type != TY_PTR && sub->valType->type != TY_ARRAY)
     parse_error(token, "Cannot dereference raw type");
   return new_expr_unary(EX_DEREF, sub->valType->u.pa.ptrof, token, sub);
-}
-
-Expr *new_expr_cast(const Type *type, const Token *token, Expr *sub, bool is_explicit) {
-  if (type->type == TY_VOID || sub->valType->type == TY_VOID)
-    parse_error(NULL, "cannot use `void' as a value");
-
-  if (same_type(type, sub->valType))
-    return sub;
-
-  check_cast(type, sub->valType, sub, is_explicit);
-
-  Expr *expr = new_expr(EX_CAST, type, token);
-  expr->u.cast.sub = sub;
-  return expr;
 }
 
 static Expr *new_expr_ternary(const Token *token, Expr *cond, Expr *tval, Expr *fval, const Type *type) {
@@ -1000,7 +912,7 @@ static const Type *parse_enum(void) {
         if (consume(TK_ASSIGN)) {
           numtok = fetch_token();
           Expr *expr = analyze_expr(parse_const(), false);
-          if (!(is_const(expr) && !is_number(expr->type))) {
+          if (!(is_const(expr) && is_number(expr->valType->type))) {
             parse_error(numtok, "const expected for enum");
           }
           value = expr->u.num.ival;
@@ -1084,7 +996,7 @@ const Type *parse_raw_type(int *pflag) {
         parse_error(NULL, "Illegal struct/union usage");
 
       Type *stype = malloc(sizeof(*type));
-      stype->type = (structtok->type == TK_STRUCT) ? TY_STRUCT : TY_UNION;
+      stype->type = TY_STRUCT;
       stype->u.struct_.name = name;
       stype->u.struct_.info = sinfo;
       type = stype;
@@ -1154,7 +1066,7 @@ const Type *parse_type_suffix(const Type *type) {
   } else {
     const Token *tok = fetch_token();
     Expr *expr = analyze_expr(parse_const(), false);
-    if (!(is_const(expr) && !is_number(expr->type)))
+    if (!(is_const(expr) && is_number(expr->valType->type)))
       parse_error(NULL, "syntax error");
     if (expr->u.num.ival <= 0)
       parse_error(tok, "Array size must be greater than 0, but %d", (int)expr->u.num.ival);
@@ -1163,6 +1075,17 @@ const Type *parse_type_suffix(const Type *type) {
       parse_error(NULL, "`]' expected");
   }
   return arrayof(parse_type_suffix(type), length);
+}
+
+static Vector *parse_funparam_types(bool *pvaargs) {  // Vector<Type*>
+  Vector *params = parse_funparams(pvaargs);
+  Vector *param_types = NULL;
+  if (params != NULL) {
+    param_types = new_vector();
+    for (int i = 0, len = params->len; i < len; ++i)
+      vec_push(param_types, ((VarInfo*)params->data[i])->type);
+  }
+  return param_types;
 }
 
 bool parse_var_def(const Type **prawType, const Type** ptype, int *pflag, Token **pident) {
@@ -1189,13 +1112,7 @@ bool parse_var_def(const Type **prawType, const Type** ptype, int *pflag, Token 
       parse_error(NULL, "`(' expected");
 
     bool vaargs;
-    Vector *params = funparams(&vaargs);
-    Vector *param_types = NULL;
-    if (params != NULL) {
-      param_types = new_vector();
-      for (int i = 0, len = params->len; i < len; ++i)
-        vec_push(param_types, ((VarInfo*)params->data[i])->type);
-    }
+    Vector *param_types = parse_funparam_types(&vaargs);
     type = ptrof(new_func_type(type, param_types, vaargs));
   } else {
     if (type->type != TY_VOID) {
@@ -1221,7 +1138,7 @@ const Type *parse_full_type(int *pflag, Token **pident) {
   return type;
 }
 
-Vector *funparams(bool *pvaargs) {  // Vector<VarInfo*>
+Vector *parse_funparams(bool *pvaargs) {  // Vector<VarInfo*>, NULL=>old style.
   Vector *params = NULL;
   bool vaargs = false;
   if (consume(TK_RPAR)) {
@@ -1241,6 +1158,11 @@ Vector *funparams(bool *pvaargs) {  // Vector<VarInfo*>
       Token *ident;
       if (!parse_var_def(NULL, &type, &flag, &ident))
         parse_error(NULL, "type expected");
+      if (flag & VF_STATIC)
+        parse_error(ident, "`static' for function parameter");
+      if (flag & VF_EXTERN)
+        parse_error(ident, "`extern' for function parameter");
+
       if (params->len == 0) {
         if (type->type == TY_VOID) {  // fun(void)
           if (!consume(TK_RPAR))
@@ -1273,16 +1195,22 @@ static StructInfo *parse_struct(bool is_union) {
     if (consume(TK_RBRACE))
       break;
 
-    const Type *type;
-    int flag;
-    Token *ident;
-    if (!parse_var_def(NULL, &type, &flag, &ident))
-      parse_error(NULL, "type expected");
-    not_void(type);
+    const Type *rawType = NULL;
+    for (;;) {
+      const Type *type;
+      int flag;
+      Token *ident;
+      if (!parse_var_def(&rawType, &type, &flag, &ident))
+        parse_error(NULL, "type expected");
+      not_void(type);
+      var_add(members, ident, type, flag);
 
-    if (!consume(TK_SEMICOL))
-      parse_error(NULL, "`;' expected");
-    var_add(members, ident, type, flag);
+      if (consume(TK_COMMA))
+        continue;
+      if (!consume(TK_SEMICOL))
+        parse_error(NULL, "`;' expected");
+      break;
+    }
   }
 
   StructInfo *sinfo = malloc(sizeof(*sinfo));
@@ -1673,6 +1601,117 @@ Expr *parse_expr(void) {
 
 static const Type *tyNumTable[] = { &tyChar, &tyShort, &tyInt, &tyLong, &tyEnum };
 
+Scope *curscope;
+
+// Call before accessing struct member to ensure that struct is declared.
+void ensure_struct(Type *type, const Token *token) {
+  assert(type->type == TY_STRUCT);
+  if (type->u.struct_.info == NULL) {
+    // TODO: Search from name.
+    StructInfo *sinfo = (StructInfo*)map_get(struct_map, type->u.struct_.name);
+    if (sinfo == NULL)
+      parse_error(token, "Accessing unknown struct(%s)'s member", type->u.struct_.name);
+    type->u.struct_.info = sinfo;
+  }
+}
+
+bool can_cast(const Type *dst, const Type *src, Expr *src_expr, bool is_explicit) {
+  if (same_type(dst, src))
+    return true;
+
+  if (dst->type == TY_VOID)
+    return src->type == TY_VOID || is_explicit;
+  if (src->type == TY_VOID)
+    return false;
+
+  switch (dst->type) {
+  case TY_NUM:
+    switch (src->type) {
+    case TY_NUM:
+      return true;
+    case TY_PTR:
+    case TY_ARRAY:
+    case TY_FUNC:
+      if (is_explicit) {
+        // TODO: Check sizeof(long) is same as sizeof(ptr)
+        return true;
+      }
+      break;
+    default:
+      break;
+    }
+    break;
+  case TY_PTR:
+    switch (src->type) {
+    case TY_NUM:
+      if (src_expr->type == EX_NUM && src_expr->u.num.ival == 0)  // Special handling for 0 to pointer.
+        return true;
+      if (is_explicit)
+        return true;
+      break;
+    case TY_PTR:
+      if (is_explicit)
+        return true;
+      // void* is interchangable with any pointer type.
+      if (dst->u.pa.ptrof->type == TY_VOID || src->u.pa.ptrof->type == TY_VOID)
+        return true;
+      break;
+    case TY_ARRAY:
+      if (is_explicit)
+        return true;
+      if (same_type(dst->u.pa.ptrof, src->u.pa.ptrof) ||
+          can_cast(dst, ptrof(src->u.pa.ptrof), src_expr, is_explicit))
+        return true;
+      break;
+    case TY_FUNC:
+      if (is_explicit)
+        return true;
+      if (dst->u.pa.ptrof->type == TY_FUNC && same_type(dst->u.pa.ptrof, src))
+        return true;
+      break;
+    default:  break;
+    }
+    break;
+  case TY_ARRAY:
+    switch (src->type) {
+    case TY_PTR:
+      if (is_explicit && same_type(dst->u.pa.ptrof, src->u.pa.ptrof))
+        return true;
+      // Fallthrough
+    case TY_ARRAY:
+      if (is_explicit)
+        return true;
+      break;
+    default:  break;
+    }
+    break;
+  default:
+    break;
+  }
+  return false;
+}
+
+bool check_cast(const Type *dst, const Type *src, Expr *src_expr, bool is_explicit) {
+  if (can_cast(dst, src, src_expr, is_explicit))
+    return true;
+  parse_error(NULL, "Cannot convert value from type %d to %d", src->type, dst->type);
+  return false;
+}
+
+Expr *new_expr_cast(const Type *type, const Token *token, Expr *sub, bool is_explicit) {
+  if (type->type == TY_VOID || sub->valType->type == TY_VOID)
+    parse_error(NULL, "cannot use `void' as a value");
+
+  if (same_type(type, sub->valType))
+    return sub;
+
+  check_cast(type, sub->valType, sub, is_explicit);
+
+  Expr *expr = new_expr(EX_CAST, type, token);
+  expr->u.cast.sub = sub;
+  return expr;
+}
+
 Expr *new_expr_sizeof(const Token *token, const Type *type, Expr *sub) {
   Expr *expr = new_expr(EX_SIZEOF, &tySize, token);
   expr->u.sizeof_.type = type;
@@ -1691,6 +1730,27 @@ static Expr *add_num(enum ExprType exprType, const Token *tok, Expr *lhs, Expr *
     lnt = NUM_INT;
   if (rnt == NUM_ENUM)
     rnt = NUM_INT;
+
+  if (is_const(lhs) && is_const(rhs)) {
+    intptr_t lval = lhs->u.num.ival;
+    intptr_t rval = rhs->u.num.ival;
+    intptr_t value;
+    switch (exprType) {
+    case EX_ADD:
+      value = lval + rval;
+      break;
+    case EX_SUB:
+      value = lval - rval;
+      break;
+    default:
+      assert(false);
+      value = -1;
+      break;
+    }
+    Num num = {value};
+    const Type *type = lnt >= rnt ? lhs->valType : rhs->valType;
+    return new_expr_numlit(type, lhs->token, &num);
+  }
 
   const Type *type;
   if (lnt >= rnt || keep_left) {
@@ -1723,10 +1783,10 @@ Expr *add_expr(const Token *tok, Expr *lhs, Expr *rhs, bool keep_left) {
   //  rtype = &tyInt;
 
   if (is_number(ltype->type)) {
-    if (same_type(ltype, rtype))
-      return new_expr_bop(EX_ADD, ltype, tok, lhs, rhs);
     if (is_number(rtype->type))
       return add_num(EX_ADD, tok, lhs, rhs, keep_left);
+    if (same_type(ltype, rtype))
+      return new_expr_bop(EX_ADD, ltype, tok, lhs, rhs);
   }
 
   switch (ltype->type) {
@@ -1771,10 +1831,10 @@ static Expr *diff_ptr(const Token *tok, Expr *lhs, Expr *rhs) {
 
 static Expr *sub_expr(const Token *tok, Expr *lhs, Expr *rhs, bool keep_left) {
   if (is_number(lhs->valType->type)) {
-    if (same_type(lhs->valType, rhs->valType))
-      return new_expr_bop(EX_SUB, lhs->valType, tok, lhs, rhs);
     if (is_number(rhs->valType->type))
       return add_num(EX_SUB, tok, lhs, rhs, keep_left);
+    if (same_type(lhs->valType, rhs->valType))
+      return new_expr_bop(EX_SUB, lhs->valType, tok, lhs, rhs);
   }
 
   switch (lhs->valType->type) {
@@ -1827,7 +1887,7 @@ static bool cast_numbers(Expr **pLhs, Expr **pRhs, bool keep_left) {
 }
 
 static bool member_access_recur(const Type *type, const Token *ident, Vector *stack) {
-  assert(type->type == TY_STRUCT || type->type == TY_UNION);
+  assert(type->type == TY_STRUCT);
   ensure_struct((Type*)type, ident);
   const char *name = ident->u.ident;
 
@@ -1839,7 +1899,7 @@ static bool member_access_recur(const Type *type, const Token *ident, Vector *st
         vec_push(stack, (void*)(long)i);
         return true;
       }
-    } else if (info->type->type == TY_STRUCT || info->type->type == TY_UNION) {
+    } else if (info->type->type == TY_STRUCT) {
       vec_push(stack, (void*)(long)i);
       bool res = member_access_recur(info->type, ident, stack);
       if (res)
@@ -1876,6 +1936,9 @@ static void analyze_cmp(Expr *expr) {
 
 // Traverse expr to check semantics and determine value type.
 Expr *analyze_expr(Expr *expr, bool keep_left) {
+  if (expr == NULL)
+    return NULL;
+
   switch (expr->type) {
   // Literals
   case EX_NUM:
@@ -1895,6 +1958,7 @@ Expr *analyze_expr(Expr *expr, bool keep_left) {
             // Replace local variable reference to global.
             name = varinfo->u.l.label;
             expr = new_expr_varref(name, varinfo->type, true, expr->token);
+            global = true;
           } else {
             type = varinfo->type;
           }
@@ -2151,7 +2215,7 @@ Expr *analyze_expr(Expr *expr, bool keep_left) {
       // Find member's type from struct info.
       const Type *targetType = target->valType;
       if (acctok->type == TK_DOT) {
-        if (!is_struct_or_union(targetType->type))
+        if (targetType->type != TY_STRUCT)
           parse_error(acctok, "`.' for non struct value");
       } else {  // TK_ARROW
         if (targetType->type == TY_PTR)
@@ -2160,7 +2224,7 @@ Expr *analyze_expr(Expr *expr, bool keep_left) {
           targetType = targetType->u.pa.ptrof;
         else
           parse_error(acctok, "`->' for non pointer value");
-        if (!is_struct_or_union(targetType->type))
+        if (targetType->type != TY_STRUCT)
           parse_error(acctok, "`->' for non struct value");
       }
 
@@ -2264,56 +2328,44 @@ if (expr->valType == NULL) { fprintf(stderr, "expr->type=%d, ", expr->type); }
   assert(expr->valType != NULL);
   return expr;
 }
+#include "parser.h"
+
 #include <assert.h>
 #include <stdbool.h>
 #include <stdlib.h>  // malloc
-#include <string.h>
 
 #include "expr.h"
 #include "lexer.h"
 #include "type.h"
 #include "util.h"
-#include "var.h"
-
-const int LF_BREAK = 1 << 0;
-const int LF_CONTINUE = 1 << 0;
-
-static int curloopflag;
-static Defun *curfunc;
-static Node *curswitch;
 
 static Node *stmt(void);
 
-static Expr *parse_analyze_expr(void) {
-  return analyze_expr(parse_expr(), false);
+static VarDecl *new_vardecl(const Type *type, const Token *ident, Initializer *init, int flag) {
+  VarDecl *decl = malloc(sizeof(*decl));
+  decl->type = type;
+  decl->ident = ident;
+  decl->init = init;
+  decl->flag = flag;
+  return decl;
 }
 
-static Defun *new_defun(const Type *type, const char *name, Vector *params) {
+static Defun *new_defun(const Type *rettype, const char *name, Vector *params, int flag, bool vaargs) {
   Defun *defun = malloc(sizeof(*defun));
-  defun->type = type;
+  defun->rettype = rettype;
   defun->name = name;
   defun->params = params;
-  defun->top_scope = NULL;
+  defun->flag = flag;
+  defun->vaargs = vaargs;
+
+  defun->type = NULL;
   defun->stmts = NULL;
+  defun->top_scope = NULL;
   defun->all_scopes = new_vector();
   defun->labels = NULL;
   defun->gotos = NULL;
   defun->ret_label = NULL;
   return defun;
-}
-
-static void add_func_label(const char *label) {
-  assert(curfunc != NULL);
-  if (curfunc->labels == NULL)
-    curfunc->labels = new_map();
-  map_put(curfunc->labels, label, label);  // Put dummy value.
-}
-
-static void add_func_goto(Node *node) {
-  assert(curfunc != NULL);
-  if (curfunc->gotos == NULL)
-    curfunc->gotos = new_vector();
-  vec_push(curfunc->gotos, node);
 }
 
 static Node *new_node(enum NodeType type) {
@@ -2322,15 +2374,15 @@ static Node *new_node(enum NodeType type) {
   return node;
 }
 
-static Node *new_node_expr(Expr *e) {
+Node *new_node_expr(Expr *e) {
   Node *node = new_node(ND_EXPR);
   node->u.expr = e;
   return node;
 }
 
-static Node *new_node_block(Scope *scope, Vector *nodes) {
+static Node *new_node_block(Vector *nodes) {
   Node *node = new_node(ND_BLOCK);
-  node->u.block.scope = scope;
+  node->u.block.scope = NULL;
   node->u.block.nodes = nodes;
   return node;
 }
@@ -2372,8 +2424,8 @@ static Node *new_node_while(Expr *cond, Node *body) {
 
 static Node *new_node_do_while(Node *body, Expr *cond) {
   Node *node = new_node(ND_DO_WHILE);
-  node->u.do_while.body = body;
-  node->u.do_while.cond = cond;
+  node->u.while_.body = body;
+  node->u.while_.cond = cond;
   return node;
 }
 
@@ -2406,221 +2458,17 @@ static Node *new_node_label(const char *name, Node *stmt) {
   return node;
 }
 
+static Node *new_node_vardecl(Vector *decls) {
+  Node *node = new_node(ND_VARDECL);
+  node->u.vardecl.decls = decls;
+  node->u.vardecl.inits = NULL;
+  return node;
+}
+
 static Node *new_node_defun(Defun *defun) {
   Node *node = new_node(ND_DEFUN);
   node->u.defun = defun;
   return node;
-}
-
-static Node *parse_if(void) {
-  if (consume(TK_LPAR)) {
-    Expr *cond = parse_analyze_expr();
-    if (consume(TK_RPAR)) {
-      Node *tblock = stmt();
-      Node *fblock = NULL;
-      if (consume(TK_ELSE)) {
-        fblock = stmt();
-      }
-      return new_node_if(cond, tblock, fblock);
-    }
-  }
-  parse_error(NULL, "Illegal syntax in `if'");
-  return NULL;
-}
-
-static Node *parse_switch(void) {
-  if (consume(TK_LPAR)) {
-    Expr *value = parse_analyze_expr();
-    if (consume(TK_RPAR)) {
-      Node *swtch = new_node_switch(value);
-
-      Node *save_switch = curswitch;
-      int save_flag = curloopflag;
-      curloopflag |= LF_BREAK;
-      curswitch = swtch;
-
-      swtch->u.switch_.body = stmt();
-
-      curloopflag = save_flag;
-      curswitch = save_switch;
-
-      return swtch;
-    }
-  }
-  parse_error(NULL, "Illegal syntax in `switch'");
-  return NULL;
-}
-
-static Node *parse_case(Token *tok) {
-  if (curswitch == NULL)
-    parse_error(tok, "`case' cannot use outside of `switch`");
-
-  tok = fetch_token();
-  Expr *valnode = analyze_expr(parse_const(), false);
-  if (!is_const(valnode))
-    parse_error(tok, "Cannot use expression");
-  intptr_t value = valnode->u.num.ival;
-
-  if (!consume(TK_COLON))
-    parse_error(NULL, "`:' expected");
-
-  Vector *values = curswitch->u.switch_.case_values;
-
-  // Check duplication.
-  for (int i = 0, len = values->len; i < len; ++i) {
-    if ((intptr_t)values->data[i] == value)
-      parse_error(tok, "Case value `%lld' already defined: %s", value);
-  }
-
-  vec_push(values, (void*)value);
-
-  return new_node_case(value);
-}
-
-static Node *parse_default(Token *tok) {
-  if (curswitch == NULL)
-    parse_error(tok, "`default' cannot use outside of `switch'");
-  if (curswitch->u.switch_.has_default)
-    parse_error(tok, "`default' already defined in `switch'");
-
-  if (!consume(TK_COLON))
-    parse_error(NULL, "`:' expected");
-
-  curswitch->u.switch_.has_default = true;
-
-  return new_node_default();
-}
-
-static Node *parse_while(void) {
-  if (consume(TK_LPAR)) {
-    Expr *cond = parse_analyze_expr();
-    if (consume(TK_RPAR)) {
-      int save_flag = curloopflag;
-      curloopflag |= LF_BREAK | LF_CONTINUE;
-      Node *body = stmt();
-      curloopflag = save_flag;
-
-      return new_node_while(cond, body);
-    }
-  }
-  parse_error(NULL, "Illegal syntax in `while'");
-  return NULL;
-}
-
-static Node *parse_do_while(void) {
-  int save_flag = curloopflag;
-  curloopflag |= LF_BREAK | LF_CONTINUE;
-  Node *body = stmt();
-  curloopflag = save_flag;
-
-  if (consume(TK_WHILE)) {
-    if (consume(TK_LPAR)) {
-      Expr *cond = parse_analyze_expr();
-      if (consume(TK_RPAR) && consume(TK_SEMICOL)) {
-        return new_node_do_while(body, cond);
-      }
-    }
-  }
-  parse_error(NULL, "Illegal syntax in `do-while'");
-  return NULL;
-}
-
-static Vector *parse_vardecl_cont(const Type *rawType, Type *type, int flag, Token *ident);
-static Node *parse_for(void) {
-  Scope *scope = NULL;
-  if (consume(TK_LPAR)) {
-    assert(curfunc != NULL);
-    Expr *pre = NULL;
-    bool nopre = false;
-    Vector *stmts = NULL;
-    if (consume(TK_SEMICOL)) {
-      nopre = true;
-    } else {
-      const Type *rawType = NULL;
-      Type *type;
-      int flag;
-      Token *ident;
-      if (parse_var_def(&rawType, (const Type**)&type, &flag, &ident)) {
-        if (ident == NULL)
-          parse_error(NULL, "Ident expected");
-        scope = enter_scope(curfunc, NULL);
-        stmts = parse_vardecl_cont(rawType, type, flag, ident);
-        if (!consume(TK_SEMICOL))
-          scope = NULL;  // Error
-      } else {
-        pre = parse_analyze_expr();
-        if (!consume(TK_SEMICOL))
-          pre = NULL;  // Error
-      }
-    }
-    if (nopre || pre != NULL || scope != NULL) {
-      Expr *cond = NULL;
-      Expr *post = NULL;
-      Node *body = NULL;
-      if ((consume(TK_SEMICOL) || (cond = parse_analyze_expr(), consume(TK_SEMICOL))) &&
-          (consume(TK_RPAR) || (post = parse_analyze_expr(), consume(TK_RPAR)))) {
-        int save_flag = curloopflag;
-        curloopflag |= LF_BREAK | LF_CONTINUE;
-        body = stmt();
-        curloopflag = save_flag;
-
-        Node *node = new_node_for(pre, cond, post, body);
-        if (scope != NULL) {
-          exit_scope();
-          if (stmts == NULL)
-            stmts = new_vector();
-          vec_push(stmts, node);
-          return new_node_block(scope, stmts);
-        } else {
-          return node;
-        }
-      }
-    }
-  }
-  if (scope != NULL)
-    exit_scope();
-  parse_error(NULL, "Illegal syntax in `for'");
-  return NULL;
-}
-
-static Node *parse_break_continue(enum NodeType type) {
-  if (!consume(TK_SEMICOL))
-    parse_error(NULL, "`;' expected");
-  return new_node(type);
-}
-
-static Node *parse_goto(void) {
-  Token *label = consume(TK_IDENT);
-  if (label == NULL)
-    parse_error(NULL, "label for goto expected");
-  if (!consume(TK_SEMICOL))
-    parse_error(NULL, "`;' expected");
-  Node *node = new_node_goto(label);
-  assert(curfunc != NULL);
-  add_func_goto(node);
-  return node;
-}
-
-static Node *parse_return(void) {
-  assert(curfunc != NULL);
-
-  Expr *val = NULL;
-  Token *tok;
-  const Type *rettype = curfunc->type->u.func.ret;
-  if ((tok = consume(TK_SEMICOL)) != NULL) {
-    if (rettype->type != TY_VOID)
-      parse_error(tok, "`return' required a value");
-  } else {
-    tok = fetch_token();
-    val = parse_analyze_expr();
-    if (!consume(TK_SEMICOL))
-      parse_error(NULL, "`;' expected");
-
-    if (rettype->type == TY_VOID)
-      parse_error(tok, "void function `return' a value");
-    val = new_expr_cast(rettype, tok, val, false);
-  }
-  return new_node_return(val);
 }
 
 // Initializer
@@ -2643,6 +2491,16 @@ static Initializer *parse_initializer(void) {
           init->type = vDot;
           init->u.dot.name = ident->u.ident;
           init->u.dot.value = value;
+        } else if (consume(TK_LBRACKET)) {
+          Expr *index = parse_const();
+          if (!consume(TK_RBRACKET))
+            parse_error(NULL, "`]' expected");
+          consume(TK_ASSIGN);  // both accepted: `[1] = 2`, and `[1] 2`
+          Initializer *value = parse_initializer();
+          init = malloc(sizeof(*init));
+          init->type = vArr;
+          init->u.arr.index = index;
+          init->u.arr.value = value;
         } else {
           init = parse_initializer();
         }
@@ -2662,63 +2520,517 @@ static Initializer *parse_initializer(void) {
     result->u.multi = multi;
   } else {
     result->type = vSingle;
-    result->u.single = analyze_expr(parse_assign(), false);
+    result->u.single = parse_assign();
   }
   return result;
 }
 
-static Vector *clear_initial_value(Expr *expr, Vector *inits) {
-  if (inits == NULL)
-    inits = new_vector();
+static Vector *parse_vardecl_cont(const Type *rawType, Type *type, int flag, Token *ident) {
+  Vector *decls = NULL;
+  bool first = true;
+  do {
+    if (!first) {
+      if (!parse_var_def(&rawType, (const Type**)&type, &flag, &ident) || ident == NULL) {
+        parse_error(NULL, "`ident' expected");
+        return NULL;
+      }
+    }
+    first = false;
+    not_void(type);
 
-  switch (expr->valType->type) {
-  case TY_NUM:
-    {
-      Num num = {0};
-      Expr *zero = new_expr_numlit(expr->valType, NULL, &num);
-      vec_push(inits,
-               new_node_expr(new_expr_bop(EX_ASSIGN, expr->valType, NULL,
-                                          expr, zero)));
+    Initializer *init = NULL;
+    if (consume(TK_ASSIGN)) {
+      init = parse_initializer();
     }
-    break;
-  case TY_PTR:
-    {
-      Num num = {0};
-      Expr *zero = new_expr_numlit(expr->valType, NULL, &num);
-      vec_push(inits,
-               new_node_expr(new_expr_bop(EX_ASSIGN, expr->valType, NULL, expr,
-                                          new_expr_cast(expr->valType, NULL, zero, true))));  // intptr_t
+
+    VarDecl *decl = new_vardecl(type, ident, init, flag);
+    if (decls == NULL)
+      decls = new_vector();
+    vec_push(decls, decl);
+  } while (consume(TK_COMMA));
+  return decls;
+}
+
+static Node *parse_vardecl(void) {
+  const Type *rawType = NULL;
+  Type *type;
+  int flag;
+  Token *ident;
+  if (!parse_var_def(&rawType, (const Type**)&type, &flag, &ident))
+    return NULL;
+  if (ident == NULL)
+    parse_error(NULL, "Ident expected");
+
+  Vector *decls = parse_vardecl_cont(rawType, type, flag, ident);
+
+  if (!consume(TK_SEMICOL))
+    parse_error(NULL, "`;' expected");
+
+  return decls != NULL ? new_node_vardecl(decls) : NULL;
+}
+
+static Node *parse_if(void) {
+  if (consume(TK_LPAR)) {
+    Expr *cond = parse_expr();
+    if (consume(TK_RPAR)) {
+      Node *tblock = stmt();
+      Node *fblock = NULL;
+      if (consume(TK_ELSE)) {
+        fblock = stmt();
+      }
+      return new_node_if(cond, tblock, fblock);
     }
-    break;
-  case TY_ARRAY:
-    {
-      size_t arr_len = expr->valType->u.pa.length;
-      for (size_t i = 0; i < arr_len; ++i) {
-        Num ofs = {.ival=i};
-        Expr *add = add_expr(NULL, expr,
-                             new_expr_numlit(&tyInt, NULL, &ofs), true);
-        clear_initial_value(new_expr_deref(NULL, add), inits);
+  }
+  parse_error(NULL, "Illegal syntax in `if'");
+  return NULL;
+}
+
+static Node *parse_switch(void) {
+  if (consume(TK_LPAR)) {
+    Expr *value = parse_expr();
+    if (consume(TK_RPAR)) {
+      Node *swtch = new_node_switch(value);
+      swtch->u.switch_.body = stmt();
+      return swtch;
+    }
+  }
+  parse_error(NULL, "Illegal syntax in `switch'");
+  return NULL;
+}
+
+static Node *parse_case(void) {
+  Token *tok = fetch_token();
+  Expr *valnode = analyze_expr(parse_const(), false);
+  if (!is_const(valnode))
+    parse_error(tok, "Cannot use expression");
+  intptr_t value = valnode->u.num.ival;
+
+  if (!consume(TK_COLON))
+    parse_error(NULL, "`:' expected");
+
+  return new_node_case(value);
+}
+
+static Node *parse_default(void) {
+  if (!consume(TK_COLON))
+    parse_error(NULL, "`:' expected");
+  return new_node_default();
+}
+
+static Node *parse_while(void) {
+  if (consume(TK_LPAR)) {
+    Expr *cond = parse_expr();
+    if (consume(TK_RPAR)) {
+      Node *body = stmt();
+
+      return new_node_while(cond, body);
+    }
+  }
+  parse_error(NULL, "Illegal syntax in `while'");
+  return NULL;
+}
+
+static Node *parse_do_while(void) {
+  Node *body = stmt();
+
+  if (consume(TK_WHILE) && consume(TK_LPAR)) {
+    Expr *cond = parse_expr();
+    if (consume(TK_RPAR) && consume(TK_SEMICOL)) {
+      return new_node_do_while(body, cond);
+    }
+  }
+  parse_error(NULL, "Illegal syntax in `do-while'");
+  return NULL;
+}
+
+static Node *parse_for(void) {
+  if (consume(TK_LPAR)) {
+    Expr *pre = NULL;
+    bool nopre = false;
+    Vector *decls = NULL;
+    if (consume(TK_SEMICOL)) {
+      nopre = true;
+    } else {
+      const Type *rawType = NULL;
+      Type *type;
+      int flag;
+      Token *ident;
+      if (parse_var_def(&rawType, (const Type**)&type, &flag, &ident)) {
+        if (ident == NULL)
+          parse_error(NULL, "Ident expected");
+        decls = parse_vardecl_cont(rawType, type, flag, ident);
+        if (!consume(TK_SEMICOL))
+          decls = NULL;  // Error
+      } else {
+        pre = parse_expr();
+        if (!consume(TK_SEMICOL))
+          pre = NULL;  // Error
       }
     }
-    break;
-  case TY_STRUCT:
-    {
-      const StructInfo *sinfo = expr->valType->u.struct_.info;
-      assert(sinfo != NULL);
-      for (int i = 0; i < sinfo->members->len; ++i) {
-        VarInfo* varinfo = sinfo->members->data[i];
-        Expr *member = new_expr_member(NULL, varinfo->type, expr, NULL, NULL, i);
-        clear_initial_value(member, inits);
+    if (nopre || pre != NULL || decls != NULL) {
+      Expr *cond = NULL;
+      Expr *post = NULL;
+      Node *body = NULL;
+      if ((consume(TK_SEMICOL) || (cond = parse_expr(), consume(TK_SEMICOL))) &&
+          (consume(TK_RPAR) || (post = parse_expr(), consume(TK_RPAR)))) {
+        body = stmt();
+
+        Node *node = new_node_for(pre, cond, post, body);
+        if (decls != NULL) {
+          Vector *stmts = new_vector();
+          vec_push(stmts, new_node_vardecl(decls));
+          vec_push(stmts, node);
+          return new_node_block(stmts);
+        } else {
+          return node;
+        }
       }
     }
-    break;
-  case TY_UNION:
-  default:
-    assert(!"Not implemented");
-    break;
+  }
+  parse_error(NULL, "Illegal syntax in `for'");
+  return NULL;
+}
+
+static Node *parse_break_continue(enum NodeType type) {
+  if (!consume(TK_SEMICOL))
+    parse_error(NULL, "`;' expected");
+  return new_node(type);
+}
+
+static Node *parse_goto(void) {
+  Token *label = consume(TK_IDENT);
+  if (label == NULL)
+    parse_error(NULL, "label for goto expected");
+  if (!consume(TK_SEMICOL))
+    parse_error(NULL, "`;' expected");
+  return new_node_goto(label);
+}
+
+static Node *parse_return(void) {
+  Expr *val = NULL;
+  Token *tok;
+  if ((tok = consume(TK_SEMICOL)) != NULL) {
+  } else {
+    tok = fetch_token();
+    val = parse_expr();
+    if (!consume(TK_SEMICOL))
+      parse_error(NULL, "`;' expected");
+  }
+  return new_node_return(val);
+}
+
+// Multiple stmt-s, also accept `case` and `default`.
+static Vector *read_stmts(void) {
+  Vector *nodes = NULL;
+  for (;;) {
+    if (consume(TK_RBRACE))
+      return nodes;
+
+    Node *node;
+    Token *tok;
+    if ((node = parse_vardecl()) != NULL)
+      ;
+    else if ((tok = consume(TK_CASE)) != NULL)
+      node = parse_case();
+    else if ((tok = consume(TK_DEFAULT)) != NULL)
+      node = parse_default();
+    else
+      node = stmt();
+
+    if (node == NULL)
+      continue;
+    if (nodes == NULL)
+      nodes = new_vector();
+    vec_push(nodes, node);
+  }
+}
+
+static Node *parse_block(void) {
+  Vector *nodes = read_stmts();
+  return new_node_block(nodes);
+}
+
+static Node *stmt(void) {
+  Token *label = consume(TK_IDENT);
+  if (label != NULL) {
+    if (consume(TK_COLON)) {
+      return new_node_label(label->u.ident, stmt());
+    }
+    unget_token(label);
   }
 
-  return inits;
+  if (consume(TK_SEMICOL))
+    return NULL;
+
+  if (consume(TK_LBRACE))
+    return parse_block();
+
+  if (consume(TK_IF))
+    return parse_if();
+
+  if (consume(TK_SWITCH))
+    return parse_switch();
+
+  if (consume(TK_WHILE))
+    return parse_while();
+
+  if (consume(TK_DO))
+    return parse_do_while();
+
+  if (consume(TK_FOR))
+    return parse_for();
+
+  Token *tok;
+  if ((tok = consume(TK_BREAK)) != NULL) {
+    return parse_break_continue(ND_BREAK);
+  }
+  if ((tok = consume(TK_CONTINUE)) != NULL) {
+    return parse_break_continue(ND_CONTINUE);
+  }
+  if ((tok = consume(TK_GOTO)) != NULL) {
+    return parse_goto();
+  }
+
+  if (consume(TK_RETURN))
+    return parse_return();
+
+  // expression statement.
+  Expr *val = parse_expr();
+  if (!consume(TK_SEMICOL))
+    parse_error(NULL, "Semicolon required");
+  return new_node_expr(val);
+}
+
+static Node *parse_defun(const Type *rettype, int flag, Token *ident) {
+  const char *name = ident->u.ident;
+  bool vaargs;
+  Vector *params = parse_funparams(&vaargs);
+
+  // Definition.
+  Defun *defun = new_defun(rettype, name, params, flag, vaargs);
+  if (consume(TK_SEMICOL)) {  // Prototype declaration.
+  } else {
+    if (!consume(TK_LBRACE)) {
+      parse_error(NULL, "`;' or `{' expected");
+      return NULL;
+    }
+
+    defun->stmts = read_stmts();
+    // Ensure stmts to be non-null to indicate this is not prototype definition.
+    if (defun->stmts == NULL)
+      defun->stmts = new_vector();
+  }
+  return new_node_defun(defun);
+}
+
+static void parse_typedef(void) {
+  int flag;
+  Token *ident;
+  const Type *type = parse_full_type(&flag, &ident);
+  if (type == NULL)
+    parse_error(NULL, "type expected");
+  not_void(type);
+
+  if (ident == NULL) {
+    ident = consume(TK_IDENT);
+    if (ident == NULL)
+      parse_error(NULL, "ident expected");
+  }
+  const char *name = ident->u.ident;
+
+  map_put(typedef_map, name, type);
+
+  if (!consume(TK_SEMICOL))
+    parse_error(NULL, "`;' expected");
+}
+
+static Node *parse_global_var_decl(const Type *rawtype, int flag, const Type *type, Token *ident) {
+  bool first = true;
+  Vector *decls = NULL;
+  do {
+    if (!first) {
+      type = parse_type_modifier(rawtype);
+      if ((ident = consume(TK_IDENT)) == NULL)
+        parse_error(NULL, "`ident' expected");
+    }
+    first = false;
+
+    if (type->type == TY_VOID)
+      parse_error(ident, "`void' not allowed");
+
+    type = parse_type_suffix(type);
+    Initializer *init = NULL;
+    const Token *tok;
+    if ((tok = consume(TK_ASSIGN)) != NULL) {
+      init = parse_initializer();
+    }
+
+    VarDecl *decl = new_vardecl(type, ident, init, flag);
+    if (decls == NULL)
+      decls = new_vector();
+    vec_push(decls, decl);
+  } while (consume(TK_COMMA));
+
+  if (!consume(TK_SEMICOL))
+    parse_error(NULL, "`;' or `,' expected");
+
+  return decls != NULL ? new_node_vardecl(decls) : NULL;
+}
+
+static Node *toplevel(void) {
+  int flag;
+  const Type *rawtype = parse_raw_type(&flag);
+  if (rawtype != NULL) {
+    const Type *type = parse_type_modifier(rawtype);
+    if ((type->type == TY_STRUCT ||
+         (type->type == TY_NUM && type->u.numtype == NUM_ENUM)) &&
+        consume(TK_SEMICOL))  // Just struct/union definition.
+      return NULL;
+
+    Token *ident;
+    if ((ident = consume(TK_IDENT)) != NULL) {
+      if (consume(TK_LPAR))  // Function.
+        return parse_defun(type, flag, ident);
+
+      return parse_global_var_decl(rawtype, flag, type, ident);
+    }
+    parse_error(NULL, "ident expected");
+    return NULL;
+  }
+  if (consume(TK_TYPEDEF)) {
+    parse_typedef();
+    return NULL;
+  }
+  parse_error(NULL, "Unexpected token");
+  return NULL;
+}
+
+Node *parse_program(void) {
+  Vector *nodes = new_vector();
+  while (!consume(TK_EOF)) {
+    Node *node = toplevel();
+    if (node != NULL)
+      vec_push(nodes, node);
+  }
+
+  Node *node = new_node(ND_TOPLEVEL);
+  node->u.toplevel.nodes = nodes;
+  return node;
+}
+#include "sema.h"
+
+#include <assert.h>
+#include <stdlib.h>  // malloc
+
+#include "expr.h"
+#include "lexer.h"
+#include "parser.h"
+#include "type.h"
+#include "util.h"
+#include "var.h"
+
+const int LF_BREAK = 1 << 0;
+const int LF_CONTINUE = 1 << 0;
+
+Defun *curfunc;
+static int curloopflag;
+static Node *curswitch;
+
+// Scope
+
+static Scope *enter_scope(Defun *defun, Vector *vars) {
+  Scope *scope = new_scope(curscope, vars);
+  curscope = scope;
+  vec_push(defun->all_scopes, scope);
+  return scope;
+}
+
+static void exit_scope(void) {
+  assert(curscope != NULL);
+  curscope = curscope->parent;
+}
+
+static VarInfo *add_cur_scope(const Token *ident, const Type *type, int flag) {
+  if (curscope->vars == NULL)
+    curscope->vars = new_vector();
+  return var_add(curscope->vars, ident, type, flag);
+}
+
+static void fix_array_size(Type *type, Initializer *init) {
+  assert(init != NULL);
+  assert(type->type == TY_ARRAY);
+
+  bool is_str = false;
+  if (init->type != vMulti &&
+      !(is_char_type(type->u.pa.ptrof) &&
+        init->type == vSingle &&
+        can_cast(type, init->u.single->valType, init->u.single, false) &&
+        (is_str = true))) {
+    parse_error(NULL, "Error initializer");
+  }
+
+  size_t arr_len = type->u.pa.length;
+  if (arr_len == (size_t)-1) {
+    if (is_str) {
+      type->u.pa.length = init->u.single->u.str.size;
+    } else {
+      size_t index = 0;
+      size_t max_index = 0;
+      size_t i, len = init->u.multi->len;
+      for (i = 0; i < len; ++i) {
+        Initializer *init_elem = init->u.multi->data[i];
+        if (init_elem->type == vArr) {
+          assert(init_elem->u.arr.index->type == EX_NUM);
+          index = init_elem->u.arr.index->u.num.ival;
+        }
+        ++index;
+        if (max_index < index)
+          max_index = index;
+      }
+      type->u.pa.length = max_index;
+    }
+  } else {
+    assert(!is_str || init->u.single->type == EX_STR);
+    size_t init_len = is_str ? init->u.single->u.str.size : (size_t)init->u.multi->len;
+    if (init_len > arr_len)
+      parse_error(NULL, "Initializer more than array size");
+  }
+}
+
+static void add_func_label(const char *label) {
+  assert(curfunc != NULL);
+  if (curfunc->labels == NULL)
+    curfunc->labels = new_map();
+  map_put(curfunc->labels, label, label);  // Put dummy value.
+}
+
+static void add_func_goto(Node *node) {
+  assert(curfunc != NULL);
+  if (curfunc->gotos == NULL)
+    curfunc->gotos = new_vector();
+  vec_push(curfunc->gotos, node);
+}
+
+static Initializer *analyze_initializer(Initializer *init) {
+  if (init == NULL)
+    return NULL;
+
+  switch (init->type) {
+  case vSingle:
+    init->u.single = analyze_expr(init->u.single, false);
+    break;
+  case vMulti:
+    for (int i = 0; i < init->u.multi->len; ++i)
+      init->u.multi->data[i] = analyze_initializer(init->u.multi->data[i]);
+    break;
+  case vDot:
+    init->u.dot.value = analyze_initializer(init->u.dot.value);
+    break;
+  case vArr:
+    init->u.arr.value = analyze_initializer(init->u.arr.value);
+    break;
+  }
+  return init;
 }
 
 static void string_initializer(Expr *dst, Expr *src, Vector *inits) {
@@ -2744,105 +3056,191 @@ static void string_initializer(Expr *dst, Expr *src, Vector *inits) {
                                         new_expr_deref(NULL, add_expr(NULL, dst, index, true)),
                                         new_expr_deref(NULL, add_expr(NULL, src, index, true)))));
   }
-  if (dstsize > size) {
-    Num z = {.ival=0};
-    Expr *zero = new_expr_numlit(&tyChar, NULL, &z);
-    for (size_t i = size; i < dstsize; ++i) {
-      Num n = {.ival=i};
-      Expr *index = new_expr_numlit(&tyInt, NULL, &n);
-      vec_push(inits,
-               new_node_expr(new_expr_bop(EX_ASSIGN, &tyChar, NULL,
-                                          new_expr_deref(NULL, add_expr(NULL, dst, index, true)),
-                                          zero)));
-    }
-  }
 }
 
-static void fix_array_size(Type *type, Initializer *init) {
-  if (type->type != TY_ARRAY)
-    return;
-
-  bool is_str = false;
-  if (init->type != vMulti &&
-      !(is_char_type(type->u.pa.ptrof) &&
-        init->type == vSingle &&
-        can_cast(type, init->u.single->valType, init->u.single, false) &&
-        (is_str = true))) {
-    parse_error(NULL, "Error initializer");
-  }
-
-  size_t arr_len = type->u.pa.length;
-  if (arr_len == (size_t)-1) {
-    type->u.pa.length = is_str ? init->u.single->u.str.size : (size_t)init->u.multi->len;
-  } else {
-    assert(!is_str || init->u.single->type == EX_STR);
-    size_t init_len = is_str ? init->u.single->u.str.size : (size_t)init->u.multi->len;
-    if (init_len > arr_len)
-      parse_error(NULL, "Initializer more than array size");
-  }
+static int compare_desig_start(const void *a, const void *b) {
+  const size_t *pa = *(size_t**)a;
+  const size_t *pb = *(size_t**)b;
+  intptr_t d = *pa - *pb;
+  return d > 0 ? 1 : d < 0 ? -1 : 0;
 }
 
-Initializer **flatten_initializer(const Type *type, Initializer *init) {
-  assert(is_struct_or_union(type->type));
-  assert(init->type == vMulti);
-
-  ensure_struct((Type*)type, NULL);
-  const StructInfo *sinfo = type->u.struct_.info;
-  int n = sinfo->members->len;
-  int m = init->u.multi->len;
-  if (n <= 0) {
-    if (m > 0)
-      parse_error(NULL, "Initializer for empty struct");
-    return NULL;
+static Initializer *flatten_array_initializer(Initializer *init) {
+  // Check whether vDot or vArr exists.
+  int i = 0, len = init->u.multi->len;
+  for (; i < len; ++i) {
+    Initializer *init_elem = init->u.multi->data[i];
+    if (init_elem->type == vDot)
+      parse_error(NULL, "dot initializer for array");
+    if (init_elem->type == vArr)
+      break;
   }
-  if (type->type == TY_UNION && m > 1)
-    error("Initializer for union more than 1");
+  if (i >= len)  // vArr not exits.
+    return init;
 
-  Initializer **values = malloc(sizeof(Initializer*) * n);
-  for (int i = 0; i < n; ++i)
-    values[i] = NULL;
-
-  int index = 0;
-  for (int i = 0; i < m; ++i) {
-    Initializer *value = init->u.multi->data[i];
-    if (value->type == vDot) {
-      index = var_find(sinfo->members, value->u.dot.name);
-      if (index < 0)
-        parse_error(NULL, "`%s' is not member of struct", value->u.dot.name);
-      value = value->u.dot.value;
-    }
-    if (index >= n)
-      parse_error(NULL, "Too many init values");
-
-    // Allocate string literal for char* as a char array.
-    if (value->type == vSingle && value->u.single->type == EX_STR) {
-      const VarInfo *member = sinfo->members->data[index];
-      if (member->type->type == TY_PTR &&
-          is_char_type(member->type->u.pa.ptrof)) {
-        Expr *expr = value->u.single;
-        Initializer *strinit = malloc(sizeof(*strinit));
-        strinit->type = vSingle;
-        strinit->u.single = expr;
-
-        // Create string and point to it.
-        Type* strtype = arrayof(&tyChar, expr->u.str.size);
-        const char * label = alloc_label();
-        const Token *ident = alloc_ident(label, NULL, NULL);
-        VarInfo *varinfo = define_global(strtype, VF_CONST | VF_STATIC, ident, NULL);
-        varinfo->u.g.init = strinit;
-
-        // Replace initializer from string literal to string array defined in global.
-        value->u.single = new_expr_varref(label, strtype, true, ident);
+  // Enumerate designated initializer.
+  Vector *ranges = new_vector();  // <(start, count)>
+  size_t lastStartIndex = 0;
+  size_t lastStart = 0;
+  size_t index = i;
+  for (; i <= len; ++i, ++index) {  // '+1' is for last range.
+    Initializer *init_elem;
+    if (i >= len || (init_elem = init->u.multi->data[i])->type == vArr) {
+      if (i < len && init_elem->u.arr.index->type != EX_NUM)
+        parse_error(NULL, "Constant value expected");
+      if ((size_t)i > lastStartIndex) {
+        size_t *range = malloc(sizeof(size_t) * 3);
+        range[0] = lastStart;
+        range[1] = lastStartIndex;
+        range[2] = index - lastStart;
+        vec_push(ranges, range);
       }
-    }
-
-    values[index++] = value;
+      if (i >= len)
+        break;
+      lastStart = index = init_elem->u.arr.index->u.num.ival;
+      lastStartIndex = i;
+    } else if (init_elem->type == vDot)
+      parse_error(NULL, "dot initializer for array");
   }
 
-  return values;
+  // Sort
+  qsort(ranges->data, ranges->len, sizeof(size_t*), compare_desig_start);
+
+  // Reorder
+  Vector *reordered = new_vector();
+  index = 0;
+  for (int i = 0; i < ranges->len; ++i) {
+    size_t *p = ranges->data[i];
+    size_t start = p[0];
+    size_t index = p[1];
+    size_t count = p[2];
+    if (i > 0) {
+      size_t *q = ranges->data[i - 1];
+      if (start < q[0] + q[2])
+        parse_error(NULL, "Initializer for array overlapped");
+    }
+    for (size_t j = 0; j < count; ++j) {
+      Initializer *elem = init->u.multi->data[index + j];
+      if (j == 0 && index != start && elem->type != vArr) {
+        Initializer *arr = malloc(sizeof(*arr));
+        arr->type = vArr;
+        Num n = {.ival = start};
+        arr->u.arr.index = new_expr_numlit(&tyInt, NULL, &n);
+        arr->u.arr.value = elem;
+        elem = arr;
+      }
+      vec_push(reordered, elem);
+    }
+  }
+
+  Initializer *init2 = malloc(sizeof(*init2));
+  init2->type = vMulti;
+  init2->u.multi = reordered;
+  return init2;
+}
+
+Initializer *flatten_initializer(const Type *type, Initializer *init) {
+  if (init == NULL)
+    return NULL;
+
+  switch (type->type) {
+  case TY_STRUCT:
+    {
+      if (init->type != vMulti)
+        parse_error(NULL, "`{...}' expected for initializer");
+
+      ensure_struct((Type*)type, NULL);
+      const StructInfo *sinfo = type->u.struct_.info;
+      int n = sinfo->members->len;
+      int m = init->u.multi->len;
+      if (n <= 0) {
+        if (m > 0)
+          parse_error(NULL, "Initializer for empty struct");
+        return NULL;
+      }
+      if (sinfo->is_union && m > 1)
+        parse_error(NULL, "Initializer for union more than 1");
+
+      Initializer **values = malloc(sizeof(Initializer*) * n);
+      for (int i = 0; i < n; ++i)
+        values[i] = NULL;
+
+      int index = 0;
+      for (int i = 0; i < m; ++i) {
+        Initializer *value = init->u.multi->data[i];
+        if (value->type == vArr)
+          parse_error(NULL, "indexed initializer for array");
+
+        if (value->type == vDot) {
+          index = var_find(sinfo->members, value->u.dot.name);
+          if (index < 0)
+            parse_error(NULL, "`%s' is not member of struct", value->u.dot.name);
+          value = value->u.dot.value;
+        }
+        if (index >= n)
+          parse_error(NULL, "Too many init values");
+
+        // Allocate string literal for char* as a char array.
+        if (value->type == vSingle && value->u.single->type == EX_STR) {
+          const VarInfo *member = sinfo->members->data[index];
+          if (member->type->type == TY_PTR &&
+              is_char_type(member->type->u.pa.ptrof)) {
+            Expr *expr = value->u.single;
+            Initializer *strinit = malloc(sizeof(*strinit));
+            strinit->type = vSingle;
+            strinit->u.single = expr;
+
+            // Create string and point to it.
+            Type* strtype = arrayof(&tyChar, expr->u.str.size);
+            const char * label = alloc_label();
+            const Token *ident = alloc_ident(label, NULL, NULL);
+            VarInfo *varinfo = define_global(strtype, VF_CONST | VF_STATIC, ident, NULL);
+            varinfo->u.g.init = strinit;
+
+            // Replace initializer from string literal to string array defined in global.
+            value->u.single = new_expr_varref(label, strtype, true, ident);
+          }
+        }
+
+        values[index++] = value;
+      }
+
+      Initializer *flat = malloc(sizeof(*flat));
+      flat->type = vMulti;
+      //flat->u.multi = new_vector();
+      Vector *v = malloc(sizeof(*v));
+      v->len = v->capacity = n;
+      v->data = (void**)values;
+      flat->u.multi = v;
+
+      return flat;
+    }
+  case TY_ARRAY:
+    switch (init->type) {
+    case vMulti:
+      init = flatten_array_initializer(init);
+      break;
+    case vSingle:
+      // Special handling for string (char[]).
+      if (can_cast(type, init->u.single->valType, init->u.single, false))
+        break;
+      // Fallthrough
+    default:
+      parse_error(NULL, "Illegal initializer");
+      break;
+    }
+  default:
+    break;
+  }
+  return init;
 }
 
 static Initializer *check_global_initializer(const Type *type, Initializer *init) {
+  if (init == NULL)
+    return NULL;
+
+  init = flatten_initializer(type, init);
+
   switch (type->type) {
   case TY_NUM:
     if (init->type == vSingle) {
@@ -2953,14 +3351,13 @@ static Initializer *check_global_initializer(const Type *type, Initializer *init
     }
     break;
   case TY_STRUCT:
-  case TY_UNION:
     {
-      Initializer ** values = flatten_initializer(type, init);
       const StructInfo *sinfo = type->u.struct_.info;
       for (int i = 0, n = sinfo->members->len; i < n; ++i) {
         VarInfo* varinfo = sinfo->members->data[i];
-        if (values[i] != NULL)
-          check_global_initializer(varinfo->type, values[i]);
+        Initializer *init_elem = init->u.multi->data[i];
+        if (init_elem != NULL)
+          init->u.multi->data[i] = check_global_initializer(varinfo->type, init_elem);
       }
     }
     break;
@@ -2972,39 +3369,54 @@ static Initializer *check_global_initializer(const Type *type, Initializer *init
 }
 
 static Vector *assign_initial_value(Expr *expr, Initializer *init, Vector *inits) {
+  if (init == NULL)
+    return inits;
+
   if (inits == NULL)
     inits = new_vector();
 
+  Initializer *org_init = init;
+  init = flatten_initializer(expr->valType, init);
+
   switch (expr->valType->type) {
   case TY_ARRAY:
-    {
+    switch (init->type) {
+    case vMulti:
+      {
+        size_t arr_len = expr->valType->u.pa.length;
+        assert(arr_len != (size_t)-1);
+        if ((size_t)init->u.multi->len > arr_len)
+          parse_error(NULL, "Initializer more than array size");
+        size_t len = init->u.multi->len;
+        size_t index = 0;
+        for (size_t i = 0; i < len; ++i, ++index) {
+          Initializer *init_elem = init->u.multi->data[i];
+          if (init_elem->type == vArr) {
+            Expr *ind = init_elem->u.arr.index;
+            if (ind->type != EX_NUM)
+              parse_error(NULL, "Number required");
+            index = ind->u.num.ival;
+            init_elem = init_elem->u.arr.value;
+          }
+
+          Num n = {.ival=index};
+          Expr *add = add_expr(NULL, expr, new_expr_numlit(&tyInt, NULL, &n), true);
+
+          assign_initial_value(new_expr_deref(NULL, add), init_elem, inits);
+        }
+      }
+      break;
+    case vSingle:
       // Special handling for string (char[]).
-      if (is_char_type(expr->valType->u.pa.ptrof) &&
-          init->type == vSingle &&
-          can_cast(expr->valType, init->u.single->valType, init->u.single, false)) {
+      if (can_cast(expr->valType, init->u.single->valType, init->u.single, false)) {
         string_initializer(expr, init->u.single, inits);
         break;
       }
+      // Fallthrough
+    default:
+      parse_error(NULL, "Error initializer");
+      break;
 
-      if (init->type != vMulti)
-        parse_error(NULL, "Error initializer");
-      size_t arr_len = expr->valType->u.pa.length;
-      assert(arr_len != (size_t)-1);
-      if ((size_t)init->u.multi->len > arr_len)
-        parse_error(NULL, "Initializer more than array size");
-      int len = init->u.multi->len;
-      for (int i = 0; i < len; ++i) {
-        Num n = {.ival=i};
-        Expr *add = add_expr(NULL, expr, new_expr_numlit(&tyInt, NULL, &n), true);
-        assign_initial_value(new_expr_deref(NULL, add),
-                             init->u.multi->data[i], inits);
-      }
-      // Clear left.
-      for (size_t i = len; i < arr_len; ++i) {
-        Num n = {.ival=i};
-        Expr *add = add_expr(NULL, expr, new_expr_numlit(&tyInt, NULL, &n), true);
-        clear_initial_value(new_expr_deref(NULL, add), inits);
-      }
     }
     break;
   case TY_STRUCT:
@@ -3012,42 +3424,33 @@ static Vector *assign_initial_value(Expr *expr, Initializer *init, Vector *inits
       if (init->type != vMulti)
         parse_error(NULL, "`{...}' expected for initializer");
 
-      Initializer **values = flatten_initializer(expr->valType, init);
-
       const StructInfo *sinfo = expr->valType->u.struct_.info;
-      for (int i = 0, n = sinfo->members->len; i < n; ++i) {
-        VarInfo* varinfo = sinfo->members->data[i];
-        Expr *member = new_expr_member(NULL, varinfo->type, expr, NULL, NULL, i);
-        if (values[i] != NULL)
-          assign_initial_value(member, values[i], inits);
-        else
-          clear_initial_value(member, inits);
-      }
-    }
-    break;
-  case TY_UNION:
-    {
-      if (init->type != vMulti)
-        parse_error(NULL, "`{...}' expected for initializer");
+      if (!sinfo->is_union) {
+        for (int i = 0, n = sinfo->members->len; i < n; ++i) {
+          VarInfo* varinfo = sinfo->members->data[i];
+          Expr *member = new_expr_member(NULL, varinfo->type, expr, NULL, NULL, i);
+          Initializer *init_elem = init->u.multi->data[i];
+          if (init_elem != NULL)
+            assign_initial_value(member, init_elem, inits);
+        }
+      } else {
+        int n = sinfo->members->len;
+        int m = init->u.multi->len;
+        if (n <= 0 && m > 0)
+          parse_error(NULL, "Initializer for empty union");
+        if (org_init->u.multi->len > 1)
+          parse_error(NULL, "More than one initializer for union");
 
-      const StructInfo *sinfo = expr->valType->u.struct_.info;
-      ensure_struct((Type*)expr->valType, NULL);
-      int n = sinfo->members->len;
-      int m = init->u.multi->len;
-      if (n <= 0 && m > 0)
-        parse_error(NULL, "Initializer for empty union");
-
-      int index = 0;
-      Initializer *value = init->u.multi->data[0];
-      if (value->type == vDot) {
-        index = var_find(sinfo->members, value->u.dot.name);
-        if (index < 0)
-          parse_error(NULL, "`%s' is not member of struct", value->u.dot.name);
-        value = value->u.dot.value;
+        for (int i = 0; i < n; ++i) {
+          Initializer *init_elem = init->u.multi->data[i];
+          if (init_elem == NULL)
+            continue;
+          VarInfo* varinfo = sinfo->members->data[i];
+          Expr *member = new_expr_member(NULL, varinfo->type, expr, NULL, NULL, i);
+          assign_initial_value(member, init_elem, inits);
+          break;
+        }
       }
-      VarInfo* varinfo = sinfo->members->data[index];
-      Expr *member = new_expr_member(NULL, varinfo->type, expr, NULL, NULL, index);
-      assign_initial_value(member, value, inits);
     }
     break;
   default:
@@ -3062,174 +3465,68 @@ static Vector *assign_initial_value(Expr *expr, Initializer *init, Vector *inits
   return inits;
 }
 
-static Vector *parse_vardecl_cont(const Type *rawType, Type *type, int flag, Token *ident) {
+static Node *sema_vardecl(Node *node) {
+  assert(node->type == ND_VARDECL);
+  Vector *decls = node->u.vardecl.decls;
   Vector *inits = NULL;
-  bool first = true;
-  do {
-    if (!first) {
-      if (!parse_var_def(&rawType, (const Type**)&type, &flag, &ident) || ident == NULL) {
-        parse_error(NULL, "`ident' expected");
-        return NULL;
-      }
-    }
-    first = false;
-    not_void(type);
+  for (int i = 0, len = decls->len; i < len; ++i) {
+    VarDecl *decl = decls->data[i];
+    const Type *type = decl->type;
+    const Token *ident = decl->ident;
+    int flag = decl->flag;
+    Initializer *init = decl->init;
 
-    VarInfo *varinfo = add_cur_scope(ident, type, flag);
-    Initializer *init = NULL;
-    if (consume(TK_ASSIGN)) {
-      init = parse_initializer();
-      fix_array_size(type, init);
+    if (type->type == TY_ARRAY && init != NULL)
+      fix_array_size((Type*)type, init);
+
+    if (curfunc != NULL) {
+      VarInfo *varinfo = add_cur_scope(ident, type, flag);
+      init = analyze_initializer(init);
 
       // TODO: Check `init` can be cast to `type`.
       if (flag & VF_STATIC) {
         varinfo->u.g.init = check_global_initializer(type, init);
-      } else {
-        inits = assign_initial_value(new_expr_varref(ident->u.ident, type, false, NULL), init, inits);
+        // static variable initializer is handled in codegen, same as global variable.
+      } else if (init != NULL) {
+        inits = assign_initial_value(
+            new_expr_varref(ident->u.ident, type, false, NULL), init, inits);
       }
+    } else {
+      if (flag & VF_EXTERN && init != NULL)
+        parse_error(/*tok*/ NULL, "extern with initializer");
+      // Toplevel
+      VarInfo *varinfo = define_global(type, flag, ident, NULL);
+      assert(varinfo != NULL);
+      init = analyze_initializer(init);
+      varinfo->u.g.init = check_global_initializer(type, init);
     }
-  } while (consume(TK_COMMA));
-
-  return inits;
-}
-
-static bool parse_vardecl(Node **pnode) {
-  assert(curfunc != NULL);
-
-  const Type *rawType = NULL;
-  Type *type;
-  int flag;
-  Token *ident;
-  if (!parse_var_def(&rawType, (const Type**)&type, &flag, &ident))
-    return false;
-  if (ident == NULL)
-    parse_error(NULL, "Ident expected");
-
-  Vector *inits = parse_vardecl_cont(rawType, type, flag, ident);
-
-  if (!consume(TK_SEMICOL))
-    parse_error(NULL, "`;' expected");
-
-  if (inits != NULL && inits->len == 1)
-    *pnode = inits->data[0];
-  else
-    *pnode = new_node_block(NULL, inits);
-  return true;
-}
-
-// Multiple stmt-s, also accept `case` and `default`.
-static Vector *read_stmts(void) {
-  Vector *nodes = NULL;
-  for (;;) {
-    if (consume(TK_RBRACE))
-      return nodes;
-    if (nodes == NULL)
-      nodes = new_vector();
-
-    Node *node;
-    Token *tok;
-    if (parse_vardecl(&node))
-      ;
-    else if ((tok = consume(TK_CASE)) != NULL)
-      node = parse_case(tok);
-    else if ((tok = consume(TK_DEFAULT)) != NULL)
-      node = parse_default(tok);
-    else
-      node = stmt();
-    vec_push(nodes, node);
-  }
-}
-
-static Node *parse_block(void) {
-  assert(curfunc != NULL);
-  Scope *scope = enter_scope(curfunc, NULL);
-  Vector *nodes = read_stmts();
-  exit_scope();
-  return new_node_block(scope, nodes);
-}
-
-static Node *stmt(void) {
-  Token *label = consume(TK_IDENT);
-  if (label != NULL) {
-    if (consume(TK_COLON)) {
-      add_func_label(label->u.ident);
-      return new_node_label(label->u.ident, stmt());
-    }
-    unget_token(label);
   }
 
-  if (consume(TK_SEMICOL))
-    return new_node_block(NULL, NULL);
-
-  if (consume(TK_LBRACE))
-    return parse_block();
-
-  if (consume(TK_IF))
-    return parse_if();
-
-  if (consume(TK_SWITCH))
-    return parse_switch();
-
-  if (consume(TK_WHILE))
-    return parse_while();
-
-  if (consume(TK_DO))
-    return parse_do_while();
-
-  if (consume(TK_FOR))
-    return parse_for();
-
-  Token *tok;
-  if ((tok = consume(TK_BREAK)) != NULL) {
-    if ((curloopflag & LF_BREAK) == 0)
-      parse_error(tok, "`break' cannot be used outside of loop");
-    return parse_break_continue(ND_BREAK);
-  }
-  if ((tok = consume(TK_CONTINUE)) != NULL) {
-    if ((curloopflag & LF_CONTINUE) == 0)
-      parse_error(tok, "`continue' cannot be used outside of loop");
-    return parse_break_continue(ND_CONTINUE);
-  }
-  if ((tok = consume(TK_GOTO)) != NULL) {
-    return parse_goto();
-  }
-
-  if (consume(TK_RETURN))
-    return parse_return();
-
-  // expression statement.
-  Expr *val = parse_analyze_expr();
-  if (!consume(TK_SEMICOL))
-    parse_error(NULL, "Semicolon required");
-  return new_node_expr(val);
+  node->u.vardecl.inits = inits;
+  return node;
 }
 
-static Node *parse_defun(const Type *rettype, int flag, Token *ident) {
-  const char *name = ident->u.ident;
-  bool vaargs;
-  Vector *params = funparams(&vaargs);
+static void sema_nodes(Vector *nodes) {
+  if (nodes == NULL)
+    return;
+  for (int i = 0, len = nodes->len; i < len; ++i)
+    nodes->data[i] = sema(nodes->data[i]);
+}
+
+static void sema_defun(Defun *defun) {
+  const Token *ident = NULL;
+
   Vector *param_types = NULL;
-  if (params != NULL) {
+  if (defun->params != NULL) {
     param_types = new_vector();
-    for (int i = 0, len = params->len; i < len; ++i)
-      vec_push(param_types, ((VarInfo*)params->data[i])->type);
+    for (int i = 0, len = defun->params->len; i < len; ++i)
+      vec_push(param_types, ((VarInfo*)defun->params->data[i])->type);
   }
-  const Type *functype = new_func_type(rettype, param_types, vaargs);
+  defun->type = new_func_type(defun->rettype, param_types, defun->vaargs);
 
-  Defun *defun = NULL;
-  if (consume(TK_SEMICOL)) {  // Prototype declaration.
-  } else {
-    if (!consume(TK_LBRACE)) {
-      parse_error(NULL, "`;' or `{' expected");
-      return NULL;
-    }
-    // Definition.
-    defun = new_defun(functype, name, params);
-  }
-
-  VarInfo *def = find_global(name);
+  VarInfo *def = find_global(defun->name);
   if (def == NULL) {
-    define_global(functype, flag | VF_CONST, ident, NULL);
+    define_global(defun->type, defun->flag | VF_CONST, ident, defun->name);
   } else {
     if (def->type->type != TY_FUNC)
       parse_error(ident, "Definition conflict: `%s'");
@@ -3239,15 +3536,15 @@ static Node *parse_defun(const Type *rettype, int flag, Token *ident) {
       parse_error(ident, "`%s' function already defined");
   }
 
-  if (defun != NULL) {
+  if (defun->stmts != NULL) {  // Not prototype defintion.
     curfunc = defun;
-
-    enter_scope(defun, params);  // Scope for parameters.
-    defun->top_scope = enter_scope(defun, NULL);
-    defun->stmts = read_stmts();
+    enter_scope(defun, defun->params);  // Scope for parameters.
+    curscope = defun->top_scope = enter_scope(defun, NULL);
+    sema_nodes(defun->stmts);
     exit_scope();
     exit_scope();
     curfunc = NULL;
+    curscope = NULL;
 
     // Check goto labels.
     if (defun->gotos != NULL) {
@@ -3260,107 +3557,159 @@ static Node *parse_defun(const Type *rettype, int flag, Token *ident) {
       }
     }
   }
-  return defun != NULL ? new_node_defun(defun) : NULL;
 }
 
-static void parse_typedef(void) {
-  int flag;
-  Token *ident;
-  const Type *type = parse_full_type(&flag, &ident);
-  if (type == NULL)
-    parse_error(NULL, "type expected");
-  not_void(type);
+Node *sema(Node *node) {
+  if (node == NULL)
+    return node;
 
-  if (ident == NULL) {
-    ident = consume(TK_IDENT);
-    if (ident == NULL)
-      parse_error(NULL, "ident expected");
-  }
-  const char *name = ident->u.ident;
+  switch (node->type) {
+  case ND_EXPR:
+    node->u.expr = analyze_expr(node->u.expr, false);
+    break;
 
-  map_put(typedef_map, name, type);
+  case ND_DEFUN:
+    sema_defun(node->u.defun);
+    break;
 
-  if (!consume(TK_SEMICOL))
-    parse_error(NULL, "`;' expected");
-}
-
-static Node *define_global_var(const Type *rawtype, int flag, const Type *type, Token *ident) {
-  bool first = true;
-  for (;;) {
-    if (!first) {
-      type = parse_type_modifier(rawtype);
-      if ((ident = consume(TK_IDENT)) == NULL)
-        parse_error(NULL, "`ident' expected");
+  case ND_BLOCK:
+    {
+      Scope *parent_scope = curscope;
+      if (curfunc != NULL)
+        node->u.block.scope = curscope = enter_scope(curfunc, NULL);
+      sema_nodes(node->u.block.nodes);
+      curscope = parent_scope;
     }
-    first = false;
+    break;
 
-    if (type->type == TY_VOID)
-      parse_error(ident, "`void' not allowed");
+  case ND_IF:
+    node->u.if_.cond = analyze_expr(node->u.if_.cond, false);
+    node->u.if_.tblock = sema(node->u.if_.tblock);
+    node->u.if_.fblock = sema(node->u.if_.fblock);
+    break;
 
-    type = parse_type_suffix(type);
-    VarInfo *varinfo = define_global(type, flag, ident, NULL);
-    Initializer *init = NULL;
-    const Token *tok;
-    if ((tok = consume(TK_ASSIGN)) != NULL) {
-      if (flag & VF_EXTERN)
-        parse_error(tok, "extern with initializer");
-      init = parse_initializer();
-      fix_array_size((Type*)type, init);
-      init = check_global_initializer(type, init);
+  case ND_SWITCH:
+    {
+      Node *save_switch = curswitch;
+      int save_flag = curloopflag;
+      curloopflag |= LF_BREAK;
+      curswitch = node;
+
+      node->u.switch_.value = analyze_expr(node->u.switch_.value, false);
+      node->u.switch_.body = sema(node->u.switch_.body);
+
+      curloopflag = save_flag;
+      curswitch = save_switch;
     }
-    varinfo->u.g.init = init;
+    break;
 
-    if (consume(TK_COMMA))
-      continue;
-    if (!consume(TK_SEMICOL))
-      parse_error(NULL, "`;' or `,' expected");
+  case ND_WHILE:
+  case ND_DO_WHILE:
+    {
+      node->u.while_.cond = analyze_expr(node->u.while_.cond, false);
+
+      int save_flag = curloopflag;
+      curloopflag |= LF_BREAK | LF_CONTINUE;
+
+      node->u.while_.body = sema(node->u.while_.body);
+
+      curloopflag = save_flag;
+    }
+    break;
+
+  case ND_FOR:
+    {
+      node->u.for_.pre = analyze_expr(node->u.for_.pre, false);
+      node->u.for_.cond = analyze_expr(node->u.for_.cond, false);
+      node->u.for_.post = analyze_expr(node->u.for_.post, false);
+
+      int save_flag = curloopflag;
+      curloopflag |= LF_BREAK | LF_CONTINUE;
+
+      node->u.for_.body = sema(node->u.for_.body);
+
+      curloopflag = save_flag;
+    }
+    break;
+
+  case ND_BREAK:
+    if ((curloopflag & LF_BREAK) == 0)
+      parse_error(/*tok*/ NULL, "`break' cannot be used outside of loop");
+    break;
+
+  case ND_CONTINUE:
+    if ((curloopflag & LF_CONTINUE) == 0)
+      parse_error(/*tok*/ NULL, "`continue' cannot be used outside of loop");
+    break;
+
+  case ND_RETURN:
+    {
+      assert(curfunc != NULL);
+      const Type *rettype = curfunc->type->u.func.ret;
+      Expr *val = node->u.return_.val;
+      Token *tok = NULL;
+      if (val == NULL) {
+        if (rettype->type != TY_VOID)
+          parse_error(tok, "`return' required a value");
+      } else {
+        if (rettype->type == TY_VOID)
+          parse_error(tok, "void function `return' a value");
+
+        const Token *tok = NULL;
+        Expr *val = analyze_expr(node->u.return_.val, false);
+        node->u.return_.val = new_expr_cast(rettype, tok, val, false);
+      }
+    }
+    break;
+
+  case ND_CASE:
+    {
+      if (curswitch == NULL)
+        parse_error(/*tok*/ NULL, "`case' cannot use outside of `switch`");
+
+      intptr_t value = node->u.case_.value;
+      // Check duplication.
+      Vector *values = curswitch->u.switch_.case_values;
+      for (int i = 0, len = values->len; i < len; ++i) {
+        if ((intptr_t)values->data[i] == value)
+          parse_error(/*tok*/ NULL, "Case value `%lld' already defined: %s", value);
+      }
+      vec_push(values, (void*)value);
+    }
+    break;
+
+  case ND_DEFAULT:
+    if (curswitch == NULL)
+      parse_error(/*tok*/ NULL, "`default' cannot use outside of `switch'");
+    if (curswitch->u.switch_.has_default)
+      parse_error(/*tok*/ NULL, "`default' already defined in `switch'");
+
+    curswitch->u.switch_.has_default = true;
+    break;
+
+  case ND_GOTO:
+    add_func_goto(node);
+    break;
+
+  case ND_LABEL:
+    add_func_label(node->u.label.name);
+    node->u.label.stmt = sema(node->u.label.stmt);
+    break;
+
+  case ND_VARDECL:
+    return sema_vardecl(node);
+
+  case ND_TOPLEVEL:
+    sema_nodes(node->u.toplevel.nodes);
+    break;
+
+  default:
+    fprintf(stderr, "sema: Unhandled node, type=%d\n", node->type);
+    assert(false);
     break;
   }
-  return NULL;
+  return node;
 }
-
-static Node *toplevel(void) {
-  int flag;
-  const Type *rawtype = parse_raw_type(&flag);
-  if (rawtype != NULL) {
-    const Type *type = parse_type_modifier(rawtype);
-    if ((is_struct_or_union(type->type) ||
-         (type->type == TY_NUM && type->u.numtype == NUM_ENUM)) &&
-        consume(TK_SEMICOL))  // Just struct/union definition.
-      return NULL;
-
-    Token *ident;
-    if ((ident = consume(TK_IDENT)) != NULL) {
-      if (consume(TK_LPAR))  // Function.
-        return parse_defun(type, flag, ident);
-
-      define_global_var(rawtype, flag, type, ident);
-      return NULL;
-    }
-    parse_error(NULL, "ident expected");
-    return NULL;
-  }
-  if (consume(TK_TYPEDEF)) {
-    parse_typedef();
-    return NULL;
-  }
-  parse_error(NULL, "Unexpected token");
-  return NULL;
-}
-
-Vector *parse_program(void) {
-  Vector *node_vector = new_vector();
-  while (!consume(TK_EOF)) {
-    Node *node = toplevel();
-    if (node != NULL)
-      vec_push(node_vector, node);
-  }
-  return node_vector;
-}
-#if defined(__XV6)
-#define NO_ASM_OUTPUT
-#endif
-
 #include "codegen.h"
 
 #include <assert.h>
@@ -3371,25 +3720,19 @@ Vector *parse_program(void) {
 #include <string.h>
 
 #include "expr.h"
+#include "lexer.h"
+#include "parser.h"
+#include "sema.h"
 #include "type.h"
 #include "util.h"
 #include "var.h"
 
-#if defined(NO_ASM_OUTPUT)
-#define ADD_ASM(...)  // ignore
-#define add_asm(...)  // ignore
-#endif
-
-#define UNUSED(x)  ((void)(x))
-
 const int FRAME_ALIGN = 8;
-const int MAX_ARGS = 6;
-const int WORD_SIZE = /*sizeof(void*)*/ 8;
+const int STACK_PARAM_BASE_OFFSET = (2 - MAX_REG_ARGS) * 8;
 
-#define CURIP(ofs)  (instruction_pointer + ofs)
 #include "x86_64.h"
 
-#define ALIGN_SECTION_SIZE(sec, align_)  do { int align = (int)(align_); add_asm_align(align); align_section_size(sec, align); } while (0)
+#define ALIGN_SECTION_SIZE(sec, align_)  do { int align = (int)(align_); add_asm_align(align); } while (0)
 
 size_t type_size(const Type *type) {
   switch (type->type) {
@@ -3417,8 +3760,7 @@ size_t type_size(const Type *type) {
     assert(type->u.pa.length != (size_t)-1);
     return type_size(type->u.pa.ptrof) * type->u.pa.length;
   case TY_STRUCT:
-  case TY_UNION:
-    calc_struct_size(type->u.struct_.info, type->type == TY_UNION);
+    calc_struct_size(type->u.struct_.info);
     return type->u.struct_.info->size;
   default:
     assert(false);
@@ -3451,8 +3793,7 @@ static int align_size(const Type *type) {
   case TY_ARRAY:
     return align_size(type->u.pa.ptrof);
   case TY_STRUCT:
-  case TY_UNION:
-    calc_struct_size(type->u.struct_.info, type->type == TY_UNION);
+    calc_struct_size(type->u.struct_.info);
     return type->u.struct_.info->align;
   default:
     assert(false);
@@ -3460,7 +3801,7 @@ static int align_size(const Type *type) {
   }
 }
 
-void calc_struct_size(StructInfo *sinfo, bool is_union) {
+void calc_struct_size(StructInfo *sinfo) {
   assert(sinfo != NULL);
   if (sinfo->size >= 0)
     return;
@@ -3475,7 +3816,7 @@ void calc_struct_size(StructInfo *sinfo, bool is_union) {
     int align = align_size(varinfo->type);
     size = ALIGN(size, align);
     varinfo->offset = size;
-    if (!is_union)
+    if (!sinfo->is_union)
       size += sz;
     else
       if (maxsize < sz)
@@ -3484,65 +3825,16 @@ void calc_struct_size(StructInfo *sinfo, bool is_union) {
       max_align = align;
   }
 
-  if (is_union)
+  if (sinfo->is_union)
     size = maxsize;
   size = ALIGN(size, max_align);
   sinfo->size = size;
   sinfo->align = max_align;
 }
 
-static Map *label_map;  // <uintptr_t adr>
-
-enum LocType {
-  LOC_REL8,
-  LOC_REL32,
-  LOC_ABS64,
-};
-
-typedef struct {
-  enum LocType type;
-  enum SectionType section;
-  uintptr_t adr;
-  const char *label;
-  union {
-    struct {
-      uintptr_t base;
-    } rel;
-  };
-} LocInfo;
-
-typedef struct {
-  uintptr_t start;
-  unsigned char* buf;
-  size_t size;
-} Section;
-
-static Section sections[2];
-static size_t instruction_pointer;
 static FILE *asm_fp;
 
-static void add_section_data(enum SectionType secno, const unsigned char* data, size_t bytes) {
-  Section *sec = &sections[secno];
-  size_t size = sec->size;
-  size_t newsize = size + bytes;
-  unsigned char *buf = realloc(sec->buf, newsize);
-  if (buf == NULL)
-    error("not enough memory");
-  memcpy(buf + size, data, bytes);
-  sec->buf = buf;
-  sec->size = newsize;
-  instruction_pointer += bytes;
-}
-
-void add_code(const unsigned char* buf, size_t bytes) {
-  add_section_data(SEC_CODE, buf, bytes);
-}
-
-#if !defined(NO_ASM_OUTPUT)
 void add_asm(const char *fmt, ...) {
-  if (asm_fp == NULL)
-    return;
-
   va_list ap;
   va_start(ap, fmt);
   fprintf(asm_fp, "\t");
@@ -3550,19 +3842,12 @@ void add_asm(const char *fmt, ...) {
   fprintf(asm_fp, "\n");
   va_end(ap);
 }
-#endif
 
 void add_asm_label(const char *label) {
-  if (asm_fp == NULL)
-    return;
-
   fprintf(asm_fp, "%s:\n", label);
 }
 
 static void add_asm_comment(const char *comment, ...) {
-  if (asm_fp == NULL)
-    return;
-
   if (comment == NULL) {
     fprintf(asm_fp, "\n");
     return;
@@ -3581,64 +3866,6 @@ static void add_asm_align(int align) {
     add_asm(".align %d", (int)(align));
 }
 
-// Put label at the current.
-void add_label(const char *label) {
-  map_put(label_map, label, (void*)CURIP(0));
-}
-
-void add_bss(size_t size) {
-  //codesize += size;
-  instruction_pointer += size;
-}
-
-void align_section_size(int sec, int align) {
-  size_t size = sections[sec].size;
-  size_t aligned_size = ALIGN(size, align);
-  size_t add = aligned_size - size;
-  if (add <= 0)
-    return;
-
-  void* zero = calloc(add, 1);
-  add_section_data(sec, zero, add);
-  free(zero);
-
-  assert(sections[sec].size == aligned_size);
-}
-
-uintptr_t label_adr(const char *label) {
-  void *adr = map_get(label_map, label);
-  return adr != NULL ? (uintptr_t)adr : (uintptr_t)-1;
-}
-
-static Vector *loc_vector;
-
-static LocInfo *new_loc(enum LocType type, enum SectionType section, uintptr_t adr, const char *label) {
-  LocInfo *loc = malloc(sizeof(*loc));
-  loc->type = type;
-  loc->section = section;
-  loc->adr = adr;
-  loc->label = label;
-  vec_push(loc_vector, loc);
-  return loc;
-}
-
-void add_loc_rel8(const char *label, int ofs, int baseofs) {
-  uintptr_t adr = instruction_pointer + ofs;
-  LocInfo *loc = new_loc(LOC_REL8, SEC_CODE, adr, label);
-  loc->rel.base = CURIP(baseofs);
-}
-
-void add_loc_rel32(const char *label, int ofs, int baseofs) {
-  uintptr_t adr = instruction_pointer + ofs;
-  LocInfo *loc = new_loc(LOC_REL32, SEC_CODE, adr, label);
-  loc->rel.base = CURIP(baseofs);
-}
-
-void add_loc_abs64(enum SectionType section, const char *label, uintptr_t pos) {
-  new_loc(LOC_ABS64, section, pos, label);
-}
-
-#if !defined(NO_ASM_OUTPUT)
 static const char *escape(int c) {
   switch (c) {
   case '\0': return "\\0";
@@ -3685,9 +3912,10 @@ static char *escape_string(const char *str, size_t size) {
     s = p + 1;
   }
 }
-#endif
 
 void construct_initial_value(unsigned char *buf, const Type *type, Initializer *init, Vector **pptrinits) {
+  assert(init == NULL || init->type != vDot);
+
   add_asm_align(align_size(type));
 
   switch (type->type) {
@@ -3761,18 +3989,22 @@ void construct_initial_value(unsigned char *buf, const Type *type, Initializer *
     if (init == NULL || init->type == vMulti) {
       const Type *elem_type = type->u.pa.ptrof;
       size_t elem_size = type_size(elem_type);
-      size_t elem_count = type->u.pa.length;
-      int len = 0;
       if (init != NULL) {
         Vector *init_array = init->u.multi;
-        len = init_array->len;
-        for (int i = 0; i < len; ++i) {
-          construct_initial_value(buf + (i * elem_size), elem_type, init_array->data[i], pptrinits);
+        size_t index = 0;
+        size_t len = init_array->len;
+        for (size_t i = 0; i < len; ++i, ++index) {
+          Initializer *init_elem = init_array->data[i];
+          if (init_elem->type == vArr) {
+            size_t next = init_elem->u.arr.index->u.num.ival;
+            for (size_t j = index; j < next; ++j)
+              construct_initial_value(buf + (j * elem_size), elem_type, NULL, pptrinits);
+            index = next;
+            init_elem = init_elem->u.arr.value;
+          }
+          construct_initial_value(buf + (index * elem_size), elem_type, init_elem, pptrinits);
         }
-        assert((size_t)len <= elem_count);
-      }
-      for (size_t i = len; i < elem_count; ++i) {
-        construct_initial_value(buf + (i * elem_size), elem_type, NULL, pptrinits);
+        assert((size_t)len <= type->u.pa.length);
       }
     } else {
       if (init->type == vSingle &&
@@ -3783,43 +4015,34 @@ void construct_initial_value(unsigned char *buf, const Type *type, Initializer *
         memcpy(buf, init->u.single->u.str.buf, src_size);
 
         UNUSED(size);
-        add_asm(".string \"%s\"", escape_string((char*)buf, size));
+        add_asm(".ascii \"%s\"", escape_string((char*)buf, size));
       } else {
         error("Illegal initializer");
       }
     }
     break;
   case TY_STRUCT:
-  case TY_UNION:
     {
-      Initializer **values = NULL;
-
-      if (init != NULL) {
-        if (init->type != vMulti)
-          error("initializer type error");
-        values = flatten_initializer(type, init);
-      }
-
-      ensure_struct((Type*)type, NULL);
+      assert(init == NULL || init->type == vMulti);
 
       const StructInfo *sinfo = type->u.struct_.info;
       int count = 0;
       for (int i = 0, n = sinfo->members->len; i < n; ++i) {
         VarInfo* varinfo = sinfo->members->data[i];
         Initializer *mem_init;
-        if (values == NULL) {
-          if (type->type == TY_UNION)
+        if (init == NULL) {
+          if (sinfo->is_union)
             continue;
           mem_init = NULL;
         } else {
-          mem_init = values[i];
+          mem_init = init->u.multi->data[i];
         }
-        if (mem_init != NULL || type->type != TY_UNION) {
+        if (mem_init != NULL || !sinfo->is_union) {
           construct_initial_value(buf + varinfo->offset, varinfo->type, mem_init, pptrinits);
           ++count;
         }
       }
-      if (type->type == TY_UNION && count <= 0) {
+      if (sinfo->is_union && count <= 0) {
         VarInfo* varinfo = sinfo->members->data[0];
         construct_initial_value(buf + varinfo->offset, varinfo->type, NULL, pptrinits);
       }
@@ -3832,7 +4055,7 @@ void construct_initial_value(unsigned char *buf, const Type *type, Initializer *
   }
 }
 
-static void put_data(enum SectionType sec, const char *label, const VarInfo *varinfo) {
+static void put_data(const char *label, const VarInfo *varinfo) {
   size_t size = type_size(varinfo->type);
   unsigned char *buf = calloc(size, 1);
   if (buf == NULL)
@@ -3841,21 +4064,11 @@ static void put_data(enum SectionType sec, const char *label, const VarInfo *var
   ALIGN_SECTION_SIZE(sec, align_size(varinfo->type));
   if ((varinfo->flag & VF_STATIC) == 0)  // global
     add_asm(".globl %s", label);
-  size_t baseadr = instruction_pointer;
   ADD_LABEL(label);
 
   Vector *ptrinits = NULL;  // <[ptr, label]>
   construct_initial_value(buf, varinfo->type, varinfo->u.g.init, &ptrinits);
-  add_section_data(sec, buf, size);
-
-  if (ptrinits != NULL) {
-    for (int i = 0; i < ptrinits->len; ++i) {
-      void **pp = (void**)ptrinits->data[i];
-      unsigned char *p = pp[0];
-      const char *label = pp[1];
-      add_loc_abs64(sec, label, p - buf + baseadr);
-    }
-  }
+  //add_section_data(sec, buf, size);
 
   free(buf);
 }
@@ -3871,7 +4084,7 @@ static void put_rodata(void) {
       continue;
 
     const char *name = (const char *)gvar_map->keys->data[i];
-    put_data(SEC_CODE, name, varinfo);
+    put_data(name, varinfo);
   }
 }
 
@@ -3886,7 +4099,7 @@ static void put_rwdata(void) {
       continue;
 
     const char *name = (const char *)gvar_map->keys->data[i];
-    put_data(SEC_DATA, name, varinfo);
+    put_data(name, varinfo);
   }
 }
 
@@ -3901,81 +4114,13 @@ static void put_bss(void) {
     //ALIGN_SECTION_SIZE(SEC_DATA, align_size(varinfo->type));
     int align = align_size(varinfo->type);
     add_asm_align(align);
-    instruction_pointer = ALIGN(instruction_pointer, align);
+    //instruction_pointer = ALIGN(instruction_pointer, align);
     size_t size = type_size(varinfo->type);
     if (size < 1)
       size = 1;
-    add_label(name);
-    add_bss(size);
+    //add_label(name);
+    //add_bss(size);
     add_asm(".comm %s, %d", name, size);
-  }
-}
-
-// Resolve label locations.
-static void resolve_label_locations(void) {
-  Vector *unsolved_labels = NULL;
-  for (int i = 0; i < loc_vector->len; ++i) {
-    LocInfo *loc = loc_vector->data[i];
-    void *val = map_get(label_map, loc->label);
-    if (val == NULL) {
-      if (unsolved_labels == NULL)
-        unsolved_labels = new_vector();
-      bool found = false;
-      for (int j = 0; j < unsolved_labels->len; ++j) {
-        if (strcmp(unsolved_labels->data[j], loc->label) == 0) {
-          found = true;
-          break;
-        }
-      }
-      if (!found)
-        vec_push(unsolved_labels, loc->label);
-      continue;
-    }
-
-    intptr_t v = (intptr_t)val;
-    Section *section = &sections[loc->section];
-    unsigned char *code = section->buf;
-    uintptr_t offset = loc->adr - section->start;
-    switch (loc->type) {
-    case LOC_REL8:
-      {
-        intptr_t d = v - loc->rel.base;
-        // TODO: Check out of range
-        code[offset] = d;
-      }
-      break;
-    case LOC_REL32:
-      {
-        intptr_t d = v - loc->rel.base;
-        // TODO: Check out of range
-        for (int i = 0; i < 4; ++i)
-          code[offset + i] = d >> (i * 8);
-      }
-      break;
-    case LOC_ABS64:
-      for (int i = 0; i < 8; ++i)
-        code[offset + i] = v >> (i * 8);
-      break;
-    default:
-      assert(false);
-      break;
-    }
-  }
-
-  if (unsolved_labels != NULL) {
-    fprintf(stderr, "Link error:\n");
-    for (int i = 0; i < unsolved_labels->len; ++i)
-      fprintf(stderr, "  Cannot find label `%s'\n", (char*)unsolved_labels->data[i]);
-    exit(1);
-  }
-}
-
-static void dump_labels(void) {
-  add_asm_comment(NULL);
-  for (int i = 0, n = map_count(label_map); i < n; ++i) {
-    const char *name = label_map->keys->data[i];
-    uintptr_t adr = (uintptr_t)label_map->vals->data[i];
-    add_asm_comment("%08x: %s", adr, name);
   }
 }
 
@@ -3984,40 +4129,19 @@ void fixup_locations(void) {
   put_rodata();
 
   // Data section
-  sections[SEC_DATA].start = instruction_pointer = ALIGN(instruction_pointer, 0x1000);  // Page size.
+  //sections[SEC_DATA].start = instruction_pointer = ALIGN(instruction_pointer, 0x1000);  // Page size.
 
   add_asm_comment(NULL);
   add_asm(".data");
   put_rwdata();
 
+  add_asm_comment(NULL);
+  add_asm_comment("bss");
   put_bss();
-
-  resolve_label_locations();
-
-  dump_labels();
-}
-
-void get_section_size(int section, size_t *pfilesz, size_t *pmemsz, uintptr_t *ploadadr) {
-  *pfilesz = sections[section].size;
-  *ploadadr = sections[section].start;
-  switch (section) {
-  case SEC_CODE:
-    *pmemsz = *pfilesz;
-    break;
-  case SEC_DATA:
-    *pmemsz = instruction_pointer - sections[SEC_DATA].start;  // Include bss.
-    break;
-  default:
-    assert(!"Illegal");
-    break;
-  }
 }
 
 //
 
-#ifndef __XCC
-static Defun *curfunc;
-#endif
 static const char *s_break_label;
 static const char *s_continue_label;
 int stackpos;
@@ -4040,43 +4164,14 @@ static void pop_continue_label(const char *save) {
   s_continue_label = save;
 }
 
-void gen_cond_jmp(Expr *cond, bool tf, const char *label) {
-  gen_expr(cond);
-
-  switch (cond->valType->type) {
-  case TY_NUM:
-    switch (cond->valType->u.numtype) {
-    case NUM_CHAR:  TEST_AL_AL(); break;
-    case NUM_SHORT: TEST_AX_AX(); break;
-    case NUM_INT: case NUM_ENUM:
-      TEST_EAX_EAX();
-      break;
-    case NUM_LONG:
-      TEST_RAX_RAX();
-      break;
-    default: assert(false); break;
-    }
-    break;
-  case TY_PTR:
-    TEST_RAX_RAX();
-    break;
-  default: assert(false); break;
-  }
-
-  if (tf)
-    JNE32(label);
-  else
-    JE32(label);
-}
-
-static int arrange_func_params(Scope *scope) {
+static int arrange_variadic_func_params(Scope *scope) {
   // Arrange parameters increasing order in stack,
   // and each parameter occupies sizeof(intptr_t).
   for (int i = 0; i < scope->vars->len; ++i) {
     VarInfo *varinfo = (VarInfo*)scope->vars->data[i];
-    varinfo->offset = (i - MAX_ARGS) * WORD_SIZE;
+    varinfo->offset = (i - MAX_REG_ARGS) * WORD_SIZE;
   }
-  return MAX_ARGS * WORD_SIZE;
+  return MAX_REG_ARGS * WORD_SIZE;
 }
 
 static size_t arrange_scope_vars(Defun *defun) {
@@ -4087,9 +4182,26 @@ static size_t arrange_scope_vars(Defun *defun) {
     Scope *scope = (Scope*)defun->all_scopes->data[i];
     size_t scope_size = scope->parent != NULL ? scope->parent->size : 0;
     if (scope->vars != NULL) {
-      if (defun->type->u.func.vaargs && i == 0) {
-        // Special arrangement for function parameters to work va_list.
-        scope_size = arrange_func_params(scope);
+      if (i == 0) {  // Function parameters.
+        if (defun->type->u.func.vaargs) {
+          // Special arrangement for va_list.
+          scope_size = arrange_variadic_func_params(scope);
+        } else {
+          for (int j = 0; j < scope->vars->len; ++j) {
+            VarInfo *varinfo = (VarInfo*)scope->vars->data[j];
+            if (j < MAX_REG_ARGS) {
+              size_t size = type_size(varinfo->type);
+              int align = align_size(varinfo->type);
+              if (size < 1)
+                size = 1;
+              scope_size = ALIGN(scope_size + size, align);
+              varinfo->offset = -scope_size;
+            } else {
+              // Assumes little endian, and put all types in WORD_SIZE.
+              varinfo->offset = STACK_PARAM_BASE_OFFSET + j * WORD_SIZE;
+            }
+          }
+        }
       } else {
         for (int j = 0; j < scope->vars->len; ++j) {
           VarInfo *varinfo = (VarInfo*)scope->vars->data[j];
@@ -4115,9 +4227,7 @@ static void put_args_to_stack(Defun *defun) {
   // Store arguments into local frame.
   Vector *params = defun->params;
   int len = params != NULL ? params->len : 0;
-  if (len > MAX_ARGS)
-    error("Parameter count %d exceeds %d in function `%s'", len, MAX_ARGS, defun->name);
-  int n = defun->type->u.func.vaargs ? MAX_ARGS : len;
+  int n = defun->type->u.func.vaargs ? MAX_REG_ARGS : len;
   for (int i = 0; i < n; ++i) {
     const Type *type;
     int offset;
@@ -4127,7 +4237,7 @@ static void put_args_to_stack(Defun *defun) {
       offset = varinfo->offset;
     } else {  // vaargs
       type = &tyLong;
-      offset = (i - MAX_ARGS) * WORD_SIZE;
+      offset = (i - MAX_REG_ARGS) * WORD_SIZE;
     }
 
     int size = 0;
@@ -4208,52 +4318,32 @@ static void out_asm(Node *node) {
   Vector *args = funcall->u.funcall.args;
   int len = args->len;
 
-  Expr *arg0 = (Expr*)args->data[0];
-  if (arg0->type != EX_STR)
+  Expr *arg0;
+  if (len != 1 || (arg0 = (Expr*)args->data[0])->type != EX_STR)
     error("__asm takes string at 1st argument");
   add_asm("%s", arg0->u.str.buf);
+}
 
-  for (int i = 1; i < len; ++i) {
-    Expr *arg = (Expr*)args->data[i];
-    switch (arg->type) {
-    case EX_NUM:
-      switch (arg->valType->u.numtype) {
-      case NUM_CHAR:
-      case NUM_SHORT:
-      case NUM_INT:
-      case NUM_LONG:
-        {
-          unsigned char buf[1] = {arg->u.num.ival};
-          add_section_data(SEC_CODE, buf, sizeof(buf));
-        }
-        break;
-      default:
-        assert(false);
-        break;
-      }
-      break;
-    case EX_FUNCALL:
-      if (is_funcall(arg, "__rel32")) {
-        if (arg->u.funcall.args->len == 1 &&
-            ((Expr*)arg->u.funcall.args->data[0])->type == EX_STR) {
-          const char *label = ((Expr*)arg->u.funcall.args->data[0])->u.str.buf;
-          ADD_LOC_REL32(label, 0, 4);
-          unsigned char buf[4] = {0};
-          add_section_data(SEC_CODE, buf, sizeof(buf));
-          break;
-        }
-      }
-      // Fallthrough
-    default:
-      error("num literal expected");
-      break;
-    }
+static void gen_nodes(Vector *nodes) {
+  if (nodes == NULL)
+    return;
+
+  for (int i = 0, len = nodes->len; i < len; ++i) {
+    Node *node = nodes->data[i];
+    if (node == NULL)
+      continue;
+    if (is_asm(node))
+      out_asm(node);
+    else
+      gen(node);
   }
 }
 
 static void gen_defun(Node *node) {
   assert(stackpos == 0);
   Defun *defun = node->u.defun;
+  if (defun->top_scope == NULL)  // Prototype definition
+    return;
 
   bool global = true;
   VarInfo *varinfo = find_global(defun->name);
@@ -4280,6 +4370,8 @@ static void gen_defun(Node *node) {
   if (defun->stmts != NULL) {
     for (int i = 0; i < defun->stmts->len; ++i) {
       Node *node = defun->stmts->data[i];
+      if (node == NULL)
+        continue;
       if (!is_asm(node)) {
         no_stmt = false;
         break;
@@ -4305,15 +4397,7 @@ static void gen_defun(Node *node) {
   }
 
   // Statements
-  if (defun->stmts != NULL) {
-    for (int i = 0; i < defun->stmts->len; ++i) {
-      Node *node = defun->stmts->data[i];
-      if (is_asm(node))
-        out_asm(node);
-      else
-        gen(node);
-    }
-  }
+  gen_nodes(defun->stmts);
 
   // Epilogue
   if (!no_stmt) {
@@ -4335,8 +4419,7 @@ static void gen_block(Node *node) {
       assert(curscope == node->u.block.scope->parent);
       curscope = node->u.block.scope;
     }
-    for (int i = 0, len = node->u.block.nodes->len; i < len; ++i)
-      gen((Node*)node->u.block.nodes->data[i]);
+    gen_nodes(node->u.block.nodes);
     if (node->u.block.scope != NULL)
       curscope = curscope->parent;
   }
@@ -4469,9 +4552,9 @@ static void gen_do_while(Node *node) {
   const char *l_break = push_break_label(&save_break);
   const char * l_loop = alloc_label();
   ADD_LABEL(l_loop);
-  gen(node->u.do_while.body);
+  gen(node->u.while_.body);
   ADD_LABEL(l_cond);
-  gen_cond_jmp(node->u.do_while.cond, true, l_loop);
+  gen_cond_jmp(node->u.while_.cond, true, l_loop);
   ADD_LABEL(l_break);
   pop_continue_label(save_cont);
   pop_break_label(save_break);
@@ -4523,7 +4606,47 @@ static void gen_label(Node *node) {
   gen(node->u.label.stmt);
 }
 
+static void gen_clear_local_var(const VarInfo *varinfo) {
+  // Fill with zeros regardless of variable type.
+  int offset = varinfo->offset;
+  const char *loop = alloc_label();
+  LEA_OFS32_RBP_RSI(offset);
+  MOV_IM32_EDI(type_size(varinfo->type));
+  XOR_AL_AL();
+  ADD_LABEL(loop);
+  MOV_AL_IND_RSI();
+  INC_RSI();
+  DEC_EDI();
+  JNE8(loop);
+}
+
+static void gen_vardecl(Node *node) {
+  if (curfunc != NULL) {
+    Vector *decls = node->u.vardecl.decls;
+    for (int i = 0; i < decls->len; ++i) {
+      VarDecl *decl = decls->data[i];
+      if (decl->init == NULL)
+        continue;
+      VarInfo *varinfo = scope_find(curscope, decl->ident->u.ident);
+      if (varinfo == NULL || (varinfo->flag & VF_STATIC) ||
+          !(varinfo->type->type == TY_STRUCT ||
+            varinfo->type->type == TY_ARRAY))
+        continue;
+      gen_clear_local_var(varinfo);
+    }
+  }
+  gen_nodes(node->u.vardecl.inits);
+}
+
+static void gen_toplevel(Node *node) {
+  add_asm(".text");
+  gen_nodes(node->u.toplevel.nodes);
+}
+
 void gen(Node *node) {
+  if (node == NULL)
+    return;
+
   switch (node->type) {
   case ND_EXPR:  gen_expr(node->u.expr); break;
   case ND_DEFUN:  gen_defun(node); break;
@@ -4540,6 +4663,8 @@ void gen(Node *node) {
   case ND_CONTINUE:  gen_continue(); break;
   case ND_GOTO:  gen_goto(node); break;
   case ND_LABEL:  gen_label(node); break;
+  case ND_VARDECL:  gen_vardecl(node); break;
+  case ND_TOPLEVEL:  gen_toplevel(node); break;
 
   default:
     error("Unhandled node: %d", node->type);
@@ -4547,24 +4672,8 @@ void gen(Node *node) {
   }
 }
 
-void init_gen(uintptr_t start_address_) {
-  sections[SEC_CODE].start = instruction_pointer = start_address_;
-  label_map = new_map();
-  loc_vector = new_vector();
-}
-
-void set_asm_fp(FILE *fp) {
-#if !defined(NO_ASM_OUTPUT)
+void init_gen(FILE *fp) {
   asm_fp = fp;
-#else
-  (void)fp;
-#endif
-}
-
-void output_section(FILE* fp, int section) {
-  Section *p = &sections[section];
-  unsigned char *buf = p->buf;
-  fwrite(buf, p->size, 1, fp);
 }
 #include "codegen.h"
 
@@ -4572,13 +4681,150 @@ void output_section(FILE* fp, int section) {
 #include <stdlib.h>  // malloc
 
 #include "expr.h"
+#include "sema.h"
 #include "type.h"
 #include "util.h"
 #include "var.h"
 #include "x86_64.h"
 
-void gen_cond_jmp(Expr *cond, bool tf, const char *label);
 static void gen_lval(Expr *expr);
+
+// Compare operator might swap operand oreder.
+//   EX_LE => EX_GE
+//   EX_GT => EX_LT
+static enum ExprType gen_expr_compare(enum ExprType type, Expr *lhs, Expr *rhs) {
+  const Type *ltype = lhs->valType;
+  UNUSED(ltype);
+  assert(ltype->type == rhs->valType->type && (ltype->type != TY_NUM || ltype->u.numtype == rhs->valType->u.numtype));
+  if (type == EX_LE || type == EX_GT) {
+    Expr *tmp = lhs; lhs = rhs; rhs = tmp;
+    type = type == EX_LE ? EX_GE : EX_LT;
+  }
+
+  gen_expr(lhs);
+  PUSH_RAX(); PUSH_STACK_POS();
+  gen_expr(rhs);
+
+  POP_RDI(); POP_STACK_POS();
+  return type;
+}
+
+// cmp %eax, %edi, and so on.
+static void gen_cmp_opcode(const Type *type) {
+  switch (type->type) {
+  case TY_NUM:
+    switch (type->u.numtype) {
+    case NUM_CHAR: CMP_AL_DIL(); break;
+    case NUM_SHORT: CMP_AX_DI(); break;
+    case NUM_INT: case NUM_ENUM:
+      CMP_EAX_EDI();
+      break;
+    case NUM_LONG: CMP_RAX_RDI(); break;
+    default: assert(false); break;
+    }
+    break;
+  case TY_PTR:  CMP_RAX_RDI(); break;
+  default: assert(false); break;
+  }
+}
+
+// test %eax, %eax, and so on.
+static void gen_test_opcode(const Type *type) {
+  switch (type->type) {
+  case TY_NUM:
+    switch (type->u.numtype) {
+    case NUM_CHAR:  TEST_AL_AL(); break;
+    case NUM_SHORT: TEST_AX_AX(); break;
+    case NUM_INT: case NUM_ENUM:
+      TEST_EAX_EAX();
+      break;
+    case NUM_LONG:
+      TEST_RAX_RAX();
+      break;
+    default: assert(false); break;
+    }
+    break;
+  case TY_PTR: case TY_ARRAY: case TY_FUNC:
+    TEST_RAX_RAX();
+    break;
+  default: assert(false); break;
+  }
+}
+
+void gen_cond_jmp(Expr *cond, bool tf, const char *label) {
+  // Local optimization: if `cond` is compare expression, then
+  // jump using flags after CMP directly.
+  switch (cond->type) {
+  case EX_NUM:
+    if (cond->u.num.ival == 0)
+      tf = !tf;
+    if (tf)
+      JMP32(label);
+    return;
+
+  case EX_EQ:
+  case EX_NE:
+    gen_expr_compare(cond->type, cond->u.bop.lhs, cond->u.bop.rhs);
+    gen_cmp_opcode(cond->u.bop.lhs->valType);
+    if (cond->type != EX_EQ)
+      tf = !tf;
+    if (tf)
+      JE32(label);
+    else
+      JNE32(label);
+    return;
+  case EX_LT:
+  case EX_GT:
+  case EX_LE:
+  case EX_GE:
+    {
+      enum ExprType type = gen_expr_compare(cond->type, cond->u.bop.lhs, cond->u.bop.rhs);
+      gen_cmp_opcode(cond->u.bop.lhs->valType);
+      if (type != EX_LT)
+        tf = !tf;
+      if (tf)
+        JL32(label);
+      else
+        JGE32(label);
+    }
+    return;
+  case EX_NOT:
+    gen_cond_jmp(cond->u.unary.sub, !tf, label);
+    return;
+  case EX_LOGAND:
+    if (!tf) {
+      gen_cond_jmp(cond->u.bop.lhs, false, label);
+      gen_cond_jmp(cond->u.bop.rhs, false, label);
+    } else {
+      const char *skip = alloc_label();
+      gen_cond_jmp(cond->u.bop.lhs, false, skip);
+      gen_cond_jmp(cond->u.bop.rhs, true, label);
+      ADD_LABEL(skip);
+    }
+    return;
+  case EX_LOGIOR:
+    if (tf) {
+      gen_cond_jmp(cond->u.bop.lhs, true, label);
+      gen_cond_jmp(cond->u.bop.rhs, true, label);
+    } else {
+      const char *skip = alloc_label();
+      gen_cond_jmp(cond->u.bop.lhs, true, skip);
+      gen_cond_jmp(cond->u.bop.rhs, false, label);
+      ADD_LABEL(skip);
+    }
+    return;
+  default:
+    break;
+  }
+
+  gen_expr(cond);
+  gen_test_opcode(cond->valType);
+
+  if (tf)
+    JNE32(label);
+  else
+    JE32(label);
+}
 
 static void cast(const Type *ltypep, const Type *rtypep) {
   enum eType ltype = ltypep->type;
@@ -4698,8 +4944,8 @@ static void gen_lval(Expr *expr) {
       const Type *type = expr->u.member.target->valType;
       if (type->type == TY_PTR || type->type == TY_ARRAY)
         type = type->u.pa.ptrof;
-      assert(type->type == TY_STRUCT || type->type == TY_UNION);
-      calc_struct_size(type->u.struct_.info, type->type == TY_UNION);
+      assert(type->type == TY_STRUCT);
+      calc_struct_size(type->u.struct_.info);
       Vector *members = type->u.struct_.info->members;
       VarInfo *varinfo = (VarInfo*)members->data[expr->u.member.index];
 
@@ -4750,33 +4996,52 @@ static void gen_ternary(Expr *expr) {
 }
 
 static void gen_funcall(Expr *expr) {
+  Expr *func = expr->u.funcall.func;
   Vector *args = expr->u.funcall.args;
+  int arg_count = args != NULL ? args->len : 0;
+
+  int stack_args = MAX(arg_count - MAX_REG_ARGS, 0);
+  bool align_stack = ((stackpos + stack_args * WORD_SIZE) & 15) != 0;
+  if (align_stack) {
+    SUB_IM8_RSP(8); PUSH_STACK_POS();
+  }
+
   if (args != NULL) {
     int len = args->len;
-    if (len > 6)
-      error("Param count exceeds 6 (%d)", len);
+    if (len >= MAX_REG_ARGS) {
+      bool vaargs = false;
+      if (func->type == EX_VARREF && func->u.varref.global) {
+        VarInfo *varinfo = find_global(func->u.varref.ident);
+        assert(varinfo != NULL && varinfo->type->type == TY_FUNC);
+        vaargs = varinfo->type->u.func.vaargs;
+      } else {
+        // TODO:
+      }
 
-    for (int i = 0; i < len; ++i) {
-      gen_expr((Expr*)args->data[i]);
-      PUSH_RAX();
+      if (vaargs)
+        error("Param count exceeds %d (%d)", MAX_REG_ARGS, len);
     }
 
-    switch (len) {
-    case 6:  POP_R9();  // Fallthrough
-    case 5:  POP_R8();  // Fallthrough
-    case 4:  POP_RCX();  // Fallthrough
-    case 3:  POP_RDX();  // Fallthrough
-    case 2:  POP_RSI();  // Fallthrough
-    case 1:  POP_RDI();  // Fallthrough
-    default: break;
+    for (int i = len; --i >= 0; ) {
+      gen_expr((Expr*)args->data[i]);
+      PUSH_RAX(); PUSH_STACK_POS();
+    }
+
+    int reg_args = MIN(len, MAX_REG_ARGS);
+    for (int i = 0; i < reg_args; ++i) {
+      switch (i) {
+      case 0:  POP_RDI(); break;
+      case 1:  POP_RSI(); break;
+      case 2:  POP_RDX(); break;
+      case 3:  POP_RCX(); break;
+      case 4:  POP_R8(); break;
+      case 5:  POP_R9(); break;
+      default: break;
+      }
+      POP_STACK_POS();
     }
   }
 
-  bool align_stack = (stackpos & 15) != 0;
-  if (align_stack)
-    SUB_IM8_RSP(8);
-
-  Expr *func = expr->u.funcall.func;
   if (func->type == EX_VARREF && func->u.varref.global) {
     CALL(func->u.varref.ident);
   } else {
@@ -4784,8 +5049,12 @@ static void gen_funcall(Expr *expr) {
     CALL_IND_RAX();
   }
 
-  if (align_stack)
-    ADD_IM8_RSP(8);
+  for (int i = 0; i < stack_args; ++i)
+    POP_STACK_POS();
+
+  if (align_stack) {
+    ADD_IM8_RSP(8); POP_STACK_POS();
+  }
 }
 
 void gen_arith(enum ExprType exprType, const Type *valType, const Type *rhsType) {
@@ -5170,31 +5439,39 @@ void gen_expr(Expr *expr) {
   case EX_POSTINC:
   case EX_POSTDEC:
     gen_lval(expr->u.unary.sub);
-    MOV_IND_RAX_RDI();
     switch (expr->valType->type) {
     case TY_NUM:
       switch (expr->valType->u.numtype) {
       case NUM_CHAR:
+        MOV_IND_RAX_DIL();
         if (expr->type == EX_POSTINC)  INCB_IND_RAX();
         else                           DECB_IND_RAX();
+        MOV_DIL_AL();
         break;
       case NUM_SHORT:
+        MOV_IND_RAX_DI();
         if (expr->type == EX_POSTINC)  INCW_IND_RAX();
         else                           DECW_IND_RAX();
+        MOV_DI_AX();
         break;
       case NUM_INT:
+        MOV_IND_RAX_EDI();
         if (expr->type == EX_POSTINC)  INCL_IND_RAX();
         else                           DECL_IND_RAX();
+        MOV_EDI_EAX();
         break;
       case NUM_LONG:
+        MOV_IND_RAX_RDI();
         if (expr->type == EX_POSTINC)  INCQ_IND_RAX();
         else                           DECQ_IND_RAX();
+        MOV_RDI_RAX();
         break;
       default: assert(false); break;
       }
       break;
     case TY_PTR:
       {
+        MOV_IND_RAX_RDI();
         size_t size = type_size(expr->valType->u.pa.ptrof);
         assert(size < ((size_t)1 << 31));  // TODO:
         if (expr->type == EX_POSTINC) {
@@ -5204,13 +5481,13 @@ void gen_expr(Expr *expr) {
           if (size < 256)  SUBQ_IM8_IND_RAX(size);
           else             SUBQ_IM32_IND_RAX(size);
         }
+        MOV_RDI_RAX();
       }
       break;
     default:
       assert(false);
       break;
     }
-    MOV_RDI_RAX();
     return;
 
   case EX_FUNCALL:
@@ -5220,29 +5497,34 @@ void gen_expr(Expr *expr) {
   case EX_NEG:
     gen_expr(expr->u.unary.sub);
     assert(expr->valType->type == TY_NUM);
-    switch (expr->valType->u.numtype) {
-    case NUM_CHAR: NEG_AL(); break;
-    case NUM_INT:  NEG_EAX(); break;
-    case NUM_LONG: NEG_RAX(); break;
+    switch (expr->u.unary.sub->valType->u.numtype) {
+    case NUM_CHAR:   NEG_AL(); break;
+    case NUM_SHORT:  NEG_AX(); break;
+    case NUM_INT:    NEG_EAX(); break;
+    case NUM_LONG:   NEG_RAX(); break;
     default:  assert(false); break;
     }
     break;
 
   case EX_NOT:
     gen_expr(expr->u.unary.sub);
-    switch (expr->valType->type) {
+    switch (expr->u.unary.sub->valType->type) {
     case TY_NUM:
-      switch (expr->valType->u.numtype) {
-      case NUM_CHAR: TEST_AL_AL(); break;
-      case NUM_INT:  TEST_EAX_EAX(); break;
+      switch (expr->u.unary.sub->valType->u.numtype) {
+      case NUM_CHAR:   TEST_AL_AL(); break;
+      case NUM_SHORT:  TEST_AX_AX(); break;
+      case NUM_INT:    TEST_EAX_EAX(); break;
+      case NUM_LONG:   TEST_RAX_RAX(); break;
       default:  assert(false); break;
       }
       break;
-    case TY_PTR:  TEST_RAX_RAX(); break;
+    case TY_PTR: case TY_ARRAY: case TY_FUNC:
+      TEST_RAX_RAX();
+      break;
     default:  assert(false); break;
     }
     SETE_AL();
-    MOVZX_AL_EAX();
+    MOVSX_AL_EAX();
     break;
 
   case EX_EQ:
@@ -5252,26 +5534,13 @@ void gen_expr(Expr *expr) {
   case EX_LE:
   case EX_GE:
     {
-      enum ExprType type = expr->type;
-      Expr *lhs = expr->u.bop.lhs;
-      Expr *rhs = expr->u.bop.rhs;
-      const Type *ltype = lhs->valType;
-
-      assert(ltype->type == rhs->valType->type && (ltype->type != TY_NUM || ltype->u.numtype == rhs->valType->u.numtype));
-      if (type == EX_LE || type == EX_GT) {
-        Expr *tmp = lhs; lhs = rhs; rhs = tmp;
-        type = type == EX_LE ? EX_GE : EX_LT;
-      }
-
-      gen_expr(lhs);
-      PUSH_RAX(); PUSH_STACK_POS();
-      gen_expr(rhs);
-
-      POP_RDI(); POP_STACK_POS();
+      enum ExprType type = gen_expr_compare(expr->type, expr->u.bop.lhs, expr->u.bop.rhs);
+      const Type *ltype = expr->u.bop.lhs->valType;
       switch (ltype->type) {
       case TY_NUM:
         switch (ltype->u.numtype) {
         case NUM_CHAR: CMP_AL_DIL(); break;
+        case NUM_SHORT: CMP_AX_DI(); break;
         case NUM_INT: case NUM_ENUM:
           CMP_EAX_EDI();
           break;
@@ -5291,37 +5560,33 @@ void gen_expr(Expr *expr) {
       default: assert(false); break;
       }
     }
-    MOVZX_AL_EAX();
+    MOVSX_AL_EAX();
     return;
 
   case EX_LOGAND:
     {
-      const char * l_false = alloc_label();
-      const char * l_true = alloc_label();
-      const char * l_next = alloc_label();
+      const char *l_false = alloc_label();
+      const char *l_next = alloc_label();
       gen_cond_jmp(expr->u.bop.lhs, false, l_false);
-      gen_cond_jmp(expr->u.bop.rhs, true, l_true);
+      gen_cond_jmp(expr->u.bop.rhs, false, l_false);
+      MOV_IM32_EAX(1);
+      JMP8(l_next);
       ADD_LABEL(l_false);
       XOR_EAX_EAX();  // 0
-      JMP8(l_next);
-      ADD_LABEL(l_true);
-      MOV_IM32_EAX(1);
       ADD_LABEL(l_next);
     }
     return;
 
   case EX_LOGIOR:
     {
-      const char * l_false = alloc_label();
-      const char * l_true = alloc_label();
-      const char * l_next = alloc_label();
+      const char *l_true = alloc_label();
+      const char *l_next = alloc_label();
       gen_cond_jmp(expr->u.bop.lhs, true, l_true);
-      gen_cond_jmp(expr->u.bop.rhs, false, l_false);
+      gen_cond_jmp(expr->u.bop.rhs, true, l_true);
+      XOR_EAX_EAX();  // 0
+      JMP8(l_next);
       ADD_LABEL(l_true);
       MOV_IM32_EAX(1);
-      JMP8(l_next);
-      ADD_LABEL(l_false);
-      XOR_EAX_EAX();  // 0
       ADD_LABEL(l_next);
     }
     return;
@@ -5351,238 +5616,66 @@ void gen_expr(Expr *expr) {
     break;
   }
 }
-#include "libgen.h"  // dirname
 #include "stdarg.h"
 #include "stdint.h"
 #include "stdio.h"
 #include "stdlib.h"
 #include "string.h"
-#include "sys/wait.h"
-#include "unistd.h"  // fork, execvp
 
 #include "codegen.h"
-#include "elfutil.h"
 #include "expr.h"
 #include "lexer.h"
+#include "parser.h"
+#include "sema.h"
 #include "type.h"
 #include "util.h"
 #include "var.h"
 
-#define PROG_START   (0x100)
-
-#if defined(__XV6)
-// XV6
-#include "../kernel/syscall.h"
-#include "../kernel/traps.h"
-
-#define START_ADDRESS    0x1000
-
-#define SYSTEMCALL(no)  do { MOV_IM32_EAX(no); INT(T_SYSCALL); } while(0)
-
-#define SYSCALL_EXIT   (SYS_exit)
-#define SYSCALL_WRITE  (SYS_write)
-
-#elif defined(__linux__)
-// Linux
-
-#include <sys/stat.h>
-
-#define START_ADDRESS    (0x01000000 + PROG_START)
-
-#define SYSTEMCALL(no)  do { MOV_IM32_EAX(no); SYSCALL(); } while(0)
-
-#define SYSCALL_EXIT   (60 /*__NR_exit*/)
-#define SYSCALL_WRITE  (1 /*__NR_write*/)
-
-#else
-
-#error Target not supported
-
-#endif
-
-#define LOAD_ADDRESS    START_ADDRESS
-
 ////////////////////////////////////////////////
 
-static pid_t fork1(void) {
-  pid_t pid = fork();
-  if (pid < 0)
-    error("fork failed");
-  return pid;
-}
-
-static void init_compiler(uintptr_t adr) {
+static void init_compiler(FILE *fp) {
+  init_gen(fp);
   struct_map = new_map();
   typedef_map = new_map();
   gvar_map = new_map();
-
-  init_gen(adr);
 }
 
 static void compile(FILE *fp, const char *filename) {
   init_lexer(fp, filename);
-  Vector *node_vector = parse_program();
-
-  for (int i = 0, len = node_vector->len; i < len; ++i)
-    gen(node_vector->data[i]);
+  Node *node = parse_program();
+  node = sema(node);
+  gen(node);
 }
 
-// Pass preprocessor's output to this compiler
-static int pipe_pp_xcc(char **pp_argv, char ** xcc_argv) {
-  // cpp | xcc
-  int fd[2];
-  if (pipe(fd) < 0)
-    error("pipe failed");
-  pid_t pid1 = fork1();
-  if (pid1 == 0) {
-    close(STDOUT_FILENO);
-    dup(fd[1]);
-    close(fd[0]);
-    close(fd[1]);
-    if (execvp(pp_argv[0], pp_argv) < 0) {
-      perror(pp_argv[0]);
-      exit(1);
-    }
-  }
-  pid_t pid2 = fork1();
-  if (pid2 == 0) {
-    close(STDIN_FILENO);
-    dup(fd[0]);
-    close(fd[0]);
-    close(fd[1]);
-    if (execvp(xcc_argv[0], xcc_argv) < 0) {
-      perror(xcc_argv[0]);
-      exit(1);
-    }
-  }
-  close(fd[0]);
-  close(fd[1]);
-
-  int ec1 = -1, ec2 = -1;
-  int r1 = waitpid(pid1, &ec1, 0);
-  int r2 = waitpid(pid2, &ec2, 0);
-  if (r1 < 0 || r2 < 0)
-    error("wait failed");
-  return ec1 != 0 ? ec1 : ec2;
-}
-
-static char *change_ext(const char *fn, const char *ext) {
-  size_t fnlen = strlen(fn), extlen = strlen(ext);
-  char *buf = malloc(fnlen + extlen + 2);  // dot + '\0'
-  strcpy(buf, fn);
-  char *p = strrchr(buf, '/');
-  if (p == NULL)
-    p = buf;
-  p = strrchr(p, '.');
-  if (p == NULL)
-    p = buf + fnlen;
-  *p++ = '.';
-  strcpy(p, ext);
-  return buf;
-}
-
-static void put_padding(FILE* fp, uintptr_t start) {
-  long cur = ftell(fp);
-   if (start > (size_t)cur) {
-    size_t size = start - (uintptr_t)cur;
-    char* buf = calloc(1, size);
-    fwrite(buf, size, 1, fp);
-    free(buf);
-  }
-}
+static const char LOCAL_LABEL_PREFIX[] = "--local-label-prefix=";
 
 int main(int argc, char* argv[]) {
-  const char *ofn = "a.out";
-  char *out_asm = NULL;
   int iarg;
 
   for (iarg = 1; iarg < argc; ++iarg) {
     if (*argv[iarg] != '-')
       break;
-    if (strncmp(argv[iarg], "-o", 2) == 0)
-      ofn = strdup_(argv[iarg] + 2);
-    if (strncmp(argv[iarg], "-S", 2) == 0)
-      out_asm = &argv[iarg][2];
-  }
-
-  if (argc > iarg) {
-    // Pass sources to preprocessor.
-    char **pp_argv = malloc(sizeof(char*) * (argc + 1));
-    pp_argv[0] = cat_path(dirname(strdup_(argv[0])), "cpp");
-    memcpy(&pp_argv[1], &argv[1], sizeof(char*) * argc);
-    pp_argv[argc] = NULL;
-    char **xcc_argv = argv;
-    xcc_argv[iarg] = NULL;  // Destroy!
-    return pipe_pp_xcc(pp_argv, xcc_argv) != 0;
+    if (strncmp(argv[iarg], LOCAL_LABEL_PREFIX, sizeof(LOCAL_LABEL_PREFIX) - 1) == 0) {
+      set_local_label_prefix(&argv[iarg][sizeof(LOCAL_LABEL_PREFIX) - 1]);
+    }
   }
 
   // Compile.
-
-  FILE *asm_fp = NULL;
-  if (out_asm != NULL) {
-    const char *name = *out_asm != '\0' ? out_asm : ofn;
-    out_asm = change_ext(name, "s");
-    asm_fp = fopen(out_asm, "w");
-    if (asm_fp == NULL)
-      error("Cannot open file for asm: %s", out_asm);
-    set_asm_fp(asm_fp);
-  }
-
-  init_compiler(LOAD_ADDRESS);
+  init_compiler(stdout);
 
   // Test.
   define_global(new_func_type(&tyVoid, NULL, true), 0, NULL, "__asm");
-  define_global(new_func_type(&tyVoid, NULL, false), 0, NULL, "__rel32");
 
   compile(stdin, "*stdin*");
 
   fixup_locations();
-
-  uintptr_t entry = label_adr("_start");
-  if (entry == (uintptr_t)-1)
-    error("Cannot find label: `%s'", "_start");
-
-  FILE* fp = fopen(ofn, "wb");
-  if (fp == NULL) {
-    fprintf(stderr, "Failed to open output file: %s\n", ofn);
-    return 1;
-  }
-
-  size_t codefilesz, codememsz;
-  size_t datafilesz, datamemsz;
-  uintptr_t codeloadadr, dataloadadr;
-  get_section_size(0, &codefilesz, &codememsz, &codeloadadr);
-  get_section_size(1, &datafilesz, &datamemsz, &dataloadadr);
-
-  int phnum = datamemsz > 0 ? 2 : 1;
-
-  out_elf_header(fp, entry, phnum);
-  out_program_header(fp, 0, PROG_START, codeloadadr, codefilesz, codememsz);
-  if (phnum > 1)
-    out_program_header(fp, 1, ALIGN(PROG_START + codefilesz, 0x1000), dataloadadr, datafilesz, datamemsz);
-
-  put_padding(fp, PROG_START);
-  output_section(fp, 0);
-  if (phnum > 1) {
-    put_padding(fp, ALIGN(PROG_START + codefilesz, 0x1000));
-    output_section(fp, 1);
-  }
-  fclose(fp);
-  if (asm_fp != NULL)
-    fclose(asm_fp);
-
-#if !defined(__XV6) && defined(__linux__)
-  if (chmod(ofn, 0755) == -1) {
-    perror("chmod failed\n");
-    return 1;
-  }
-#endif
 
   return 0;
 }
 #include "util.h"
 
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdlib.h>  // malloc
 #include <string.h>  // strcmp
 #include <assert.h>
@@ -5598,13 +5691,21 @@ char *strndup_(const char *str, size_t size) {
   return dup;
 }
 
+static char label_prefix[8] = "L";
+
 char *alloc_label(void) {
   static int label_no;
   ++label_no;
   //char buf[sizeof(int) * 3 + 1];
   char buf[32];
-  snprintf(buf, sizeof(buf), ".L%d", label_no);
+  snprintf(buf, sizeof(buf), ".%s%d", label_prefix, label_no);
   return strdup_(buf);
+}
+
+void set_local_label_prefix(const char *prefix) {
+  if (strlen(prefix) >= sizeof(label_prefix) - 1)
+    error("Label prefix too long");
+  strncpy(label_prefix, prefix, sizeof(label_prefix));
 }
 
 char *cat_path(const char *base_dir, const char *rel_path) {
@@ -5656,6 +5757,78 @@ ssize_t getline_(char **lineptr, size_t *pcapa, FILE *stream, size_t start) {
   *lineptr = top;
   *pcapa = capa;
   return size;
+}
+
+char *abspath(const char *root, const char *path) {
+  if (*path == '/')
+    return strdup_(path);
+
+  bool is_root = *root == '/';
+
+  Vector *dirs = new_vector();  // [start, end]
+  for (const char *p = root; *p != '\0'; ) {
+    if (*p == '/')
+      if (*(++p) == '\0')
+        break;
+    vec_push(dirs, p);
+    const char *q = strchr(p, '/');
+    if (q == NULL) {
+      vec_push(dirs, p + strlen(p));
+      break;
+    }
+    vec_push(dirs, q);
+    p = q;
+  }
+
+  for (const char *p = path; *p != '\0'; ) {
+    if (*p == '/') {
+      while (*p == '/')
+        ++p;
+      if (*p == '\0') {
+        // End with '/'.
+        vec_push(dirs, p);
+        vec_push(dirs, p);
+        break;
+      }
+    }
+    const char *q = strchr(p, '/');
+    if (q == NULL)
+      q = p + strlen(p);
+    size_t size = q - p;
+    if (size == 1 && strncmp(p, ".", size) == 0) {
+      // Skip
+    } else if (size == 2 && strncmp(p, "..", size) == 0) {
+      if (dirs->len < 2)
+        return NULL;  // Illegal
+      dirs->len -= 2;
+    } else {
+      vec_push(dirs, p);
+      vec_push(dirs, q);
+    }
+    p = q;
+  }
+
+  if (dirs->len == 0)
+    return strdup_("/");
+
+  size_t total_len = 1;  // 1 for NUL-terminate.
+  for (int i = 0; i < dirs->len; i += 2) {
+    if (i != 0 || is_root)
+      total_len += 1;
+    total_len += ((char*)dirs->data[i + 1] - (char*)dirs->data[i]);
+  }
+
+  char *buf = malloc(total_len);
+  char *p = buf;
+  for (int i = 0; i < dirs->len; i += 2) {
+    if (i != 0 || is_root)
+      *p++ = '/';
+    size_t size = (char*)dirs->data[i + 1] - (char*)dirs->data[i];
+    memcpy(p, dirs->data[i], size);
+    p += size;
+  }
+  *p = '\0';
+  return buf;
 }
 
 void error(const char* fmt, ...) {
@@ -5718,6 +5891,14 @@ void map_put(Map *map, const char *key, const void *val) {
 void *map_get(Map *map, const char *key) {
   int i = map_find(map, key);
   return i >= 0 ? map->vals->data[i] : NULL;
+}
+
+bool map_try_get(Map *map, const char *key, void **output) {
+  int i = map_find(map, key);
+  if (i < 0)
+    return false;
+  *output = map->vals->data[i];
+  return true;
 }
 #include "elfutil.h"
 

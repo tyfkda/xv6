@@ -181,6 +181,12 @@ static void out(char c) {
     flush();
 }
 
+static void outs(const char *s) {
+  char c;
+  while ((c = *s++) != '\0')
+    out(c);
+}
+
 static void extend(size_t n, char **pp, size_t *pcapa) {
   if (n <= *pcapa)
     return;
@@ -249,6 +255,14 @@ void rl_clear_input(void) {
   rl_kill_after();
 }
 
+void rl_redraw(int p) {
+  for (int i = p; i < rl.n; ++i)
+    out(rl.buf[i]);
+  int m = rl.n - rl.p;
+  for (int i = 0; i < m; ++i)
+    out('\b');
+}
+
 void rl_putc(char c) {
   extend(rl.n + 1, &rl.buf, &rl.capa);
   int m = rl.n - rl.p;
@@ -258,11 +272,8 @@ void rl_putc(char c) {
   rl.buf[rl.p] = c;
 
   ++rl.n;
-  for (int i = rl.p; i < rl.n; ++i)
-    out(rl.buf[i]);
   ++rl.p;
-  for (int i = 0; i < m; ++i)
-    out('\b');
+  rl_redraw(rl.p - 1);
 }
 
 void rl_set_input(const char *input) {
@@ -271,15 +282,18 @@ void rl_set_input(const char *input) {
     rl_putc(*p);
 }
 
-ssize_t readline(char **lineptr, size_t *pcapa, bool use_raw_mode) {
+ssize_t readline(const char *prompt, char **lineptr, size_t *pcapa, bool use_raw_mode) {
   rl.buf = *lineptr;
   rl.capa = *pcapa;
   rl.p = rl.n = 0;
   int his_index = -1;
 
-  if (use_raw_mode && !setRawMode(true, rl.ifd)) {
-    fprintf(stderr,"Failed to set raw mode\n");
-    exit(1);
+  if (use_raw_mode) {
+    if (!setRawMode(true, rl.ifd)) {
+      fprintf(stderr,"Failed to set raw mode\n");
+      exit(1);
+    }
+    outs(prompt);
   }
 
   char buf[16];
@@ -399,6 +413,13 @@ ssize_t readline(char **lineptr, size_t *pcapa, bool use_raw_mode) {
           rl_set_input(ringbuf_get(&rl.history, his_index));
       }
       continue;
+
+    case C('L'):
+      outs("\x1b[2J\x1b[H");  // Clear screen, Move to the top left.
+      if (use_raw_mode)
+        outs(prompt);
+      rl_redraw(0);
+      break;
 
     default:
       break;
@@ -706,9 +727,9 @@ runcmd(struct cmd *cmd)
 }
 
 int
-getcmd(FILE* fp, char **linebuf, size_t *pcapa, bool raw_mode)
+getcmd(const char *prompt, FILE* fp, char **linebuf, size_t *pcapa, bool raw_mode)
 {
-  ssize_t r = readline(linebuf, pcapa, raw_mode);
+  ssize_t r = readline(prompt, linebuf, pcapa, raw_mode);
   if (r < 0)
     return -1;
   return 0;
@@ -724,9 +745,7 @@ sh(FILE* fp)
 
   // Read and run input commands.
   for (;;) {
-    if (tty)
-      fprintf(stderr, "$ ");
-    if (getcmd(fp, &buf, &bufcapa, tty) < 0)
+    if (getcmd("$ ", fp, &buf, &bufcapa, tty) < 0)
       break;
     if(strncmp(buf, "cd ", 3) == 0){
       // Chdir must be called by the parent, not the child.

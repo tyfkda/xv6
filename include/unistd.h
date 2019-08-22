@@ -1,6 +1,7 @@
 #pragma once
 
 #include "stddef.h"  // size_t
+#include "sys/types.h"  // pid_t
 
 #define STDIN_FILENO   (0)
 #define STDOUT_FILENO  (1)
@@ -14,9 +15,6 @@ enum {
 
 struct stat;
 struct rtcdate;
-
-typedef long off_t;
-typedef int pid_t;
 
 #ifdef __cplusplus
 extern "C" {

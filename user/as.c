@@ -417,6 +417,8 @@ typedef struct {
   Operand dst;
 } Line;
 
+bool err;
+
 static bool is_label_first_chr(char c) {
   return isalpha(c) || c == '_' || c == '.';
 }
@@ -464,7 +466,7 @@ static int find_match_index(const char **pp, const char **table, size_t count) {
   return -1;
 }
 
-static enum Opcode parse_directive(const char **pp) {
+static enum DirectiveType parse_directive(const char **pp) {
   return find_match_index(pp, kDirectiveTable, sizeof(kDirectiveTable) / sizeof(*kDirectiveTable)) + 1;
 }
 
@@ -756,8 +758,8 @@ static void parse_line(const char *str, Line *line) {
     }
 
     if (*p != '\0' && !(*p == '/' && p[1] == '/')) {
-      //error("Syntax error");
-      fprintf(stderr, "Not handled: %s\n", p);
+      fprintf(stderr, "Syntax error: %s\n", p);
+      err = true;
     }
   }
 }
@@ -787,6 +789,10 @@ static bool assemble_mov(const Line *line) {
     if (is_reg8(line->dst.u.reg)) {
       int d = line->dst.u.reg - AL;
       ADD_CODE(0xb0 + d, IM8(line->src.u.immediate));
+      return true;
+    } else if (is_reg16(line->dst.u.reg)) {
+      int d = line->dst.u.reg - AX;
+      ADD_CODE(0x66, 0xb8 + d, IM16(line->src.u.immediate));
       return true;
     } else if (is_reg32(line->dst.u.reg)) {
       int d = line->dst.u.reg - EAX;
@@ -1147,6 +1153,11 @@ static void assemble_line(const Line *line, const char *rawline) {
         int s = line->src.u.reg - AX;
         int d = line->dst.u.reg - EAX;
         ADD_CODE(0x0f, 0xbf, 0xc0 + s + d * 8);
+        return;
+      } else if (is_reg16(line->src.u.reg) && is_reg64(line->dst.u.reg)) {
+        int s = line->src.u.reg - AX;
+        int d = line->dst.u.reg - RAX;
+        ADD_CODE(0x48, 0x0f, 0xbf, 0xc0 + s + d * 8);
         return;
       } else if (is_reg32(line->src.u.reg) && is_reg64(line->dst.u.reg)) {
         int s = line->src.u.reg - EAX;
@@ -1624,7 +1635,17 @@ static void assemble_line(const Line *line, const char *rawline) {
     break;
   case XOR:
     if (line->src.type == REG && line->dst.type == REG) {
-      if (is_reg32(line->src.u.reg) && is_reg32(line->dst.u.reg)) {
+      if (is_reg8(line->src.u.reg) && is_reg8(line->dst.u.reg)) {
+        int s = line->src.u.reg - AL;
+        int d = line->dst.u.reg - AL;
+        ADD_CODE(0x30, 0xc0 + s * 8 + d);
+        return;
+      } else if (is_reg16(line->src.u.reg) && is_reg16(line->dst.u.reg)) {
+        int s = line->src.u.reg - AX;
+        int d = line->dst.u.reg - AX;
+        ADD_CODE(0x66, 0x31, 0xc0 + s * 8 + d);
+        return;
+      } else if (is_reg32(line->src.u.reg) && is_reg32(line->dst.u.reg)) {
         int s = line->src.u.reg - EAX;
         int d = line->dst.u.reg - EAX;
         ADD_CODE(0x31, 0xc0 + s * 8 + d);
@@ -1713,12 +1734,31 @@ static void assemble_line(const Line *line, const char *rawline) {
             return;
           }
         }
+      } else if (is_reg64(line->dst.u.reg)) {
+        int d = line->dst.u.reg - RAX;
+        if (is_im8(value)) {
+          ADD_CODE(0x48, 0x83, 0xf8 + d, IM8(value));
+          return;
+        } else if (is_im32(value)) {
+          if (line->dst.u.reg == EAX) {
+            ADD_CODE(0x48, 0x3d, IM32(value));
+            return;
+          } else {
+            ADD_CODE(0x48, 0x81, 0xf8 + d, IM32(value));
+            return;
+          }
+        }
       }
     }
     break;
   case TEST:
     if (line->src.type == REG && line->dst.type == REG) {
-      if (is_reg32(line->src.u.reg) && is_reg32(line->src.u.reg)) {
+      if (is_reg8(line->src.u.reg) && is_reg8(line->src.u.reg)) {
+        int s = line->src.u.reg - AL;
+        int d = line->dst.u.reg - AL;
+        ADD_CODE(0x84, 0xc0 + s * 8 + d);
+        return;
+      } else if (is_reg32(line->src.u.reg) && is_reg32(line->src.u.reg)) {
         int s = line->src.u.reg - EAX;
         int d = line->dst.u.reg - EAX;
         ADD_CODE(0x85, 0xc0 + s * 8 + d);
@@ -1812,7 +1852,8 @@ static void assemble_line(const Line *line, const char *rawline) {
     break;
   }
 
-  printf("op=%2d: not handled: %s\n", line->op, rawline);
+  fprintf(stderr, "op=%2d: not handled: %s\n", line->op, rawline);
+  err = true;
 }
 
 static void assemble(FILE *fp) {
@@ -1869,6 +1910,14 @@ int main(int argc, char* argv[]) {
     }
   } else {
     assemble(stdin);
+  }
+
+  if (err) {
+    if (fp != NULL) {
+      fclose(fp);
+      remove(ofn);
+    }
+    return 1;
   }
 
   resolve_label_locations(LOAD_ADDRESS);

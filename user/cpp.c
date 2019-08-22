@@ -389,7 +389,7 @@ bool handle_ifdef(const char *p) {
 intptr_t reduce(Expr *expr) {
   switch (expr->type) {
   case EX_NUM:
-    switch (expr->valType->u.numtype) {
+    switch (expr->valType->u.num.type) {
     case NUM_CHAR:
     case NUM_SHORT:
     case NUM_INT:
@@ -1119,12 +1119,13 @@ void unget_token(Token *token) {
 #include <string.h>
 
 #include "util.h"
+#include "lexer.h"
 
-const Type tyChar =  {.type=TY_NUM, .u={.numtype=NUM_CHAR}};
-const Type tyShort = {.type=TY_NUM, .u={.numtype=NUM_SHORT}};
-const Type tyInt =   {.type=TY_NUM, .u={.numtype=NUM_INT}};
-const Type tyLong =  {.type=TY_NUM, .u={.numtype=NUM_LONG}};
-const Type tyEnum =  {.type=TY_NUM, .u={.numtype=NUM_ENUM}};
+const Type tyChar =  {.type=TY_NUM, .u={.num={.type=NUM_CHAR}}};
+const Type tyShort = {.type=TY_NUM, .u={.num={.type=NUM_SHORT}}};
+const Type tyInt =   {.type=TY_NUM, .u={.num={.type=NUM_INT}}};
+const Type tyLong =  {.type=TY_NUM, .u={.num={.type=NUM_LONG}}};
+const Type tyEnum =  {.type=TY_NUM, .u={.num={.type=NUM_ENUM}}};
 const Type tyVoid =  {.type=TY_VOID};
 
 bool is_number(enum eType type) {
@@ -1132,7 +1133,7 @@ bool is_number(enum eType type) {
 }
 
 bool is_char_type(const Type *type) {
-  return type->type == TY_NUM && type->u.numtype == NUM_CHAR;
+  return type->type == TY_NUM && type->u.num.type == NUM_CHAR;
 }
 
 bool is_void_ptr(const Type *type) {
@@ -1148,7 +1149,7 @@ bool same_type(const Type *type1, const Type *type2) {
     case TY_VOID:
       return true;
     case TY_NUM:
-      return type1->u.numtype == type2->u.numtype;
+      return type1->u.num.type == type2->u.num.type;
     case TY_ARRAY:
     case TY_PTR:
       type1 = type1->u.pa.ptrof;
@@ -1228,12 +1229,49 @@ void define_struct(const char *name, StructInfo *sinfo) {
   map_put(struct_map, name, sinfo);
 }
 
+// Enum
+
+Map *enum_map;
+Map *enum_value_map;
+
+Type *find_enum(const char *name) {
+  return map_get(enum_map, name);
+}
+
+Type *define_enum(const Token *ident) {
+  Type *type = malloc(sizeof(*type));
+  type->type = TY_NUM;
+  type->u.num.type = NUM_ENUM;
+  type->u.num.enum_.ident = ident;
+  type->u.num.enum_.members = new_vector();
+
+  if (ident != NULL) {
+    map_put(enum_map, ident->u.ident, type);
+  }
+
+  return type;
+}
+
+void add_enum_member(Type *type, const Token *ident, int value) {
+  assert(type->type == TY_NUM && type->u.num.type == NUM_ENUM);
+  EnumMember *member = malloc(sizeof(*member));
+  member->ident = ident;
+  member->value = value;
+  vec_push(type->u.num.enum_.members, member);
+
+  map_put(enum_value_map, ident->u.ident, (void*)(intptr_t)value);
+}
+
+bool find_enum_value(const char *name, intptr_t *output) {
+  return map_try_get(enum_value_map, name, (void**)output);
+}
+
 #if 0
 void dump_type(FILE *fp, const Type *type) {
   switch (type->type) {
   case TY_VOID: fprintf(fp, "void"); break;
   case TY_NUM:
-    switch (type->u.numtype) {
+    switch (type->u.num.type) {
     case NUM_CHAR:  fprintf(fp, "char"); break;
     case NUM_SHORT: fprintf(fp, "short"); break;
     case NUM_INT:   fprintf(fp, "int"); break;
@@ -1498,8 +1536,12 @@ Expr *member_access(Expr *target, Token *acctok) {
 
 static const Type *parse_enum(void) {
   Token *typeIdent = consume(TK_IDENT);
-
+  Type *type = typeIdent != NULL ? find_enum(typeIdent->u.ident) : NULL;
   if (consume(TK_LBRACE)) {
+    // TODO: Duplicate check.
+    if (type != NULL)
+      parse_error(typeIdent, "Duplicate enum type");
+    type = define_enum(typeIdent);
     if (!consume(TK_RBRACE)) {
       int value = 0;
       for (;;) {
@@ -1515,15 +1557,9 @@ static const Type *parse_enum(void) {
           }
           value = expr->u.num.ival;
         }
-        // Define
-        (void)typeIdent;  // TODO: Define enum type with name.
-        Initializer *init = malloc(sizeof(*init));
-        init->type = vSingle;
-        //init->u.single = new_expr_numlit(EX_INT, numtok, value);
-        init->u.single = new_expr(EX_NUM, &tyEnum, numtok);
-        init->u.single->u.num.ival = value;
-        VarInfo *varinfo = define_global(&tyEnum, VF_CONST, ident, NULL);
-        varinfo->u.g.init = init;
+
+        // TODO: Check whether symbol is not defined.
+        add_enum_member(type, ident, value);
         ++value;
 
         if (consume(TK_COMMA))
@@ -1532,8 +1568,11 @@ static const Type *parse_enum(void) {
           break;
       }
     }
+  } else {
+    if (type == NULL)
+      parse_error(typeIdent, "Unknown enum type");
   }
-  return &tyEnum;
+  return type;
 }
 
 const Type *parse_raw_type(int *pflag) {
@@ -2302,6 +2341,12 @@ Expr *new_expr_cast(const Type *type, const Token *token, Expr *sub, bool is_exp
 
   if (same_type(type, sub->valType))
     return sub;
+  //if (is_const(sub)) {
+  //  // Casting number types needs its value range info,
+  //  // so handlded in codegen.
+  //  sub->valType = type;
+  //  return sub;
+  //}
 
   check_cast(type, sub->valType, sub, is_explicit);
 
@@ -2322,8 +2367,8 @@ static Expr *add_num(enum ExprType exprType, const Token *tok, Expr *lhs, Expr *
   const Type *ltype = lhs->valType;
   const Type *rtype = rhs->valType;
   assert(ltype->type == TY_NUM && rtype->type == TY_NUM);
-  enum NumType lnt = ltype->u.numtype;
-  enum NumType rnt = rtype->u.numtype;
+  enum NumType lnt = ltype->u.num.type;
+  enum NumType rnt = rtype->u.num.type;
   if (lnt == NUM_ENUM)
     lnt = NUM_INT;
   if (rnt == NUM_ENUM)
@@ -2469,8 +2514,8 @@ static bool cast_numbers(Expr **pLhs, Expr **pRhs, bool keep_left) {
       !is_number((*pRhs)->valType->type))
     return false;
 
-  enum NumType ltype = (*pLhs)->valType->u.numtype;
-  enum NumType rtype = (*pRhs)->valType->u.numtype;
+  enum NumType ltype = (*pLhs)->valType->u.num.type;
+  enum NumType rtype = (*pRhs)->valType->u.num.type;
   if (ltype == NUM_ENUM)
     ltype = NUM_INT;
   if (rtype == NUM_ENUM)
@@ -2567,11 +2612,13 @@ Expr *analyze_expr(Expr *expr, bool keep_left) {
         if (varinfo != NULL) {
           global = true;
           type = varinfo->type;
-          if (type->type == TY_NUM && type->u.numtype == NUM_ENUM) {
-            // Enum value is embeded directly.
-            assert(varinfo->u.g.init->type == vSingle);
-            return varinfo->u.g.init->u.single;
-          }
+        }
+      }
+      if (type == NULL) {
+        intptr_t value;
+        if (find_enum_value(name, &value)) {
+          Num num = {.ival = value};
+          return new_expr_numlit(&tyInt, NULL, &num);
         }
       }
       if (type == NULL)
@@ -2650,7 +2697,7 @@ Expr *analyze_expr(Expr *expr, bool keep_left) {
           break;
         }
         Num num = {value};
-        const Type *type = lhs->valType->u.numtype >= rhs->valType->u.numtype ? lhs->valType : rhs->valType;
+        const Type *type = lhs->valType->u.num.type >= rhs->valType->u.num.type ? lhs->valType : rhs->valType;
         return new_expr_numlit(type, lhs->token, &num);
       }
 
@@ -2898,7 +2945,7 @@ Expr *analyze_expr(Expr *expr, bool keep_left) {
           } else if (vaargs && i >= paramc) {
             Expr *arg = args->data[i];
             const Type *type = arg->valType;
-            if (type->type == TY_NUM && type->u.numtype < NUM_INT)  // Promote variadic argument.
+            if (type->type == TY_NUM && type->u.num.type < NUM_INT)  // Promote variadic argument.
               args->data[i] = new_expr_cast(&tyInt, arg->token, arg, false);
           }
         }

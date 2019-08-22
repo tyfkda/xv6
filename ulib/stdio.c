@@ -95,6 +95,10 @@ fread(void* buffer, size_t size, size_t count, FILE* fp)
   return read(fp->fd, buffer, size * count);
 }
 
+int remove(const char *fn) {
+  return unlink(fn);
+}
+
 int
 fgetc(FILE* fp)
 {

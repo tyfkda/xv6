@@ -8,7 +8,6 @@
 typedef struct Map Map;
 typedef struct Token Token;
 typedef struct Vector Vector;
-typedef struct Initializer Initializer;
 
 // Num
 
@@ -100,3 +99,10 @@ Type *find_enum(const char *name);
 Type *define_enum(const Token *ident);
 void add_enum_member(Type *type, const Token *ident, int value);
 bool find_enum_value(const char *name, intptr_t *output);
+
+// Typedef
+
+extern Map *typedef_map;  // <char*, Type*>
+
+const Type *find_typedef(const char *ident);
+bool add_typedef(const char *ident, const Type *type);

@@ -5,13 +5,50 @@
 
 typedef struct Defun Defun;
 typedef struct Expr Expr;
-typedef struct Initializer Initializer;
 typedef struct Map Map;
 typedef struct Scope Scope;
 typedef struct Token Token;
 typedef struct Type Type;
 typedef struct VarInfo VarInfo;
 typedef struct Vector Vector;
+
+// Defun
+
+typedef struct Defun {
+  const Type *rettype;
+  const char *name;
+  Vector *params;  // <VarInfo*>
+  Vector *stmts;  // NULL => Prototype definition.
+  int flag;
+  bool vaargs;
+
+  const Type *type;
+  Scope *top_scope;
+  Vector *all_scopes;
+  Map *labels;
+  Vector *gotos;
+
+  // For codegen.
+  const char *ret_label;
+} Defun;
+
+// Initializer
+
+typedef struct Initializer {
+  enum { vSingle, vMulti, vDot, vArr } type;  // vSingle: 123, vMulti: {...}, vDot: .x=123, vArr: [n]=123
+  union {
+    Expr *single;
+    Vector *multi;  // <Initializer*>
+    struct {
+      const char *name;
+      struct Initializer *value;
+    } dot;
+    struct {
+      Expr *index;
+      struct Initializer *value;
+    } arr;
+  } u;
+} Initializer;
 
 // Node
 

@@ -1,10 +1,12 @@
 #include <assert.h>
 #include <fcntl.h>  // open
 #include <libgen.h>  // dirname
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -123,6 +125,7 @@ static int compile(const char *src, int index, Vector *cpp_cmd, char *cc1_path, 
 }
 
 int main(int argc, char* argv[]) {
+  const char *ofn = "a.out";
   bool out_asm = false;
   int iarg;
 
@@ -141,8 +144,10 @@ int main(int argc, char* argv[]) {
       break;
     if (strncmp(argv[iarg], "-I", 2) == 0)
       vec_push(cpp_cmd, argv[iarg]);
-    if (strncmp(argv[iarg], "-o", 2) == 0)
+    if (strncmp(argv[iarg], "-o", 2) == 0) {
+      ofn = argv[iarg] + 2;
       vec_push(as_cmd, argv[iarg]);
+    }
     if (strncmp(argv[iarg], "-S", 2) == 0)
       out_asm = true;
   }
@@ -176,25 +181,36 @@ int main(int argc, char* argv[]) {
   }
 
   int dst_fd = out_asm ? -1 : fd[1];
+  int res;
   if (iarg < argc) {
     for (int i = iarg; i < argc; ++i) {
       char *src = argv[i];
       char *ext = get_ext(src);
-      int res = -1;
       if (strcasecmp(ext, "c") == 0) {
         res = compile(src, i - iarg, cpp_cmd, cc1_path, dst_fd);
       } else if (strcasecmp(ext, "s") == 0) {
         res = cat(src, dst_fd);
+      } else {
+        fprintf(stderr, "Unsupported file type: %s\n", src);
+        res = -1;
       }
       if (res != 0)
-        exit(1);
+        break;
     }
   } else {
     // cpp is read from stdin.
     char *const cc1_cmd[] = {cc1_path, NULL};
-    int res = pipe_command((char**)cpp_cmd->data, cc1_cmd, dst_fd);
-    if (res != 0)
-      return 1;
+    res = pipe_command((char**)cpp_cmd->data, cc1_cmd, dst_fd);
+  }
+
+  if (res != 0 && !out_asm) {
+    assert(pid != -1);
+#if !defined(__XV6)
+    kill(pid, SIGKILL);
+    remove(ofn);
+#else
+    (void)ofn;
+#endif
   }
 
   if (!out_asm) {
@@ -206,7 +222,7 @@ int main(int argc, char* argv[]) {
     if (r1 < 0 || ec != 0)
       return 1;
   }
-  return 0;
+  return res == 0 ? 0 : 1;
 }
 #include "util.h"
 
@@ -374,6 +390,14 @@ void error(const char* fmt, ...) {
   va_end(ap);
   fprintf(stderr, "\n");
   exit(1);
+}
+
+bool is_im8(intptr_t x) {
+  return x <= ((1L << 7) - 1) && x >= -(1L << 7);
+}
+
+bool is_im32(intptr_t x) {
+  return x <= ((1L << 31) - 1) && x >= -(1L << 31);
 }
 
 // Container

@@ -18,46 +18,6 @@ typedef union {
   intptr_t ival;
 } Num;
 
-// Initializer
-
-typedef struct Initializer {
-  enum { vSingle, vMulti, vDot, vArr } type;  // vSingle: 123, vMulti: {...}, vDot: .x=123, vArr: [n]=123
-  union {
-    Expr *single;
-    Vector *multi;  // <Initializer*>
-    struct {
-      const char *name;
-      struct Initializer *value;
-    } dot;
-    struct {
-      Expr *index;
-      struct Initializer *value;
-    } arr;
-  } u;
-} Initializer;
-
-extern Map *typedef_map;  // <char*, Type*>
-
-// Defun
-
-typedef struct Defun {
-  const Type *rettype;
-  const char *name;
-  Vector *params;  // <VarInfo*>
-  Vector *stmts;  // NULL => Prototype definition.
-  int flag;
-  bool vaargs;
-
-  const Type *type;
-  Scope *top_scope;
-  Vector *all_scopes;
-  Map *labels;
-  Vector *gotos;
-
-  // For codegen.
-  const char *ret_label;
-} Defun;
-
 // Expr
 
 enum ExprType {
@@ -82,8 +42,8 @@ enum ExprType {
   EX_NE,
   EX_LT,
   EX_GT,
-  EX_GE,
   EX_LE,
+  EX_GE,
   EX_LOGAND,
   EX_LOGIOR,
   EX_ASSIGN,
@@ -121,9 +81,8 @@ typedef struct Expr {
     } str;
     struct {
       const char *ident;
-      bool global;
+      Scope *scope;  // NULL = global, non NULL = local
     } varref;
-
     struct {
       Expr *lhs;
       Expr *rhs;
@@ -162,27 +121,25 @@ typedef struct Expr {
 //
 
 void not_void(const Type *type);
-bool can_cast(const Type *dst, const Type *src, Expr *src_expr, bool is_explicit);
 
 const Type *parse_raw_type(int *pflag);
 const Type *parse_type_modifier(const Type* type);
 const Type *parse_type_suffix(const Type *type);
 const Type *parse_full_type(int *pflag, Token **pident);
 
-Expr *new_expr(enum ExprType type, const Type *valType, const Token *token);
 Expr *new_expr_numlit(const Type *type, const Token *token, const Num *num);
 Expr *new_expr_bop(enum ExprType type, const Type *valType, const Token *token, Expr *lhs, Expr *rhs);
 Expr *new_expr_deref(const Token *token, Expr *sub);
 Expr *add_expr(const Token *tok, Expr *lhs, Expr *rhs, bool keep_left);
-Expr *new_expr_varref(const char *name, const Type *type, bool global, const Token *token);
+Expr *new_expr_varref(const char *name, const Type *type, const Token *token);
 Expr *new_expr_member(const Token *token, const Type *valType, Expr *target, const Token *acctok, const Token *ident, int index);
 Expr *new_expr_sizeof(const Token *token, const Type *type, Expr *sub);
+Expr *new_expr_cast(const Type *type, const Token *token, Expr *sub);
 Vector *parse_funparams(bool *pvaargs);
 bool parse_var_def(const Type **prawType, const Type** ptype, int *pflag, Token **pident);
 Expr *parse_const(void);
 Expr *parse_assign(void);
 Expr *parse_expr(void);
 Expr *analyze_expr(Expr *expr, bool keep_left);
-Expr *new_expr_cast(const Type *type, const Token *token, Expr *sub, bool is_explicit);
 bool check_cast(const Type *dst, const Type *src, Expr *src_expr, bool is_explicit);
 bool is_const(Expr *expr);

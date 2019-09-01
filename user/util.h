@@ -33,7 +33,12 @@ typedef struct Vector {
 } Vector;
 
 Vector *new_vector(void);
+void vec_clear(Vector *vec);
 void vec_push(Vector *vec, const void *elem);
+void *vec_pop(Vector *vec);
+void vec_insert(Vector *vec, int pos, const void *elem);
+void vec_remove_at(Vector *vec, int index);
+bool vec_contains(Vector *vec, void* elem);
 
 typedef struct Map {
   Vector *keys;
@@ -43,5 +48,6 @@ typedef struct Map {
 Map *new_map(void);
 int map_count(Map *map);
 void map_put(Map *map, const char *key, const void *val);
+bool map_remove(Map *map, const char *key);
 void *map_get(Map *map, const char *key);
 bool map_try_get(Map *map, const char *key, void **output);

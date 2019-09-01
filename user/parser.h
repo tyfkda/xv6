@@ -3,6 +3,8 @@
 #include <stdbool.h>
 #include <stdint.h>  // intptr_t
 
+typedef struct BB BB;
+typedef struct BBContainer BBContainer;
 typedef struct Defun Defun;
 typedef struct Expr Expr;
 typedef struct Map Map;
@@ -25,11 +27,14 @@ typedef struct Defun {
   const Type *type;
   Scope *top_scope;
   Vector *all_scopes;
-  Map *labels;
+  Map *label_map;  // <const char*, BB*>
   Vector *gotos;
 
   // For codegen.
-  const char *ret_label;
+
+  // BasicBlock
+  BBContainer *bbcon;
+  BB *ret_bb;
 } Defun;
 
 // Initializer
@@ -96,11 +101,11 @@ typedef struct Node {
     struct {
       struct Expr *value;
       struct Node *body;
-      Vector *case_values;
+      Vector *case_values;  // <intptr_t>
       bool has_default;
     } switch_;
     struct {
-      intptr_t value;
+      Expr *value;
     } case_;
     struct {
       struct Expr *cond;

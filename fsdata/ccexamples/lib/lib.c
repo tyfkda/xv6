@@ -112,6 +112,21 @@ void* memcpy(void *dst, const void *src, size_t n) {
   return dst;
 }
 
+void* memmove(void *dst, const void *src, size_t n) {
+  const char *s = src;
+  char *d = dst;
+  if (s < d && s + n > d) {
+    s += n;
+    d += n;
+    while (n-- > 0)
+      *--d = *--s;
+  } else {
+    while (n-- > 0)
+      *d++ = *s++;
+  }
+  return dst;
+}
+
 void* memset(void* buf, int val, size_t size) {
   unsigned char *p = buf;
   unsigned char v = val;
@@ -272,7 +287,8 @@ int execve(const char *path, char *const args[], char *const envp[]) {
 }
 
 pid_t wait4(pid_t pid, int* status, int options, struct rusage *usage) {
-  __asm(" mov $61, %eax\n"  // __NR_wait4
+  __asm(" mov %rcx, %r10\n"  // 4th parameter for syscall is `%r10`. `%r10` is caller save so no need to save/restore
+        " mov $61, %eax\n"  // __NR_wait4
         " syscall\n");
 }
 
@@ -398,14 +414,18 @@ int execvp(const char *path, char *const args[]) {
   return execve(path, args, environ);
 }
 
-pid_t waitpid(int pid, int* status, int options) {
+pid_t waitpid(pid_t pid, int* status, int options) {
   return wait4(pid, status, options, NULL);
 }
 
 void perror(const char* msg) {
+  fprintf(stderr, "perror: %s\n", msg);
 }
 
 void qsort(void *base, size_t nmemb, size_t size, int (*compare)(const void *, const void *)) {
+  if (nmemb <= 1)
+    return;
+
   char *a = base;
   const char *px;
 

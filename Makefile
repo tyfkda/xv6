@@ -282,6 +282,10 @@ UPROGS=\
 	fs/bin/xxd\
 	fs/bin/zombie\
 
+obj/user/cc1.o: user/cc1.c
+	@mkdir -p obj/user
+	$(CC) $(CFLAGS) -Os -c -o $@ $<
+
 fs/bin/cc1: obj/user/cc1.o obj/ulib/ulib.a
 	@mkdir -p fs/bin out
 	$(LD) $(LDFLAGS) -T $(APPLS) -o $@ $^

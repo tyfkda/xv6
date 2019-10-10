@@ -263,7 +263,7 @@ void rl_redraw(int p) {
     out('\b');
 }
 
-void rl_putc(char c) {
+void rl_putc(char c, bool echo) {
   extend(rl.n + 1, &rl.buf, &rl.capa);
   int m = rl.n - rl.p;
   if (m > 0) {
@@ -273,13 +273,14 @@ void rl_putc(char c) {
 
   ++rl.n;
   ++rl.p;
-  rl_redraw(rl.p - 1);
+  if (echo)
+    rl_redraw(rl.p - 1);
 }
 
 void rl_set_input(const char *input) {
   rl_clear_input();
   for (const char *p = input; *p != '\0'; ++p)
-    rl_putc(*p);
+    rl_putc(*p, true);
 }
 
 ssize_t readline(const char *prompt, char **lineptr, size_t *pcapa, bool use_raw_mode) {
@@ -386,7 +387,8 @@ ssize_t readline(const char *prompt, char **lineptr, size_t *pcapa, bool use_raw
     case '\r': case '\n':
       extend(rl.n + 1, &rl.buf, &rl.capa);
       rl.buf[rl.n] = '\0';
-      write(rl.ofd, "\r\n", 2);
+      if (use_raw_mode)
+        write(rl.ofd, "\r\n", 2);
       if (rl.n > 0 && rl.buf[0] != ' ')
         rl_add_history(rl.buf);
       *lineptr = rl.buf;
@@ -426,7 +428,7 @@ ssize_t readline(const char *prompt, char **lineptr, size_t *pcapa, bool use_raw
     }
 
     if (c >= ' ') {
-      rl_putc(c);
+      rl_putc(c,  use_raw_mode);
     }
   }
 }

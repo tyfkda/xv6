@@ -85,7 +85,12 @@ execvp(const char *path, char *const argv[]){
     return -1;
   }
   char *newargv[MAXARG];
-  memcpy(newargv, argv, sizeof(newargv));
   newargv[0] = exepath;
+  for (int i = 1; i < MAXARG; ++i) {
+    char *p = argv[i];
+    newargv[i] = p;
+    if (p == NULL)
+      break;
+  }
   return execv(exepath, newargv);
 }

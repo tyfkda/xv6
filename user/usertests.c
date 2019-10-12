@@ -19,7 +19,7 @@
 char buf[8192];
 
 static void panic(const char *msg) {
-  fprintf(stderr, "%s\n", msg);
+  fprintf(stderr, "\x1b[31mPANIC! %s\x1b[0m\n", msg);
   exit(1);
 }
 
@@ -448,7 +448,7 @@ void dirtest(void)
 void
 exectest(void)
 {
-  char *argv[] = {"echo", "ALL", "TESTS", "PASSED", 0};
+  char *argv[] = {"echo", "\x1b[32mALL", "TESTS", "PASSED\x1b[0m", 0};
 
   printf("exec test\n");
   if (fork() == 0) {
@@ -1889,13 +1889,21 @@ bigargtest(void)
   unlink("bigarg-ok");
   pid = fork();
   if(pid == 0){
+#define BIGARG_STRLEN  ((0x4000) / (MAXARG - 2))
     static char *args[MAXARG];
+    static char longstr[BIGARG_STRLEN];
+    static const char str[] = "bigargs test: failed";
+    char echo[] = "echo";
     int i;
-    for(i = 0; i < MAXARG-1; i++)
-      args[i] = "bigargs test: failed\n                                                                                                                                                                                                       ";
-    args[MAXARG-1] = 0;
+    memset(longstr, '.', sizeof(longstr));
+    longstr[BIGARG_STRLEN - 1] = '\0';
+    memcpy(longstr, str, sizeof(str) - 1);  // Copy except last '\0'.
+    for(i = 1; i < MAXARG-1; i++)
+      args[i] = longstr;
+    args[0] = echo;
+    args[MAXARG-1] = NULL;
     printf("bigarg test\n");
-    execvp("echo", args);
+    execvp(echo, args);
     printf("bigarg test ok\n");
     fd = open("bigarg-ok", O_CREAT);
     close(fd);
@@ -2129,8 +2137,8 @@ main(int argc, char *argv[])
 
   uio();
 
-  exectest();
   execvetest();
+  exectest();
 
   return 0;
 }

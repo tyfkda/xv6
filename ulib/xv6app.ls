@@ -7,8 +7,7 @@ MEMORY {
 
 SECTIONS {
     .text : {
-        *(.text.startup .text.startup.*)
-        *(.text)
+        *(.text .text.*)
 
         *(.rodata*)
 

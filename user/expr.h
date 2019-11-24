@@ -1,3 +1,5 @@
+// Expression
+
 #pragma once
 
 #include <stdbool.h>
@@ -17,7 +19,7 @@ typedef union {
 
 // Expr
 
-enum ExprType {
+enum ExprKind {
   // Literals
   EX_NUM,     // 1234
   EX_STR,     // "foobar"
@@ -49,6 +51,7 @@ enum ExprType {
   EX_POS,     // +
   EX_NEG,     // -
   EX_NOT,     // !
+  EX_BITNOT,  // ~x
   EX_PREINC,  // ++e
   EX_PREDEC,  // --e
   EX_POSTINC, // e++
@@ -66,8 +69,8 @@ enum ExprType {
 };
 
 typedef struct Expr {
-  enum ExprType type;
-  const Type *valType;
+  enum ExprKind kind;
+  const Type *type;
   const Token *token;
   union {
     Num num;
@@ -108,7 +111,7 @@ typedef struct Expr {
     struct {
       Vector *list;  // <Expr*>
     } comma;
-  } u;
+  };
 } Expr;
 
 //
@@ -119,19 +122,19 @@ const Type *parse_type_suffix(const Type *type);
 const Type *parse_full_type(int *pflag, Token **pident);
 
 Expr *new_expr_numlit(const Type *type, const Token *token, const Num *num);
-Expr *new_expr_bop(enum ExprType type, const Type *valType, const Token *token, Expr *lhs, Expr *rhs);
+Expr *new_expr_bop(enum ExprKind kind, const Type *type, const Token *token, Expr *lhs, Expr *rhs);
 Expr *new_expr_deref(const Token *token, Expr *sub);
 Expr *add_expr(const Token *tok, Expr *lhs, Expr *rhs, bool keep_left);
 Expr *new_expr_varref(const char *name, const Type *type, const Token *token);
-Expr *new_expr_member(const Token *token, const Type *valType, Expr *target, const Token *acctok, const Token *ident, int index);
+Expr *new_expr_member(const Token *token, const Type *type, Expr *target, const Token *acctok, const Token *ident, int index);
 Expr *new_expr_sizeof(const Token *token, const Type *type, Expr *sub);
 Expr *new_expr_cast(const Type *type, const Token *token, Expr *sub);
+Vector *parse_args(Token **ptoken);
 Vector *parse_funparams(bool *pvaargs);
+Vector *parse_funparam_types(bool *pvaargs);  // Vector<Type*>
 bool parse_var_def(const Type **prawType, const Type** ptype, int *pflag, Token **pident);
 Expr *parse_const(void);
 Expr *parse_assign(void);
 Expr *parse_expr(void);
-bool check_cast(const Type *dst, const Type *src, Expr *src_expr, bool is_explicit);
 bool is_const(Expr *expr);
 void not_void(const Type *type);
-enum ExprType flip_cmp(enum ExprType type);

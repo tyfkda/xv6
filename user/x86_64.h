@@ -30,6 +30,9 @@
 #ifndef NUM
 #define NUM(x)  num(x)
 #endif
+#ifndef MANGLE
+#define MANGLE(label)  mangle(label)
+#endif
 
 #define AL     "%al"
 #define CL     "%cl"
@@ -41,6 +44,16 @@
 #define DIL    "%dil"
 #define R8B    "%r8b"
 #define R9B    "%r9b"
+#define R10B   "%r10b"
+#define R11B   "%r11b"
+#define R12B   "%r12b"
+#define R13B   "%r13b"
+#define R14B   "%r14b"
+#define R15B   "%r15b"
+#define AH     "%ah"
+#define CH     "%ch"
+#define DH     "%dh"
+#define BH     "%bh"
 
 #define AX     "%ax"
 #define CX     "%cx"
@@ -52,6 +65,12 @@
 #define DI     "%di"
 #define R8W    "%r8w"
 #define R9W    "%r9w"
+#define R10W   "%r10w"
+#define R11W   "%r11w"
+#define R12W   "%r12w"
+#define R13W   "%r13w"
+#define R14W   "%r14w"
+#define R15W   "%r15w"
 
 #define EAX    "%eax"
 #define ECX    "%ecx"
@@ -63,6 +82,12 @@
 #define EDI    "%edi"
 #define R8D    "%r8d"
 #define R9D    "%r9d"
+#define R10D   "%r10d"
+#define R11D   "%r11d"
+#define R12D   "%r12d"
+#define R13D   "%r13d"
+#define R14D   "%r14d"
+#define R15D   "%r15d"
 
 #define RAX    "%rax"
 #define RCX    "%rcx"
@@ -74,6 +99,12 @@
 #define RDI    "%rdi"
 #define R8     "%r8"
 #define R9     "%r9"
+#define R10    "%r10"
+#define R11    "%r11"
+#define R12    "%r12"
+#define R13    "%r13"
+#define R14    "%r14"
+#define R15    "%r15"
 
 #define RIP    "%rip"
 
@@ -103,6 +134,7 @@
 #define SHL(o1, o2)    EMIT_ASM2("shl", o1, o2)
 #define SHR(o1, o2)    EMIT_ASM2("shr", o1, o2)
 #define NEG(o1)        EMIT_ASM1("neg", o1)
+#define NOT(o1)        EMIT_ASM1("not", o1)
 #define TEST(o1, o2)   EMIT_ASM2("test", o1, o2)
 #define PUSH(o1)       EMIT_ASM1("push", o1)
 #define POP(o1)        EMIT_ASM1("pop", o1)
@@ -121,6 +153,7 @@
 #define SETG(o1)       EMIT_ASM1("setg", o1)
 #define SETLE(o1)      EMIT_ASM1("setle", o1)
 #define SETGE(o1)      EMIT_ASM1("setge", o1)
+#define CWTL()         EMIT_ASM0("cwtl")
 #define CLTD()         EMIT_ASM0("cltd")
 #define CQTO()         EMIT_ASM0("cqto")
 
@@ -128,10 +161,17 @@
 #define _WORD(x)       EMIT_ASM1(".word", x)
 #define _LONG(x)       EMIT_ASM1(".long", x)
 #define _QUAD(x)       EMIT_ASM1(".quad", x)
-#define _ALIGN(x)      EMIT_ASM1(".align", x)
 #define _GLOBL(x)      EMIT_ASM1(".globl", x)
 #define _COMM(x, y)    EMIT_ASM2(".comm", x, y)
 #define _ASCII(x)      EMIT_ASM1(".ascii", x)
 #define _SECTION(x)    EMIT_ASM1(".section", x)
 #define _TEXT()        EMIT_ASM0(".text")
 #define _DATA()        EMIT_ASM0(".data")
+
+#ifdef __APPLE__
+#define _RODATA()      _SECTION("__TEXT,__const")
+#define _P2ALIGN(x)    EMIT_ASM1(".p2align", x)
+#else
+#define _RODATA()      _SECTION(".rodata")
+#define _ALIGN(x)      EMIT_ASM1(".align", x)
+#endif

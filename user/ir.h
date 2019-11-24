@@ -7,9 +7,29 @@
 #include <stdint.h>  // intptr_t
 
 typedef struct BB BB;
+typedef struct Function Function;
+typedef struct RegAlloc RegAlloc;
+typedef struct Type Type;
 typedef struct Vector Vector;
 
-enum IrType {
+#define REG_COUNT  (7 - 1)
+#define SPILLED_REG_NO  (REG_COUNT)
+
+// Virtual register
+
+typedef struct VReg {
+  int v;
+  int r;
+  const Type *type;
+  int offset;  // Local offset for spilled register.
+} VReg;
+
+VReg *new_vreg(int vreg_no, const Type *type);
+void vreg_spill(VReg *vreg);
+
+// Intermediate Representation
+
+enum IrKind {
   IR_IMM,   // Immediate value
   IR_BOFS,  // basereg+ofs
   IR_IOFS,  // label(rip)
@@ -27,23 +47,29 @@ enum IrType {
   IR_LSHIFT,
   IR_RSHIFT,
   IR_CMP,
-  IR_INCDEC,
+  IR_INC,
+  IR_DEC,
   IR_NEG,
   IR_NOT,
+  IR_BITNOT,
   IR_SET,   // SETxx: flag => 0 or 1
-  IR_CMPI,
-  IR_PUSH,
+  IR_TEST,
   IR_JMP,
+  IR_PRECALL,
+  IR_PUSHARG,
   IR_CALL,
   IR_ADDSP,
   IR_CAST,
-  IR_LABEL,
-  IR_SAVE_LVAL,
-  IR_ASSIGN_LVAL,
+  IR_MOV,
   IR_CLEAR,
+  IR_RESULT,
+  IR_ASM,
+
+  IR_LOAD_SPILLED,
+  IR_STORE_SPILLED,
 };
 
-enum ConditionType {
+enum ConditionKind {
   COND_ANY,
   COND_EQ,
   COND_NE,
@@ -54,54 +80,72 @@ enum ConditionType {
 };
 
 typedef struct {
-  enum IrType type;
+  enum IrKind kind;
+  VReg *dst;
+  VReg *opr1;
+  VReg *opr2;
   int size;
   intptr_t value;
 
   union {
     struct {
       const char *label;
+      bool global;
     } iofs;
     struct {
-      bool inc;
-      bool pre;
-    } incdec;
-    struct {
-      enum ConditionType cond;
+      enum ConditionKind cond;
     } set;
     struct {
       BB *bb;
-      enum ConditionType cond;
+      enum ConditionKind cond;
     } jmp;
     struct {
       const char *label;
-      size_t arg_count;
+      bool *stack_aligned;
+      int arg_count;
+      bool global;
     } call;
     struct {
       int srcsize;
     } cast;
-  } u;
+    struct {
+      const char *str;
+    } asm_;
+  };
 } IR;
 
-IR *new_ir_imm(intptr_t value, int size);
-IR *new_ir_bofs(int offset);
-IR *new_ir_iofs(const char *label);
-IR *new_ir_load(int size);
-IR *new_ir_store(int size);
-IR *new_ir_memcpy(size_t size);
-IR *new_ir_op(enum IrType type, int size);
-IR *new_ir_cmpi(intptr_t value, int size);
-IR *new_ir_incdec(bool inc, bool pre, int size, intptr_t value);
-IR *new_ir_st(enum IrType type);
-IR *new_ir_set(enum ConditionType cond);
-IR *new_ir_jmp(enum ConditionType cond, BB *bb);
-IR *new_ir_call(const char *label, int arg_count);
-IR *new_ir_addsp(int value);
-IR *new_ir_cast(int dstsize, int srcsize);
-IR *new_ir_assign_lval(int size);
-IR *new_ir_clear(size_t size);
+VReg *new_ir_imm(intptr_t value, const Type *type);
+VReg *new_ir_bop(enum IrKind kind, VReg *opr1, VReg *opr2, const Type *type);
+VReg *new_ir_unary(enum IrKind kind, VReg *opr, const Type *type);
+void new_ir_mov(VReg *dst, VReg *src, int size);
+VReg *new_ir_bofs(VReg *src);
+VReg *new_ir_iofs(const char *label, bool global);
+void new_ir_store(VReg *dst, VReg *src, int size);
+void new_ir_memcpy(VReg *dst, VReg *src, int size);
+void new_ir_cmp(VReg *opr1, VReg *opr2, int size);
+void new_ir_test(VReg *reg, int size);
+void new_ir_incdec(enum IrKind kind, VReg *reg, int size, intptr_t value);
+VReg *new_ir_set(enum ConditionKind cond);
+void new_ir_jmp(enum ConditionKind cond, BB *bb);
+void new_ir_precall(int arg_count, bool *stack_aligned);
+void new_ir_pusharg(VReg *vreg);
+VReg *new_ir_call(const char *label, bool global, VReg *freg, int arg_count, const Type *result_type, bool *stack_aligned);
+void new_ir_addsp(int value);
+VReg *new_ir_cast(VReg *vreg, const Type *dsttype, int srcsize);
+void new_ir_clear(VReg *reg, size_t size);
+void new_ir_result(VReg *reg, int size);
+void new_ir_asm(const char *asm_);
 
-void ir_out(const IR *ir);
+IR *new_ir_load_spilled(int offset, int size);
+IR *new_ir_store_spilled(int offset, int size);
+
+#if !defined(SELF_HOSTING)
+void dump_func_ir(Function *func);
+#endif
+
+// Register allocator
+
+extern RegAlloc *curra;
 
 // Basci Block:
 //   Chunk of IR codes without branching in the middle (except at the bottom).
@@ -110,6 +154,10 @@ typedef struct BB {
   struct BB *next;
   const char *label;
   Vector *irs;  // <IR*>
+
+  Vector *in_regs;  // <VReg*>
+  Vector *out_regs;  // <VReg*>
+  Vector *assigned_regs;  // <VReg*>
 } BB;
 
 extern BB *curbb;
@@ -125,4 +173,6 @@ typedef struct BBContainer {
 
 BBContainer *new_func_blocks(void);
 void remove_unnecessary_bb(BBContainer *bbcon);
+void push_callee_save_regs(Function *func);
+void pop_callee_save_regs(Function *func);
 void emit_bb_irs(BBContainer *bbcon);

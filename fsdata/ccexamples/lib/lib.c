@@ -15,18 +15,20 @@ ssize_t write(int fd, const char *str, long len) {
 
 #elif defined(__linux__)
 ssize_t write(int fd, const char *str, long len) {
-  __asm(" mov $1, %eax\n"  // __NR_write
-        " syscall\n");
+  __asm("mov $1, %eax");  // __NR_write
+  __asm("syscall\n");
 }
+
+#elif defined(__APPLE__)
+
+// Use libc.
+#define USE_LIBC
 
 #else
 #error Target not supported
 #endif
 
-int __assert_failed(const char *fn, int lineno) {
-  fprintf(stderr, "Assert failed at %s(%d)\n", fn, lineno);
-  exit(1);
-}
+#ifndef USE_LIBC
 
 int strlen(const char *s) {
   const char *p;
@@ -165,9 +167,9 @@ long strtol(const char *p, char **pp, int base) {
   return result;
 }
 
-static FILE _stdin = {0};
-static FILE _stdout = {1};
-static FILE _stderr = {2};
+static FILE _stdin = {.fd=STDIN_FILENO};
+static FILE _stdout = {.fd=STDOUT_FILENO};
+static FILE _stderr = {.fd=STDERR_FILENO};
 FILE *stdin = &_stdin;
 FILE *stdout = &_stdout;
 FILE *stderr = &_stderr;
@@ -247,64 +249,69 @@ int tolower(int c) {
 char **environ = NULL;
 
 int open(const char *fn, int flag) {
-  __asm(" mov $2, %eax\n"  // __NR_open
-        " syscall\n");
+  __asm("mov $2, %eax");  // __NR_open
+  __asm("syscall");
 }
 
 int close(int fd) {
-  __asm(" mov $3, %eax\n"  // __NR_close
-        " syscall\n");
+  __asm("mov $3, %eax");  // __NR_close
+  __asm("syscall\n");
 }
 
 size_t read(int fd, void *buf, size_t size) {
-  __asm(" mov $0, %eax\n"  // __NR_read
-        " syscall\n");
+  __asm("mov $0, %eax");  // __NR_read
+  __asm("syscall");
 }
 
 static size_t _getcwd(char *buffer, size_t size) {
-  __asm(" mov $79, %eax\n"  // __NR_getcwd
-        " syscall\n");
+  __asm("mov $79, %eax");  // __NR_getcwd
+  __asm("syscall");
 }
 
 pid_t fork(void) {
-  __asm(" mov $57, %eax\n"  // __NR_fork
-        " syscall\n");
+  __asm("mov $57, %eax");  // __NR_fork
+  __asm("syscall");
 }
 
 int pipe(int *pipefd) {
-  __asm(" mov $22, %eax\n"  // __NR_pipe
-        " syscall\n");
+  __asm("mov $22, %eax");  // __NR_pipe
+  __asm("syscall");
 }
 
 int dup(int fd) {
-  __asm(" mov $32, %eax\n"  // __NR_dup
-        " syscall\n");
+  __asm("mov $32, %eax");  // __NR_dup
+  __asm("syscall");
 }
 
 int execve(const char *path, char *const args[], char *const envp[]) {
-  __asm(" mov $59, %eax\n"  // __NR_execve
-        " syscall\n");
+  __asm("mov $59, %eax");  // __NR_execve
+  __asm("syscall");
 }
 
 pid_t wait4(pid_t pid, int* status, int options, struct rusage *usage) {
-  __asm(" mov %rcx, %r10\n"  // 4th parameter for syscall is `%r10`. `%r10` is caller save so no need to save/restore
-        " mov $61, %eax\n"  // __NR_wait4
-        " syscall\n");
+  __asm("mov %rcx, %r10");  // 4th parameter for syscall is `%r10`. `%r10` is caller save so no need to save/restore
+  __asm("mov $61, %eax");  // __NR_wait4
+  __asm("syscall");
 }
 
 int chmod(const char *pathname, /*mode_t*/int mode) {
-  __asm(" mov $90, %eax\n"  // __NR_chmod
-        " syscall\n");
+  __asm("mov $90, %eax");  // __NR_chmod
+  __asm("syscall");
 }
 
 off_t lseek(int fd, off_t offset, int whence) {
-  __asm(" mov $8, %eax\n"  // __NR_lseek
-        " syscall\n");
+  __asm("mov $8, %eax");  // __NR_lseek
+  __asm("syscall\n");
 }
 
 int kill(pid_t pid, int sig) {
-  __asm(" mov $62, %eax\n"  // __NR_kill
-        " syscall\n");
+  __asm("mov $62, %eax");  // __NR_kill
+  __asm("syscall");
+}
+
+static void *_brk(void *addr) {
+  __asm("mov $12, %eax");  // __NR_brk
+  __asm("syscall");
 }
 
 #else
@@ -422,40 +429,25 @@ void perror(const char* msg) {
   fprintf(stderr, "perror: %s\n", msg);
 }
 
-void qsort(void *base, size_t nmemb, size_t size, int (*compare)(const void *, const void *)) {
-  if (nmemb <= 1)
-    return;
-
-  char *a = base;
-  const char *px;
-
-  px = &a[(nmemb >> 1) * size];
-  int i = 0;
-  int j = nmemb - 1;
-  for (;;) {
-    while (compare(&a[i * size], px) < 0)
-      ++i;
-    while (compare(px, &a[j * size]) < 0)
-      --j;
-    if (i >= j)
-      break;
-
-    char *pi = &a[i * size];
-    char *pj = &a[j * size];
-    for (size_t k = 0; k < size; ++k) {
-      char t = pi[k];
-      pi[k] = pj[k];
-      pj[k] = t;
-    }
-    if (px == pi)
-      px = pj;
-    else if (px == pj)
-      px = pi;
-    ++i;
-    --j;
-  }
-  if (i > 1)
-    qsort(a, i, size, compare);
-  if (j + 2 < nmemb)
-    qsort(&a[(j + 1) * size], nmemb - j - 1, size, compare);
+#if !defined(__XV6)
+static char *curbrk;
+int brk(void *addr) {
+  void *result = _brk(addr);
+  curbrk = result;
+  if (result < addr)
+    return EOF;
+  return 0;
 }
+
+void *sbrk(intptr_t increment) {
+  char *p = curbrk;
+  if (p == NULL)
+    p = _brk(NULL);
+  char *next = p + increment;
+  if (brk(next) < 0)
+    return (void*)-1;
+  return p;
+}
+#endif
+
+#endif  // !USE_LIBC

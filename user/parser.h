@@ -1,46 +1,35 @@
+// Parser for statement
+
 #pragma once
 
 #include <stdbool.h>
 #include <stdint.h>  // intptr_t
 
-typedef struct BB BB;
-typedef struct BBContainer BBContainer;
-typedef struct Defun Defun;
+typedef struct Function Function;
 typedef struct Expr Expr;
 typedef struct Map Map;
 typedef struct Scope Scope;
 typedef struct Token Token;
 typedef struct Type Type;
-typedef struct VarInfo VarInfo;
 typedef struct Vector Vector;
 
 // Defun
 
 typedef struct Defun {
-  const Type *rettype;
-  const char *name;
-  Vector *params;  // <VarInfo*>
-  Vector *stmts;  // NULL => Prototype definition.
-  int flag;
-  bool vaargs;
+  Function *func;
 
-  const Type *type;
-  Scope *top_scope;
-  Vector *all_scopes;
+  Vector *stmts;  // NULL => Prototype definition.
+
   Map *label_map;  // <const char*, BB*>
   Vector *gotos;
 
-  // For codegen.
-
-  // BasicBlock
-  BBContainer *bbcon;
-  BB *ret_bb;
+  int flag;
 } Defun;
 
 // Initializer
 
 typedef struct Initializer {
-  enum { vSingle, vMulti, vDot, vArr } type;  // vSingle: 123, vMulti: {...}, vDot: .x=123, vArr: [n]=123
+  enum { vSingle, vMulti, vDot, vArr } kind;  // vSingle: 123, vMulti: {...}, vDot: .x=123, vArr: [n]=123
   union {
     Expr *single;
     Vector *multi;  // <Initializer*>
@@ -52,12 +41,12 @@ typedef struct Initializer {
       Expr *index;
       struct Initializer *value;
     } arr;
-  } u;
+  };
 } Initializer;
 
 // Node
 
-enum NodeType {
+enum NodeKind {
   ND_EXPR,
   ND_DEFUN,
   ND_BLOCK,
@@ -74,6 +63,7 @@ enum NodeType {
   ND_GOTO,
   ND_LABEL,
   ND_VARDECL,
+  ND_ASM,
   ND_TOPLEVEL,
 };
 
@@ -85,7 +75,7 @@ typedef struct VarDecl {
 } VarDecl;
 
 typedef struct Node {
-  enum NodeType type;
+  enum NodeKind kind;
   union {
     Expr *expr;
     Defun *defun;
@@ -94,12 +84,12 @@ typedef struct Node {
       Vector *nodes;
     } block;
     struct {
-      struct Expr *cond;
+      Expr *cond;
       struct Node *tblock;
       struct Node *fblock;
     } if_;
     struct {
-      struct Expr *value;
+      Expr *value;
       struct Node *body;
       Vector *case_values;  // <intptr_t>
       bool has_default;
@@ -108,13 +98,13 @@ typedef struct Node {
       Expr *value;
     } case_;
     struct {
-      struct Expr *cond;
+      Expr *cond;
       struct Node *body;
     } while_;
     struct {
-      struct Expr *pre;
-      struct Expr *cond;
-      struct Expr *post;
+      Expr *pre;
+      Expr *cond;
+      Expr *post;
       struct Node *body;
     } for_;
     struct {
@@ -126,18 +116,22 @@ typedef struct Node {
       struct Node *stmt;
     } label;
     struct {
-      struct Expr *val;
+      Expr *val;
     } return_;
     struct {
       Vector *decls;  // <VarDecl*>
       Vector *inits;  // <Node*>
     } vardecl;
     struct {
+      Expr *str;
+    } asm_;
+    struct {
       Vector *nodes;
     } toplevel;
-  } u;
+  };
 } Node;
 
 Node *new_node_expr(Expr *e);
+Node *new_top_node(Vector *nodes);
 
-Node *parse_program(void);
+Vector *parse_program(Vector *nodes);

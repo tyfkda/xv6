@@ -1,3 +1,5 @@
+// Types
+
 #pragma once
 
 #include <stdbool.h>
@@ -11,8 +13,8 @@ typedef struct Vector Vector;
 
 // Num
 
-enum NumType {
-  NUM_CHAR,  // Small number type should be earlier.
+enum NumKind {
+  NUM_CHAR,  // Small number kind should be earlier.
   NUM_SHORT,
   NUM_INT,
   NUM_LONG,
@@ -21,7 +23,7 @@ enum NumType {
 
 // Type
 
-enum eType {
+enum TypeKind {
   TY_VOID,
   TY_NUM,
   TY_PTR,
@@ -43,10 +45,10 @@ typedef struct {
 } EnumMember;
 
 typedef struct Type {
-  enum eType type;
+  enum TypeKind kind;
   union {
     struct {
-      enum NumType type;
+      enum NumKind kind;
       struct {
         const Token *ident;
         Vector *members;  // <EnumMember*>
@@ -65,7 +67,7 @@ typedef struct Type {
       const char *name;
       StructInfo *info;
     } struct_;  // and union.
-  } u;
+  };
 } Type;
 
 extern const Type tyChar;
@@ -74,10 +76,11 @@ extern const Type tyInt;
 extern const Type tyLong;
 extern const Type tyEnum;
 extern const Type tyVoid;
+extern const Type tyVoidPtr;
 #define tyBool  tyInt
 #define tySize  tyLong
 
-bool is_number(enum eType type);
+bool is_number(enum TypeKind kind);
 bool is_char_type(const Type *type);
 bool is_void_ptr(const Type *type);
 bool same_type(const Type *type1, const Type *type2);

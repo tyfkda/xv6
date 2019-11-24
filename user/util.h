@@ -1,3 +1,5 @@
+// Utility
+
 #pragma once
 
 #include <stdbool.h>
@@ -19,12 +21,23 @@ char *cat_path(const char *base_dir, const char *rel_path);
 ssize_t getline_(char **lineptr, size_t *n, FILE *stream, size_t start);
 char *abspath(const char *root, const char *path);
 
+void myqsort(void *base, size_t nmemb, size_t size, int (*compare)(const void *, const void *));
+
 void error(const char* fmt, ...) /*__attribute((noreturn))*/;
 
 bool is_im8(intptr_t x);
 bool is_im32(intptr_t x);
 
 // Container
+
+typedef struct Buffer {
+  unsigned char *data;
+  size_t capa;
+  size_t size;
+} Buffer;
+
+void buf_put(Buffer *buf, const void *data, size_t bytes);
+void buf_align(Buffer *buf, int align);
 
 typedef struct Vector {
   void **data;
@@ -46,8 +59,21 @@ typedef struct Map {
 } Map;
 
 Map *new_map(void);
+void map_clear(Map *map);
 int map_count(Map *map);
 void map_put(Map *map, const char *key, const void *val);
 bool map_remove(Map *map, const char *key);
 void *map_get(Map *map, const char *key);
 bool map_try_get(Map *map, const char *key, void **output);
+
+// StringBuffer
+
+typedef struct StringBuffer {
+  Vector *elems;
+} StringBuffer;
+
+void sb_init(StringBuffer *sb);
+void sb_clear(StringBuffer *sb);
+bool sb_empty(StringBuffer *sb);
+void sb_append(StringBuffer *sb, const char *start, const char *end);
+char *sb_to_string(StringBuffer *sb);

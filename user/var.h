@@ -1,8 +1,18 @@
+// Variables
+
 #pragma once
 
+#include <stdbool.h>
+#include <stddef.h>  // size_t
+
+typedef struct BB BB;
+typedef struct BBContainer BBContainer;
+typedef struct Initializer Initializer;
 typedef struct Map Map;
+typedef struct RegAlloc RegAlloc;
 typedef struct Token Token;
 typedef struct Type Type;
+typedef struct VReg VReg;
 typedef struct Vector Vector;
 
 // Varible flags.
@@ -19,21 +29,26 @@ typedef struct VarInfo {
   int flag;
   union {
     struct {  // For global.
-      struct Initializer *init;
-    } g;
+      Initializer *init;
+    } global;
     struct {  // For local.
       const char *label;  // For static variable to refer value in global.
-    } l;
-  } u;
+    } local;
+    struct {
+      // For codegen.
+      int offset;
+    } struct_;
+  };
 
   // For codegen.
-  int offset;
+  VReg *reg;
 } VarInfo;
 
 // Variables
 
 int var_find(Vector *vartbl, const char *name);
 VarInfo *var_add(Vector *lvars, const Token *ident, const Type *type, int flag);
+Vector *extract_varinfo_types(Vector *params);
 
 extern Map *gvar_map;
 
@@ -44,7 +59,7 @@ VarInfo *define_global(const Type *type, int flag, const Token *ident, const cha
 
 typedef struct Scope {
   struct Scope *parent;
-  Vector *vars;
+  Vector *vars;  // <VarInfo*>
 
   // For codegen.
   int size;
@@ -52,3 +67,23 @@ typedef struct Scope {
 
 Scope *new_scope(Scope *parent, Vector *vars);
 VarInfo *scope_find(Scope **pscope, const char *name);
+
+// Function
+
+typedef struct Function {
+  const Type *type;
+  const char *name;
+  Vector *params;  // <VarInfo*>
+
+  Scope *top_scope;
+  Vector *all_scopes;
+
+  // For codegen.
+  RegAlloc *ra;
+  BBContainer *bbcon;
+  BB *ret_bb;
+  size_t frame_size;
+  short used_reg_bits;
+} Function;
+
+Function *new_func(const Type *type, const char *name, Vector *params);

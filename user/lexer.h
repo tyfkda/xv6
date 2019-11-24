@@ -14,37 +14,38 @@ typedef struct {
 
 // Token
 
-// Token type value
-enum TokenType {
-  TK_ADD = '+',
-  TK_SUB = '-',
-  TK_MUL = '*',
-  TK_DIV = '/',
-  TK_MOD = '%',
-  TK_AND = '&',
-  TK_OR = '|',
-  TK_HAT = '^',
-  TK_LT = '<',
-  TK_GT = '>',
-  TK_NOT = '!',
-  TK_LPAR = '(',
-  TK_RPAR = ')',
-  TK_LBRACE = '{',
-  TK_RBRACE = '}',
-  TK_LBRACKET = '[',
-  TK_RBRACKET = ']',
-  TK_ASSIGN = '=',
-  TK_COLON = ':',
-  TK_SEMICOL = ';',
-  TK_COMMA = ',',
-  TK_DOT = '.',
-  TK_QUESTION = '?',
-  TK_INTLIT = 256,  // int literal
+// Token kind
+enum TokenKind {
+  TK_EOF,  // Represent input end
+  TK_ADD,  // +
+  TK_SUB,  // -
+  TK_MUL,  // *
+  TK_DIV,  // /
+  TK_MOD,  // %
+  TK_AND,  // &
+  TK_OR,   // |
+  TK_HAT,  // ^
+  TK_LT,   // <
+  TK_GT,   // >
+  TK_NOT,  // !
+  TK_LPAR, // (
+  TK_RPAR, // )
+  TK_LBRACE,  // {
+  TK_RBRACE,  // }
+  TK_LBRACKET,  // [
+  TK_RBRACKET,  // ]
+  TK_ASSIGN,  // =
+  TK_COLON,  // :
+  TK_SEMICOL,  // ;
+  TK_COMMA,  // ,
+  TK_DOT,  // .
+  TK_QUESTION,  // ?
+  TK_TILDA,  // ~
+  TK_INTLIT,  // int literal
   TK_CHARLIT,  // char literal
   TK_LONGLIT,  // long literal
-  TK_STR,        // String literal
-  TK_IDENT,      // Identifier
-  TK_EOF,        // Represent input end
+  TK_STR,      // String literal
+  TK_IDENT,    // Identifier
   TK_LSHIFT,  // <<
   TK_RSHIFT,  // >>
   TK_EQ,  // ==
@@ -93,11 +94,12 @@ enum TokenType {
   TK_SIZEOF,
   TK_TYPEDEF,
   TK_DOTDOTDOT,
+  TK_ASM,
 };
 
-// Token type
+// Token
 typedef struct Token {
-  enum TokenType type;
+  enum TokenKind kind;
   Line *line;
   const char *begin;
   const char *end;
@@ -108,13 +110,13 @@ typedef struct Token {
       size_t size;  // Include last '\0'.
     } str;
     intptr_t value;
-  } u;
+  };
 } Token;
 
 void init_lexer(FILE *fp, const char *filename);
 void init_lexer_string(const char *line, const char *filename, int lineno);
 Token *fetch_token(void);
-Token *consume(enum TokenType type);
+Token *consume(enum TokenKind kind);
 void unget_token(Token *token);
 char *read_ident(const char **pp);
 Token *alloc_ident(const char *ident, const char *begin, const char *end);

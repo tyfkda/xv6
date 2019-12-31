@@ -1,3 +1,4 @@
+#include "ctype.h"
 #include "stdint.h"  // uintptr_t
 #include "stdio.h"
 #include "string.h"
@@ -161,10 +162,18 @@ vsnprintf(char *out, size_t n, const char *fmt_, va_list ap)
       order = c - '0';
       while (c = fmt[++i], c >= '0' && c <= '9')
         order = order * 10 + (c - '0');
+    } else if (c == '*') {
+      order = va_arg(ap, int);
     }
     if (c == '.') {
-      while (c = fmt[++i], c >= '0' && c <= '9') {
-        suborder = suborder * 10 + (c - '0');
+      c = fmt[++i];
+      if (isdigit(c)) {
+        do {
+          suborder = suborder * 10 + (c - '0');
+        } while (isdigit(c = fmt[++i]));
+      } else if (c == '*') {
+        suborder = va_arg(ap, int);
+        c = fmt[++i];
       }
     }
 

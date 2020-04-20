@@ -23,7 +23,7 @@ extern "C" {
 // system calls
 pid_t fork(void);
 int pipe(int*);
-int write(int, const void*, int);
+int write(int, const void*, size_t);
 int read(int, void*, int);
 off_t lseek(int fd, off_t offset, int whence);
 int close(int);

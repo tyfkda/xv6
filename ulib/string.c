@@ -176,20 +176,22 @@ strlen(const char *s)
 }
 
 char*
-strchr(const char *s, char c)
+strchr(const char *s, int c)
 {
+  char cc = c;
   for(; *s != '\0'; ++s)
-    if(*s == c)
+    if(*s == cc)
       return (char*)s;
   return 0;
 }
 
 char*
-strrchr(const char *s, char c)
+strrchr(const char *s, int c)
 {
+  char cc = c;
   char* last = 0;
   for(; *s != '\0'; ++s)
-    if(*s == c)
+    if(*s == cc)
       last = (char*)s;
   return last;
 }

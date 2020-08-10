@@ -1,0 +1,13 @@
+image:
+  file: .gitpod.Dockerfile
+tasks:
+  - command: >
+      ulimit -c 0;
+      git config --local alias.br branch;
+      git config --local alias.cp cherry-pick;
+      git config --local alias.rtm rebase master;
+      git config --local alias.s status;
+      git config --local alias.sp stash pop;
+      git config --local alias.ss stash save;
+      git config --local alias.sw checkout;
+      git config --local alias.tr "log --oneline --decorate --graph --branches --tags --remotes";

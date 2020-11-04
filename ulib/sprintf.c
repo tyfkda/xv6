@@ -1,4 +1,5 @@
 #include "ctype.h"
+#include "stdarg.h"
 #include "stdint.h"  // uintptr_t
 #include "stdio.h"
 #include "string.h"
@@ -43,7 +44,7 @@ snprintuint(char *out, unsigned int n, unsigned int x,
             int base, const char* digits, int order, int padding)
 {
   char buf[16];
-  int i, o;
+  unsigned int i, o;
 
   i = 0;
   do{
@@ -56,8 +57,8 @@ snprintuint(char *out, unsigned int n, unsigned int x,
     i = order;
   }
 
-  for (o = 0; --i >= 0 && o < n; ++o)
-    out[o] = buf[i];
+  for (o = 0; i > 0 && o < n; ++o)
+    out[o] = buf[--i];
 
   return o;
 }
@@ -67,7 +68,7 @@ snprintulong(char *out, unsigned int n, unsigned long x,
              int base, const char* digits, int order, int padding)
 {
   char buf[32];
-  int i, o;
+  unsigned int i, o;
 
   i = 0;
   do{
@@ -80,8 +81,8 @@ snprintulong(char *out, unsigned int n, unsigned long x,
     i = order;
   }
 
-  for (o = 0; --i >= 0 && o < n; ++o)
-    out[o] = buf[i];
+  for (o = 0; i > 0 && o < n; ++o)
+    out[o] = buf[--i];
 
   return o;
 }

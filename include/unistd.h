@@ -7,12 +7,6 @@
 #define STDOUT_FILENO  (1)
 #define STDERR_FILENO  (2)
 
-enum {
-  SEEK_SET,  // 0
-  SEEK_CUR,  // 1
-  SEEK_END,  // 2
-};
-
 struct stat;
 struct rtcdate;
 

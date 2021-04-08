@@ -1,5 +1,7 @@
 // Format of an ELF executable file
 
+#pragma once
+
 #define ELFMAG0  (0x7f)
 #define ELFMAG1  ('E')
 #define ELFMAG2  ('L')
@@ -61,6 +63,7 @@ struct proghdr {
 #define EM_386     (3)   // Intel 80386
 #define EM_X86_64  (62)  // AMD x86-64 architecture
 
+#define ET_REL   (1)  // Relocatable file
 #define ET_EXEC  (2)  // Executable file
 
 // Values for Proghdr type

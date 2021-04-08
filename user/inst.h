@@ -2,10 +2,14 @@
 
 #pragma once
 
+typedef struct Name Name;
+
+// Must match the order with kOpTable in parse_asm.c
 enum Opcode {
   NOOP,
   MOV,
   MOVSX,
+  MOVZX,
   LEA,
 
   ADD,
@@ -13,13 +17,18 @@ enum Opcode {
   SUB,
   SUBQ,
   MUL,
+  DIV,
   IDIV,
   NEG,
   NOT,
   INC,
+  INCB,
+  INCW,
   INCL,
   INCQ,
   DEC,
+  DECB,
+  DECW,
   DECL,
   DECQ,
   AND,
@@ -27,8 +36,10 @@ enum Opcode {
   XOR,
   SHL,
   SHR,
+  SAR,
   CMP,
   TEST,
+  CWTL,
   CLTD,
   CQTO,
 
@@ -73,6 +84,30 @@ enum Opcode {
 
   INT,
   SYSCALL,
+
+#ifndef __NO_FLONUM
+  MOVSD,
+  ADDSD,
+  SUBSD,
+  MULSD,
+  DIVSD,
+  UCOMISD,
+  CVTSI2SD,
+  CVTTSD2SI,
+  SQRTSD,
+
+  MOVSS,
+  ADDSS,
+  SUBSS,
+  MULSS,
+  DIVSS,
+  UCOMISS,
+  CVTSI2SS,
+  CVTTSS2SI,
+
+  CVTSD2SS,
+  CVTSS2SD,
+#endif
 };
 
 enum RegType {
@@ -161,6 +196,14 @@ enum RegType {
   RIP,
 };
 
+#ifndef __NO_FLONUM
+enum RegXmmType {
+  NOREGXMM,
+  XMM0, XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, XMM7,
+  XMM8, XMM9, XMM10, XMM11, XMM12, XMM13, XMM14, XMM15,
+};
+#endif
+
 enum RegSize {
   REG8,
   REG16,
@@ -177,24 +220,70 @@ typedef struct {
 enum OperandType {
   NOOPERAND,
   REG,        // %rax
-  INDIRECT,   // (%rax)
+  INDIRECT,   // ofs(%rax)
+  INDIRECT_WITH_INDEX,   // ofs(%rax, %rcx, 4)
   IMMEDIATE,  // $1234
-  LABEL,      // foobar
+  DIRECT,     // foobar
   DEREF_REG,  // *%rax
+#ifndef __NO_FLONUM
+  REG_XMM,
+#endif
 };
+
+enum ExprKind {
+  EX_LABEL,
+  EX_FIXNUM,
+  EX_POS,
+  EX_NEG,
+  EX_ADD = '+',
+  EX_SUB = '-',
+  EX_MUL = '*',
+  EX_DIV = '/',
+#ifndef __NO_FLONUM
+  EX_FLONUM,
+#endif
+};
+
+typedef struct Expr {
+  enum ExprKind kind;
+  union {
+    const Name *label;
+    long fixnum;
+    struct {
+      struct Expr *lhs;
+      struct Expr *rhs;
+    } bop;
+    struct {
+      struct Expr *sub;
+    } unary;
+#ifndef __NO_FLONUM
+    double flonum;
+#endif
+  };
+} Expr;
 
 typedef struct {
   enum OperandType type;
   union {
     Reg reg;
     long immediate;
-    const char *label;
     struct {
-      const char *label;
-      long offset;
+      Expr *expr;
+    } direct;
+    struct {
+      Expr *offset;
       Reg reg;
     } indirect;
+    struct {
+      Expr *offset;
+      Expr *scale;
+      Reg base_reg;
+      Reg index_reg;
+    } indirect_with_index;
     Reg deref_reg;
+#ifndef __NO_FLONUM
+    enum RegXmmType regxmm;
+#endif
   };
 } Operand;
 
@@ -218,4 +307,8 @@ enum DirectiveType {
   DT_COMM,
   DT_GLOBL,
   DT_EXTERN,
+#ifndef __NO_FLONUM
+  DT_FLOAT,
+  DT_DOUBLE,
+#endif
 };

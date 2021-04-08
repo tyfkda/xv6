@@ -10,12 +10,12 @@ void print_board(int board[][8]) {
   for (i = 0; i < 8; i++) {
     for (j = 0; j < 8; j++)
       if (board[i][j])
-	puts("Q ");
+	putstr("Q ");
       else
-	puts(". ");
-    puts("\n");
+	putstr(". ");
+    putstr("\n");
   }
-  puts("\n\n");
+  putstr("\n\n");
 }
 
 int conflict(int board[][8], int row, int col) {

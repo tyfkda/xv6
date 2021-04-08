@@ -1,22 +1,30 @@
 #include "ctype.h"
+#include "stdbool.h"
 #include "stdio.h"
 #include "stdlib.h"
 #include "string.h"
 #include "unistd.h"
 
 #include "_file.h"
-#include "sprintf.h"
 
 #if defined(__XV6)
-ssize_t write(int fd, const char *str, long len) {
+ssize_t write(int fd, const void *str, size_t len) {
   __asm("mov $16, %eax");  // SYS_write
   __asm("int $64");
 }
 
 #elif defined(__linux__)
-ssize_t write(int fd, const char *str, long len) {
+ssize_t write(int fd, const void *str, size_t len) {
+#if defined(__XCC)
   __asm("mov $1, %eax");  // __NR_write
   __asm("syscall\n");
+#else
+  ssize_t ret;
+  __asm("mov $1, %%eax\n\t"  // __NR_write
+        "syscall"
+        : "=r"(ret));
+  return ret;
+#endif
 }
 
 #elif defined(__APPLE__)
@@ -30,26 +38,34 @@ ssize_t write(int fd, const char *str, long len) {
 
 #ifndef USE_LIBC
 
-int strlen(const char *s) {
+size_t strlen(const char *s) {
   const char *p;
   for (p = s; *p != '\0'; ++p)
     ;
   return p - s;
 }
 
-char* strchr(const char *s, char c) {
+char *strchr(const char *s, int c) {
   for (; *s != '\0'; ++s)
     if (*s == c)
       return (char*)s;
   return 0;
 }
 
-char* strrchr(const char *s, char c) {
-  char* last = NULL;
+char *strrchr(const char *s, int c) {
+  char *last = NULL;
   for(; *s != '\0'; ++s)
     if(*s == c)
       last = (char*)s;
   return last;
+}
+
+char *strstr(const char *s1, const char *s2) {
+  for  (size_t len = strlen(s2); *s1 != '\0'; ++s1) {
+    if (strncmp(s1, s2, len) == 0)
+      return (char*)s1;
+  }
+  return NULL;
 }
 
 int strcmp(const char *p, const char *q) {
@@ -63,14 +79,14 @@ int strcmp(const char *p, const char *q) {
 int strncmp(const char *p, const char *q, size_t n) {
   while (n > 0 && *p == *q && *p != '\0')
     n--, p++, q++;
-  return n == 0 ? 0 : (int)((unsigned char)*p - (unsigned char)*q);
+  return n == 0 ? 0 : (int)*(unsigned char*)p - (int)*(unsigned char*)q;
 }
 
 int strcasecmp(const char *p, const char *q) {
   for (;; ++p, ++q) {
-    unsigned char c1 = *p;
-    unsigned char c2 = *q;
-    int d = c1 - c2;
+    unsigned char c1 = *(unsigned char*)p;
+    unsigned char c2 = *(unsigned char*)q;
+    int d = (int)c1 - (int)c2;
     if (d != 0)
       return d;
     if (c1 == 0)
@@ -81,8 +97,8 @@ int strcasecmp(const char *p, const char *q) {
 
 int strncasecmp(const char *p, const char *q, size_t n) {
   for (; n > 0; --n, ++p, ++q) {
-    int c1 = tolower((unsigned char)*p);
-    int c2 = tolower((unsigned char)*q);
+    int c1 = tolower(*(unsigned char*)p);
+    int c2 = tolower(*(unsigned char*)q);
     int d = c1 - c2;
     if (d != 0)
       return d;
@@ -92,29 +108,29 @@ int strncasecmp(const char *p, const char *q, size_t n) {
   return 0;
 }
 
-char* strcpy(char *s, const char *t) {
+char *strcpy(char *s, const char *t) {
   char *os = s;
-  while((*s++ = *t++) != '\0')
+  while ((*s++ = *t++) != '\0')
     ;
   return os;
 }
 
-char* strncpy(char *s, const char *t, size_t n) {
+char *strncpy(char *s, const char *t, size_t n) {
   char *os = s;
   for (; n > 0 && (*s++ = *t++) != '\0'; --n)
     ;
   return os;
 }
 
-void* memcpy(void *dst, const void *src, size_t n) {
+void *memcpy(void *dst, const void *src, size_t n) {
   const char *s = src;
   char *d = dst;
-  while(n-- > 0)
+  while (n-- > 0)
     *d++ = *s++;
   return dst;
 }
 
-void* memmove(void *dst, const void *src, size_t n) {
+void *memmove(void *dst, const void *src, size_t n) {
   const char *s = src;
   char *d = dst;
   if (s < d && s + n > d) {
@@ -129,7 +145,7 @@ void* memmove(void *dst, const void *src, size_t n) {
   return dst;
 }
 
-void* memset(void* buf, int val, size_t size) {
+void *memset(void *buf, int val, size_t size) {
   unsigned char *p = buf;
   unsigned char v = val;
   for (size_t i = 0; i < size; ++i)
@@ -137,81 +153,259 @@ void* memset(void* buf, int val, size_t size) {
   return buf;
 }
 
-long strtol(const char *p, char **pp, int base) {
-  long result = 0;
-  if (base <= 10) {
-    for (;;) {
-      char c = *p++;
-      if ('0' <= c && c < ('0'+ base))
-        result = result * base + (c - '0');
+int memcmp(const void *buf1, const void *buf2, size_t n) {
+  const unsigned char *p = buf1;
+  const unsigned char *q = buf2;
+  int d;
+  for (size_t i = 0; i < n; ++i, ++p, ++q) {
+    d = (int)*(unsigned char*)p - (int)*(unsigned char*)q;
+    if (d != 0)
+      break;
+  }
+  return d;
+}
+
+static bool parse_sign(const char **pp) {
+  const char *p = *pp;
+  char c = *p;
+  bool negative = c == '-';
+  if (c == '+' || c == '-')
+    *pp = p + 1;
+  return negative;
+}
+
+static unsigned long strtoul_sub(const char *p, char **pp, int base) {
+  char digimax = '0' + (base <= 10 ? base : 10);
+  char hexmax = 'a' - 10 + base;
+  unsigned long result = 0;
+  for (;; ++p) {
+    char c = *p;
+    int n;
+    if ('0' <= c && c < digimax)
+      n = c - '0';
+    else {
+      c = tolower(c);
+      if ('a' <= c && c < hexmax)
+        n = c - 'a' + 10;
       else
         break;
     }
-  } else {
-    for (;;) {
-      char c = *p++;
-      if ('0' <= c && c <= '9')
-        result = result * base + (c - '0');
-      else if ('A' <= c && c < ('A' - 10 + base))
-        result = result * base + (c - 'A' + 10);
-      else if ('a' <= c && c < ('a' - 10 + base))
-        result = result * base + (c - 'a' + 10);
-      else
-        break;
-    }
+    result = result * base + n;
   }
 
   if (pp != 0)
-    *pp = (char*)(p - 1);
+    *pp = (char*)p;
 
   return result;
 }
 
-static FILE _stdin = {.fd=STDIN_FILENO};
-static FILE _stdout = {.fd=STDOUT_FILENO};
-static FILE _stderr = {.fd=STDERR_FILENO};
+long strtol(const char *p, char **pp, int base) {
+  const char *orig = p;
+  bool neg = parse_sign(&p);
+  char *q;
+  long result = strtoul_sub(p, &q, base);
+  if (q == p)
+    q = (char*)orig;
+  if (neg)
+    result = -result;
+
+  if (pp != 0)
+    *pp = q;
+
+  return result;
+}
+
+unsigned long strtoul(const char *p, char **pp, int base) {
+  const char *orig = p;
+  if (*p == '+')
+    ++p;
+  char *q;
+  unsigned long result = strtoul_sub(p, &q, base);
+  if (q == p)
+    q = (char*)orig;
+
+  if (pp != 0)
+    *pp = q;
+
+  return result;
+}
+
+#ifndef __NO_FLONUM
+static double ipow(double base, long x) {
+  bool neg = false;
+  if (x < 0) {
+    neg = true;
+    x = -x;
+  }
+  double result = 1;
+  double a = base;
+  for (; x > 0; x >>= 1, a *= a) {
+    if ((x & 1) != 0)
+      result *= a;
+  }
+  return neg ? 1.0 / result : result;
+}
+
+static double strtod_i(const char *p, const char **pp) {
+  double result = 0;
+  for (;; ++p) {
+    char c = *p;
+    if (!(c >= '0' && c <= '9'))
+      break;
+    result = result * 10 + (c - '0');
+  }
+  *pp = p;
+  return result;
+}
+
+double strtod(const char* /*restrict*/ p, char ** /*restrict*/ pp) {
+  const char *orig = p;
+  bool neg = parse_sign(&p);
+
+  static const struct {
+    const char *str;
+    double pos, neg;
+  } CONST[] = {
+    {"infinity", 1.0 / 0.0, -1.0 / 0.0},
+    {"inf", 1.0 / 0.0, -1.0 / 0.0},
+    {"nan", 0.0 / 0.0, 0.0 / 0.0},
+  };
+  for (int i = 0, n = sizeof(CONST) / sizeof(*CONST); i < n; ++i) {
+    const char *str = CONST[i].str;
+    size_t len = strlen(str);
+    if (strncmp(p, str, len) == 0) {
+      p += len;
+      char c = *p;
+      if (pp != 0)
+        *pp = (char*)p;
+      return neg ? CONST[i].neg : CONST[i].pos;
+    }
+  }
+
+  const char *op = p;
+  double result = strtod_i(p, &p);
+  if (*p == '.') {
+    const char *q = p + 1;
+    double frac = strtod_i(q, &p);
+    result += frac * ipow(10, q - p);
+  }
+  if (*p == 'e' || *p == 'E') {
+    const char *q = p + 1;
+    bool neg2 = parse_sign(&q);
+    double order = strtod_i(q, &p);
+    if (q == p) {
+      // Error.
+    } else {
+      result *= ipow(10, neg2 ? -order : order);
+    }
+  }
+  if (p == op)
+    p = orig;
+  if (neg)
+    result = -result;
+
+  if (pp != 0)
+    *pp = (char*)p;
+
+  return result;
+}
+#endif
+
+static FILE _stdin = {.fd = STDIN_FILENO};
+static FILE _stdout = {.fd = STDOUT_FILENO};
+static FILE _stderr = {.fd = STDERR_FILENO};
 FILE *stdin = &_stdin;
 FILE *stdout = &_stdout;
 FILE *stderr = &_stderr;
 
-size_t fwrite(const void* buffer, size_t size, size_t count, FILE* fp) {
-  write(fp->fd, buffer, size * count);
+int fileno(FILE *fp) {
+  return fp->fd;
 }
 
-size_t vfprintf(FILE *fp, const char *fmt, va_list ap) {
+size_t fwrite(const void *buffer, size_t size, size_t count, FILE *fp) {
+  return write(fp->fd, buffer, size * count);
+}
+
+size_t fread(void *buffer, size_t size, size_t count, FILE *fp) {
+  return read(fp->fd, buffer, size * count);
+}
+
+int vfprintf(FILE *fp, const char *fmt, va_list ap) {
   // TODO: directly output to fd, not use vsnprintf.
   char buf[1024];
-  size_t len = vsnprintf(buf, sizeof(buf), fmt, ap);
-  return write(fp->fd, buf, len);
+  int len = vsnprintf(buf, sizeof(buf), fmt, ap);
+  return write(fileno(fp), buf, len);
 }
 
-size_t fprintf(FILE *fp, const char *fmt, ...) {
+int fprintf(FILE *fp, const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  size_t len = vfprintf(fp, fmt, ap);
+  int len = vfprintf(fp, fmt, ap);
   va_end(ap);
   return len;
 }
 
-size_t printf(const char *fmt, ...) {
+int printf(const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  size_t len = vfprintf(stdout, fmt, ap);
+  int len = vfprintf(stdout, fmt, ap);
   va_end(ap);
   return len;
 }
 
-int atoi(const char* s) {
+int atoi(const char *s) {
   int n = 0;
   for (; '0' <= *s && *s <= '9'; ++s)
     n = n * 10 + (*s - '0');
   return n;
 }
 
+void qsort(void *base, size_t nmemb, size_t size, int (*compare)(const void *, const void *)) {
+  if (nmemb <= 1)
+    return;
+
+  char *a = base;
+  const char *px;
+
+  px = &a[(nmemb >> 1) * size];
+  int i = 0;
+  int j = nmemb - 1;
+  for (;;) {
+    while (compare(&a[i * size], px) < 0)
+      ++i;
+    while (compare(px, &a[j * size]) < 0)
+      --j;
+    if (i >= j)
+      break;
+
+    char *pi = &a[i * size];
+    char *pj = &a[j * size];
+    for (size_t k = 0; k < size; ++k) {
+      char t = pi[k];
+      pi[k] = pj[k];
+      pj[k] = t;
+    }
+    if (px == pi)
+      px = pj;
+    else if (px == pj)
+      px = pi;
+    ++i;
+    --j;
+  }
+  if (i > 1)
+    qsort(a, i, size, compare);
+  if ((size_t)(j + 2) < nmemb)
+    qsort(&a[(j + 1) * size], nmemb - j - 1, size, compare);
+}
+
 //
 
 int isdigit(int c) {
   return '0' <= c && c <= '9';
+}
+
+int isxdigit(int c) {
+  return ('0' <= c && c <= '9') || ('A' <= c && c <= 'F') || ('a' <= c && c <= 'f');
 }
 
 int isalpha(int c) {
@@ -231,6 +425,10 @@ int tolower(int c) {
   return ('A' <= c && c <= 'Z') ? c + ('a' - 'A') : c;
 }
 
+int toupper(int c) {
+  return ('a' <= c && c <= 'z') ? c - ('a' - 'A') : c;
+}
+
 #if defined(__XV6)
 
 #elif defined(__linux__)
@@ -240,6 +438,16 @@ int tolower(int c) {
 #define	O_RDWR          0x0002          /* open for reading and writing */
 #define	O_ACCMODE       0x0003          /* mask for above modes */
 
+#define S_IRUSR         (0400)
+#define S_IWUSR         (0200)
+#define S_IXUSR         (0100)
+#define S_IRGRP         (0040)
+#define S_IWGRP         (0020)
+#define S_IXGRP         (0010)
+#define S_IROTH         (0004)
+#define S_IWOTH         (0002)
+#define S_IXOTH         (0001)
+
 #define	O_APPEND        0x0400          /* set append mode */
 #define	O_CREAT         0x0040          /* create if nonexistant */
 #define	O_TRUNC         0x0200          /* truncate to zero length */
@@ -248,7 +456,7 @@ int tolower(int c) {
 //char *environ[] = {"PATH=/bin:/usr/bin", NULL};
 char **environ = NULL;
 
-int open(const char *fn, int flag) {
+int open(const char *fn, int flag, ...) {
   __asm("mov $2, %eax");  // __NR_open
   __asm("syscall");
 }
@@ -263,7 +471,7 @@ size_t read(int fd, void *buf, size_t size) {
   __asm("syscall");
 }
 
-static size_t _getcwd(char *buffer, size_t size) {
+static int _getcwd(char *buffer, size_t size) {
   __asm("mov $79, %eax");  // __NR_getcwd
   __asm("syscall");
 }
@@ -314,6 +522,16 @@ static void *_brk(void *addr) {
   __asm("syscall");
 }
 
+int unlink(const char *pathname) {
+  __asm("mov $87, %eax");  // __NR_unlink
+  __asm("syscall");
+}
+
+int ioctl(int fd, int request, ...) {
+  __asm("mov $16, %eax");  // __NR_ioctl
+  __asm("syscall");
+}
+
 #else
 #error Target not supported
 #endif
@@ -327,11 +545,19 @@ char *dirname(char *path) {
   return ".";
 }
 
-FILE* fopen(const char* fileName, const char* mode) {
-  struct {
-    const char* str;
+char *basename(char *path) {
+  char *p = strrchr(path, '/');
+  if (p != NULL)
+    return p + 1;
+  else
+    return path;
+}
+
+FILE *fopen(const char *fileName, const char *mode) {
+  static const struct {
+    const char *str;
     int flag;
-  } static const kTable[] = {
+  } kTable[] = {
     {"r", O_RDONLY},
     {"w", O_WRONLY | O_CREAT | O_TRUNC},
     {"a", O_WRONLY | O_CREAT | O_APPEND},
@@ -359,12 +585,13 @@ FILE* fopen(const char* fileName, const char* mode) {
   if (flag == -1)
     return NULL;
 
-  int fd = open(fileName, flag);
+  int mod = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
+  int fd = open(fileName, flag, mod);
   if (fd < 0) {
     return NULL;
   }
 
-  FILE* fp = malloc(sizeof(*fp));
+  FILE *fp = malloc(sizeof(*fp));
   if (fp == NULL) {
     close(fd);
     return NULL;
@@ -374,7 +601,7 @@ FILE* fopen(const char* fileName, const char* mode) {
   return fp;
 }
 
-int fclose(FILE* fp) {
+int fclose(FILE *fp) {
   if (fp == NULL || fp->fd < 0)
     return EOF;
   close(fp->fd);
@@ -383,37 +610,95 @@ int fclose(FILE* fp) {
   return 0;
 }
 
-long ftell(FILE *fp) {
-  return lseek(fp->fd, 0, SEEK_CUR);
+int fseek(FILE *fp, long offset, int origin) {
+  return lseek(fp->fd, offset, origin);
 }
 
-int fgetc(FILE* fp) {
+long ftell(FILE *fp) {
+  return fseek(fp, 0, SEEK_CUR);
+}
+
+int fgetc(FILE *fp) {
   unsigned char c;
   int len = read(fp->fd, &c, 1);
-  return len == 1 ? (int)c : EOF;
+  return len == 1 ? c : EOF;
 }
 
-int fputc(int c, FILE* fp) {
+int fputc(int c, FILE *fp) {
   unsigned char cc = c;
   int len = write(fp->fd, &cc, 1);
   return len == 1 ? c : EOF;
 }
 
+int getchar(void) {
+  return fgetc(stdin);
+}
+
+ssize_t getline(char **lineptr, size_t *pcapa, FILE *stream) {
+  const int MIN_CAPA = 16;
+  ssize_t capa = *pcapa;
+  ssize_t size = 0;
+  char *top = *lineptr;
+  if (top == NULL || capa <= 0) {
+    top = NULL;
+    capa = 0;
+  }
+  for (;;) {
+    int c = fgetc(stream);
+    if (c == EOF) {
+      if (size == 0)
+        return -1;
+      break;
+    }
+
+    if (size + 1 >= capa) {
+      ssize_t newcapa = capa * 2;
+      if (newcapa < MIN_CAPA)
+        newcapa = MIN_CAPA;
+      char *reallocated = realloc(top, newcapa);
+      if (reallocated == NULL) {
+        *lineptr = top;
+        *pcapa = capa;
+        return -1;
+      }
+      top = reallocated;
+      capa = newcapa;
+    }
+
+    //assert(size < capa);
+    top[size++] = c;
+
+    if (c == '\n')
+      break;
+  }
+
+  //assert(size < capa);
+  top[size] = '\0';
+  *lineptr = top;
+  *pcapa = capa;
+  return size;
+}
+
 int remove(const char *fn) {
-  // TODO: Implement
-  return 0;
+  return unlink(fn);
 }
 
 char *getcwd(char *buffer, size_t size) {
+  void *allocated = NULL;
   if (buffer == NULL) {
     if (size == 0) {
       size = 512;  // PATH_MAX
     }
-    buffer = malloc(size + 1);
+    buffer = allocated = malloc(size + 1);
     if (buffer == NULL)
       return NULL;
   }
-  _getcwd(buffer, size);
+  int result = _getcwd(buffer, size);
+  if (result < 0) {
+    // errno = -result;
+    free(allocated);
+    return NULL;
+  }
   return buffer;
 }
 
@@ -421,11 +706,11 @@ int execvp(const char *path, char *const args[]) {
   return execve(path, args, environ);
 }
 
-pid_t waitpid(pid_t pid, int* status, int options) {
+pid_t waitpid(pid_t pid, int *status, int options) {
   return wait4(pid, status, options, NULL);
 }
 
-void perror(const char* msg) {
+void perror(const char *msg) {
   fprintf(stderr, "perror: %s\n", msg);
 }
 
@@ -447,6 +732,13 @@ void *sbrk(intptr_t increment) {
   if (brk(next) < 0)
     return (void*)-1;
   return p;
+}
+
+#include <sys/ioctl.h>
+
+int isatty(int fd) {
+  struct termio tm;
+  return ioctl(fd, TCGETA, &tm) == 0 ? 1 : 0;
 }
 #endif
 

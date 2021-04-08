@@ -12,21 +12,34 @@
 #define MAX(a, b)  ((a) > (b) ? (a) : (b))
 #define ALIGN(x, align)  (((x) + (align) - 1) & -(align))  // align must be 2^n
 #define UNUSED(x)  ((void)(x))
+#define IS_POWER_OF_2(x)  (x > 0 && (x & (x - 1)) == 0)
+
+#ifdef SELF_HOSTING
+#define QSORT  qsort
+#else
+#define QSORT  myqsort
+void myqsort(void *base, size_t nmemb, size_t size, int (*compare)(const void *, const void *));
+#endif
+
+typedef struct Name Name;
 
 char *strdup_(const char *str);
 char *strndup_(const char *str, size_t size);
-char *alloc_label(void);
+bool starts_with(const char *str, const char *prefix);
 void set_local_label_prefix(const char *prefix);
-char *cat_path(const char *base_dir, const char *rel_path);
-ssize_t getline_(char **lineptr, size_t *n, FILE *stream, size_t start);
-char *abspath(const char *root, const char *path);
+const Name *alloc_label(void);
+ssize_t getline_cat(char **lineptr, size_t *n, FILE *stream, size_t curlen);
+bool is_fullpath(const char *filename);
+char *cat_path(const char *root, const char *path);
+char *change_ext(const char *path, const char *ext);
 
-void myqsort(void *base, size_t nmemb, size_t size, int (*compare)(const void *, const void *));
+void show_version(const char *exe);
 
-void error(const char* fmt, ...) /*__attribute((noreturn))*/;
+void error(const char *fmt, ...) /*__attribute((noreturn))*/;
 
 bool is_im8(intptr_t x);
 bool is_im32(intptr_t x);
+const char *skip_whitespaces(const char *s);
 
 // Container
 
@@ -51,20 +64,7 @@ void vec_push(Vector *vec, const void *elem);
 void *vec_pop(Vector *vec);
 void vec_insert(Vector *vec, int pos, const void *elem);
 void vec_remove_at(Vector *vec, int index);
-bool vec_contains(Vector *vec, void* elem);
-
-typedef struct Map {
-  Vector *keys;
-  Vector *vals;
-} Map;
-
-Map *new_map(void);
-void map_clear(Map *map);
-int map_count(Map *map);
-void map_put(Map *map, const char *key, const void *val);
-bool map_remove(Map *map, const char *key);
-void *map_get(Map *map, const char *key);
-bool map_try_get(Map *map, const char *key, void **output);
+bool vec_contains(Vector *vec, void *elem);
 
 // StringBuffer
 
@@ -77,3 +77,5 @@ void sb_clear(StringBuffer *sb);
 bool sb_empty(StringBuffer *sb);
 void sb_append(StringBuffer *sb, const char *start, const char *end);
 char *sb_to_string(StringBuffer *sb);
+
+void escape_string(const char *str, size_t size, StringBuffer *sb);

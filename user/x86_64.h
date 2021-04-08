@@ -19,16 +19,22 @@
 #define IM(x)  im(x)
 #endif
 #ifndef INDIRECT
-#define INDIRECT(x)  indirect(x)
+#define INDIRECT(base, index, scale)  indirect(base, index, scale)
 #endif
 #ifndef OFFSET_INDIRECT
-#define OFFSET_INDIRECT(ofs, x)  offset_indirect(ofs, x)
+#define OFFSET_INDIRECT(ofs, base, index, scale)  offset_indirect(ofs, base, index, scale)
 #endif
 #ifndef LABEL_INDIRECT
 #define LABEL_INDIRECT(label, x)  label_indirect(label, x)
 #endif
 #ifndef NUM
 #define NUM(x)  num(x)
+#endif
+#ifndef HEXNUM
+#define HEXNUM(x)  hexnum(x)
+#endif
+#ifndef FLONUM
+#define FLONUM(x)  flonum(x)
 #endif
 #ifndef MANGLE
 #define MANGLE(label)  mangle(label)
@@ -108,14 +114,35 @@
 
 #define RIP    "%rip"
 
+#ifndef __NO_FLONUM
+#define XMM0   "%xmm0"
+#define XMM1   "%xmm1"
+#define XMM2   "%xmm2"
+#define XMM3   "%xmm3"
+#define XMM4   "%xmm4"
+#define XMM5   "%xmm5"
+#define XMM6   "%xmm6"
+#define XMM7   "%xmm7"
+#define XMM8   "%xmm8"
+#define XMM9   "%xmm9"
+#define XMM10  "%xmm10"
+#define XMM11  "%xmm11"
+#define XMM12  "%xmm12"
+#define XMM13  "%xmm13"
+#define XMM14  "%xmm14"
+#define XMM15  "%xmm15"
+#endif
+
 #define MOV(o1, o2)    EMIT_ASM2("mov", o1, o2)
 #define MOVSX(o1, o2)  EMIT_ASM2("movsx", o1, o2)
+#define MOVZX(o1, o2)  EMIT_ASM2("movzx", o1, o2)
 #define LEA(o1, o2)    EMIT_ASM2("lea", o1, o2)
 #define ADD(o1, o2)    EMIT_ASM2("add", o1, o2)
 #define ADDQ(o1, o2)   EMIT_ASM2("addq", o1, o2)
 #define SUB(o1, o2)    EMIT_ASM2("sub", o1, o2)
 #define SUBQ(o1, o2)   EMIT_ASM2("subq", o1, o2)
 #define MUL(o1)        EMIT_ASM1("mul", o1)
+#define DIV(o1)        EMIT_ASM1("div", o1)
 #define IDIV(o1)       EMIT_ASM1("idiv", o1)
 #define CMP(o1, o2)    EMIT_ASM2("cmp", o1, o2)
 #define AND(o1, o2)    EMIT_ASM2("and", o1, o2)
@@ -133,6 +160,7 @@
 #define DECQ(o1)       EMIT_ASM1("decq", o1)
 #define SHL(o1, o2)    EMIT_ASM2("shl", o1, o2)
 #define SHR(o1, o2)    EMIT_ASM2("shr", o1, o2)
+#define SAR(o1, o2)    EMIT_ASM2("sar", o1, o2)
 #define NEG(o1)        EMIT_ASM1("neg", o1)
 #define NOT(o1)        EMIT_ASM1("not", o1)
 #define TEST(o1, o2)   EMIT_ASM2("test", o1, o2)
@@ -145,6 +173,10 @@
 #define JG(o1)         EMIT_ASM1("jg", o1)
 #define JLE(o1)        EMIT_ASM1("jle", o1)
 #define JGE(o1)        EMIT_ASM1("jge", o1)
+#define JB(o1)         EMIT_ASM1("jb", o1)
+#define JA(o1)         EMIT_ASM1("ja", o1)
+#define JBE(o1)        EMIT_ASM1("jbe", o1)
+#define JAE(o1)        EMIT_ASM1("jae", o1)
 #define CALL(o1)       EMIT_ASM1("call", o1)
 #define RET()          EMIT_ASM0("ret")
 #define SETE(o1)       EMIT_ASM1("sete", o1)
@@ -153,6 +185,10 @@
 #define SETG(o1)       EMIT_ASM1("setg", o1)
 #define SETLE(o1)      EMIT_ASM1("setle", o1)
 #define SETGE(o1)      EMIT_ASM1("setge", o1)
+#define SETB(o1)       EMIT_ASM1("setb", o1)
+#define SETA(o1)       EMIT_ASM1("seta", o1)
+#define SETBE(o1)      EMIT_ASM1("setbe", o1)
+#define SETAE(o1)      EMIT_ASM1("setae", o1)
 #define CWTL()         EMIT_ASM0("cwtl")
 #define CLTD()         EMIT_ASM0("cltd")
 #define CQTO()         EMIT_ASM0("cqto")
@@ -161,6 +197,8 @@
 #define _WORD(x)       EMIT_ASM1(".word", x)
 #define _LONG(x)       EMIT_ASM1(".long", x)
 #define _QUAD(x)       EMIT_ASM1(".quad", x)
+#define _FLOAT(x)      EMIT_ASM1(".float", x)
+#define _DOUBLE(x)     EMIT_ASM1(".double", x)
 #define _GLOBL(x)      EMIT_ASM1(".globl", x)
 #define _COMM(x, y)    EMIT_ASM2(".comm", x, y)
 #define _ASCII(x)      EMIT_ASM1(".ascii", x)
@@ -170,8 +208,33 @@
 
 #ifdef __APPLE__
 #define _RODATA()      _SECTION("__TEXT,__const")
-#define _P2ALIGN(x)    EMIT_ASM1(".p2align", x)
+#define EMIT_ALIGN(x)  emit_align_p2(x)
 #else
 #define _RODATA()      _SECTION(".rodata")
-#define _ALIGN(x)      EMIT_ASM1(".align", x)
+#define EMIT_ALIGN(x)  emit_align(x)
+#endif
+
+
+#ifndef __NO_FLONUM
+// SIMD
+#define MOVSD(o1, o2)  EMIT_ASM2("movsd", o1, o2)
+#define ADDSD(o1, o2)  EMIT_ASM2("addsd", o1, o2)
+#define SUBSD(o1, o2)  EMIT_ASM2("subsd", o1, o2)
+#define MULSD(o1, o2)  EMIT_ASM2("mulsd", o1, o2)
+#define DIVSD(o1, o2)  EMIT_ASM2("divsd", o1, o2)
+#define UCOMISD(o1, o2)  EMIT_ASM2("ucomisd", o1, o2)
+#define CVTSI2SD(o1, o2)  EMIT_ASM2("cvtsi2sd", o1, o2)
+#define CVTTSD2SI(o1, o2)  EMIT_ASM2("cvttsd2si", o1, o2)
+
+#define MOVSS(o1, o2)  EMIT_ASM2("movss", o1, o2)
+#define ADDSS(o1, o2)  EMIT_ASM2("addss", o1, o2)
+#define SUBSS(o1, o2)  EMIT_ASM2("subss", o1, o2)
+#define MULSS(o1, o2)  EMIT_ASM2("mulss", o1, o2)
+#define DIVSS(o1, o2)  EMIT_ASM2("divss", o1, o2)
+#define UCOMISS(o1, o2)  EMIT_ASM2("ucomiss", o1, o2)
+#define CVTSI2SS(o1, o2)  EMIT_ASM2("cvtsi2ss", o1, o2)
+#define CVTTSS2SI(o1, o2)  EMIT_ASM2("cvttss2si", o1, o2)
+
+#define CVTSD2SS(o1, o2)  EMIT_ASM2("cvtsd2ss", o1, o2)  // double->single
+#define CVTSS2SD(o1, o2)  EMIT_ASM2("cvtss2sd", o1, o2)  // single->double
 #endif

@@ -1,3 +1,6 @@
+#define __NO_FLONUM
+ #define __NO_ELF_OBJ
+
 #if defined(__linux__)
 // To use kill on Linux,, include signal.h with `_POSIX_SOURCE` declaration.
 #define _POSIX_SOURCE  // To use `kill`
@@ -7,16 +10,22 @@
 #include <fcntl.h>  // open
 #include <libgen.h>  // dirname
 #include <signal.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 #include "util.h"
 
+#if !defined(__XV6) && !defined(__linux__)
+
+#define AS_USE_CC
+
+#endif
 
 static char *get_ext(const char *filename) {
   const char *last_slash = strrchr(filename, '/');
@@ -38,6 +47,11 @@ static int wait_process(pid_t pid) {
   if (waitpid(pid, &ec, 0) < 0)
     error("wait failed");
   return ec;
+}
+
+static pid_t wait_child(int *result) {
+  *result = -1;
+  return waitpid(0, result, 0);
 }
 
 // command > ofd
@@ -96,8 +110,11 @@ static int cat(const char *filename, int ofd) {
     ssize_t size = read(ifd, buf, SIZE);
     if (size < 0)
       return 1;
-    if (size > 0)
-      write(ofd, buf, size);
+    if (size > 0) {
+      ssize_t wsize = write(ofd, buf, size);
+      if (wsize != size)
+        error("Write failed");
+    }
     if (size < SIZE)
       break;
   }
@@ -132,34 +149,81 @@ static int compile(const char *src, Vector *cpp_cmd, Vector *cc1_cmd, int ofd) {
   int ofd2 = ofd;
   int cc_fd[2];
   pid_t cc_pid = -1;
+  int running = 0;
   if (cc1_cmd != NULL) {
     cc_pid = pipe_exec((char**)cc1_cmd->data, ofd, cc_fd);
     ofd2 = cc_fd[1];
+    ++running;
   }
 
   cpp_cmd->data[cpp_cmd->len - 2] = (void*)src;
   pid_t cpp_pid = exec_with_ofd((char**)cpp_cmd->data, ofd2);
-  int r = wait_process(cpp_pid);
-  if (r == 0) {
-    if (cc_pid != -1) {
-      close(cc_fd[0]);
-      close(cc_fd[1]);
-      r = wait_process(cc_pid);
+  ++running;
+
+  int res = 0;
+  for (; running > 0; --running) {
+    int r = 0;
+    pid_t done = wait_child(&r);  // cpp or cc1
+    if (done > 0) {
+      res |= r;
+      if (done == cpp_pid) {
+        cpp_pid = -1;
+        if (cc_pid != -1) {
+          if (r != 0) {
+            // Illegal: cpp exit with failure.
+#if !defined(__XV6)
+            kill(cc_pid, SIGKILL);
+#endif
+            break;
+          }
+          close(cc_fd[0]);
+          close(cc_fd[1]);
+        }
+      } else if (done == cc_pid) {
+        cc_pid = -1;
+        if (cpp_pid != -1) {
+          // Illegal: cc dies earlier than cpp.
+#if !defined(__XV6)
+          kill(cpp_pid, SIGKILL);
+#endif
+          break;
+        }
+      }
+    } else {
+      res |= 1;
     }
   }
-  return r;
+  return res;
 }
 
+void usage(FILE *fp) {
+  fprintf(
+      fp,
+      "Usage: xcc [options] file...\n"
+      "Options:\n"
+      "  -I<path>            Add include path\n"
+      "  -D<label[=value]>   Define label\n"
+      "  -o<filename>        Set output filename (Default: a.out)\n"
+      "  -c                  Output object file\n"
+      "  -S                  Output assembly code\n"
+      "  -E                  Output preprocess result\n"
+  );
+}
 
-int main(int argc, char* argv[]) {
-  const char *ofn = "a.out";
+int main(int argc, char *argv[]) {
+  const char *ofn = NULL;
   bool out_pp = false;
+  bool out_obj = false;
+  bool out_asm = false;
   bool run_asm = true;
   int iarg;
 
-  char *cpp_path = cat_path(dirname(strdup_(argv[0])), "cpp");
-  char *cc1_path = cat_path(dirname(strdup_(argv[0])), "cc1");
-  char *as_path = cat_path(dirname(strdup_(argv[0])), "as");
+  const char *root = dirname(strdup_(argv[0]));
+  char *cpp_path = cat_path(root, "cpp");
+  char *cc1_path = cat_path(root, "cc1");
+#if !defined(AS_USE_CC)
+  char *as_path = cat_path(root, "as");
+#endif
 
   Vector *cpp_cmd = new_vector();
   vec_push(cpp_cmd, cpp_path);
@@ -168,33 +232,85 @@ int main(int argc, char* argv[]) {
   vec_push(cc1_cmd, cc1_path);
 
   Vector *as_cmd = new_vector();
+#if !defined(AS_USE_CC)
   vec_push(as_cmd, as_path);
+#else
+  vec_push(as_cmd, "cc");
+  vec_push(as_cmd, "-x");
+  vec_push(as_cmd, "assembler");
+#endif
 
   for (iarg = 1; iarg < argc; ++iarg) {
     char *arg = argv[iarg];
     if (*arg != '-')
       break;
-    if (strncmp(arg, "-I", 2) == 0 ||
-        strncmp(arg, "-D", 2) == 0)
+
+    if (starts_with(arg, "-I") || starts_with(arg, "-D")) {
       vec_push(cpp_cmd, arg);
-    if (strncmp(arg, "-o", 2) == 0) {
+    } else if (starts_with(arg, "-c")) {
+      out_obj = true;
+      vec_push(as_cmd, arg);
+    } else if (starts_with(arg, "-o")) {
       ofn = arg + 2;
       vec_push(as_cmd, arg);
-    }
-    if (strcmp(arg, "-E") == 0) {
+    } else if (strcmp(arg, "-E") == 0) {
       out_pp = true;
       run_asm = false;
-    }
-    if (strcmp(arg, "-S") == 0 ||
-        strcmp(arg, "--dump-ir") == 0)
+    } else if (strcmp(arg, "-S") == 0) {
+      out_asm = true;
       run_asm = false;
-    vec_push(cc1_cmd, arg);
+    } else if (strcmp(arg, "--dump-ir") == 0) {
+      run_asm = false;
+      vec_push(cc1_cmd, arg);
+    } else if (starts_with(arg, "--local-label-prefix")) {
+      vec_push(cc1_cmd, arg);
+    } else if (strcmp(arg, "--help") == 0) {
+      usage(stdout);
+      return 0;
+    } else if (strcmp(arg, "--version") == 0) {
+      show_version("xcc");
+      return 0;
+    } else {
+      fprintf(stderr, "Unknown option: %s\n", arg);
+      return 1;
+    }
+  }
+
+  if (iarg >= argc) {
+    fprintf(stderr, "No input files\n\n");
+    usage(stderr);
+    return 1;
+  }
+
+  if (ofn == NULL) {
+    if (out_obj) {
+      if (iarg < argc)
+        ofn = change_ext(basename(argv[iarg]), "o");
+      else
+        ofn = "a.o";
+    } else if (out_asm) {
+      if (iarg < argc)
+        ofn = change_ext(basename(argv[iarg]), "s");
+      else
+        ofn = "a.s";
+    } else {
+      ofn = "a.out";
+    }
+
+    StringBuffer sb;
+    sb_init(&sb);
+    sb_append(&sb, "-o", NULL);
+    sb_append(&sb, ofn, NULL);
+    vec_push(as_cmd, sb_to_string(&sb));
   }
 
   vec_push(cpp_cmd, NULL);  // Buffer for src.
   vec_push(cpp_cmd, NULL);  // Terminator.
   vec_push(cc1_cmd, NULL);  // Buffer for label prefix.
   vec_push(cc1_cmd, NULL);  // Terminator.
+#if defined(AS_USE_CC)
+  vec_push(as_cmd, "-");
+#endif
   vec_push(as_cmd, NULL);  // Terminator.
 
   int ofd = STDOUT_FILENO;
@@ -204,6 +320,15 @@ int main(int argc, char* argv[]) {
   if (run_asm) {
     as_pid = pipe_exec((char**)as_cmd->data, -1, as_fd);
     ofd = as_fd[1];
+  } else if (out_asm) {
+#if !defined(__XCC) && !defined(__XV6)
+    close(STDOUT_FILENO);
+    ofd = open(ofn, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    if (ofd == -1) {
+      perror("Failed to open output file");
+      exit(1);
+    }
+#endif
   }
 
   int res = 0;
@@ -253,11 +378,15 @@ int main(int argc, char* argv[]) {
 }
 #include "util.h"
 
+#include <assert.h>
+#include <ctype.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdlib.h>  // malloc
 #include <string.h>  // strcmp
-#include <assert.h>
+
+#define VERSION  "0.1.0"
+#include "table.h"
 
 char *strdup_(const char *str) {
   return strndup_(str, strlen(str));
@@ -270,15 +399,19 @@ char *strndup_(const char *str, size_t size) {
   return dup;
 }
 
+bool starts_with(const char *str, const char *prefix) {
+  size_t len = strlen(prefix);
+  return strncmp(str, prefix, len) == 0;
+}
+
 static char label_prefix[8] = "L";
 
-char *alloc_label(void) {
+const Name *alloc_label(void) {
   static int label_no;
   ++label_no;
-  //char buf[sizeof(int) * 3 + 1];
-  char buf[32];
+  char buf[1 + (sizeof(label_prefix) - 1) + sizeof(int) * 3 + 1];
   snprintf(buf, sizeof(buf), ".%s%d", label_prefix, label_no);
-  return strdup_(buf);
+  return alloc_name(buf, NULL, true);
 }
 
 void set_local_label_prefix(const char *prefix) {
@@ -287,60 +420,46 @@ void set_local_label_prefix(const char *prefix) {
   strncpy(label_prefix, prefix, sizeof(label_prefix));
 }
 
-char *cat_path(const char *base_dir, const char *rel_path) {
-  if (*rel_path == '/')  // Absolute path?
-    return strdup_(rel_path);
+ssize_t getline_cat(char **lineptr, size_t *n, FILE *stream, size_t curlen) {
+  char *nextline = NULL;
+  size_t capa = 0;
+  ssize_t len = getline(&nextline, &capa, stream);
+  if (len == -1)
+    return -1;
+  if (len > 0) {
+    char *oldline = *lineptr;
+    char *reallocated = realloc(oldline, curlen + len + 1);
+    if (reallocated == NULL)
+      return -1;
 
-  size_t dirlen = strlen(base_dir);
-  size_t fnlen = strlen(rel_path);
-  char *path = malloc(dirlen + fnlen + 2);
-  strcpy(path, base_dir);
-  strcpy(path + dirlen, "/");
-  strcpy(path + dirlen + 1, rel_path);
-  path[dirlen + 1 + fnlen] = '\0';
-  return path;
-}
-
-ssize_t getline_(char **lineptr, size_t *pcapa, FILE *stream, size_t start) {
-  const int ADD = 16;
-  ssize_t capa = *pcapa;
-  ssize_t size = start;
-  char *top = *lineptr;
-  for (;;) {
-    int c = fgetc(stream);
-    if (c == EOF) {
-      if (size == 0)
-        return EOF;
-      break;
-    }
-
-    if (size + 1 >= capa) {
-      ssize_t newcapa = capa + ADD;
-      top = realloc(top, newcapa);
-      if (top == NULL) {
-        error("Out of memory");
-        return EOF;
-      }
-      capa = newcapa;
-    }
-
-    if (c == '\n')
-      break;
-
-    assert(size < capa);
-    top[size++] = c;
+    memcpy(reallocated + curlen, nextline, len + 1);
+    *lineptr = reallocated;
+    *n = curlen + len;  // '\0' is not included.
+    free(nextline);
   }
-
-  assert(size < capa);
-  top[size] = '\0';
-  *lineptr = top;
-  *pcapa = capa;
-  return size;
+  return curlen + len;
 }
 
-char *abspath(const char *root, const char *path) {
-  if (*path == '/')
+bool is_fullpath(const char *filename) {
+  if (*filename != '/')
+    return false;
+  for (const char *p = filename;;) {
+    p = strstr(p, "/..");
+    if (p == NULL)
+      return true;
+    if (p[3] == '/' || p[3] == '\0')
+      return false;
+    p += 3;
+  }
+}
+
+char *cat_path(const char *root, const char *path) {
+  if (is_fullpath(path))
     return strdup_(path);
+  if (*path == '/')
+    root = "/";
+
+  // Assume that root doesn't include ".."
 
   bool is_root = *root == '/';
 
@@ -410,6 +529,24 @@ char *abspath(const char *root, const char *path) {
   return buf;
 }
 
+char *change_ext(const char *path, const char *ext) {
+  const char *p = strrchr(path, '/');
+  if (p == NULL)
+    p = path;
+
+  const char *q = strrchr(p, '.');
+  size_t len = q != NULL ? (size_t)(q - path) : strlen(path);
+  size_t ext_len = strlen(ext);
+  char *s = malloc(len + 1 + ext_len);
+  if (s != NULL) {
+    memcpy(s, path, len);
+    s[len] = '.';
+    strcpy(s + (len + 1), ext);
+  }
+  return s;
+}
+
+#ifndef SELF_HOSTING
 void myqsort(void *base, size_t nmemb, size_t size, int (*compare)(const void *, const void *)) {
   if (nmemb <= 1)
     return;
@@ -447,8 +584,13 @@ void myqsort(void *base, size_t nmemb, size_t size, int (*compare)(const void *,
   if ((size_t)(j + 2) < nmemb)
     myqsort(&a[(j + 1) * size], nmemb - j - 1, size, compare);
 }
+#endif
 
-void error(const char* fmt, ...) {
+void show_version(const char *exe) {
+  printf("%s %s\n", exe, VERSION);
+}
+
+void error(const char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
   vfprintf(stderr, fmt, ap);
@@ -465,6 +607,12 @@ bool is_im32(intptr_t x) {
   return x <= ((1L << 31) - 1) && x >= -(1L << 31);
 }
 
+const char *skip_whitespaces(const char *s) {
+  while (isspace(*s))
+    ++s;
+  return s;
+}
+
 // Container
 
 #define BUF_MIN    (16 / 2)
@@ -475,7 +623,7 @@ void buf_put(Buffer *buf, const void *data, size_t bytes) {
   size_t newsize = size + bytes;
 
   if (newsize > buf->capa) {
-    size_t newcapa = ALIGN(MAX(newsize, (size_t)BUF_MIN) * 2, BUF_ALIGN);
+    size_t newcapa = ALIGN(MAX(newsize, BUF_MIN) * 2, BUF_ALIGN);
     unsigned char *p = realloc(buf->data, newcapa);
     if (p == NULL)
       error("not enough memory");
@@ -494,7 +642,7 @@ void buf_align(Buffer *buf, int align) {
   if (add <= 0)
     return;
 
-  void* zero = calloc(add, 1);
+  void *zero = calloc(add, 1);
   buf_put(buf, zero, add);
   free(zero);
 
@@ -503,8 +651,8 @@ void buf_align(Buffer *buf, int align) {
 
 Vector *new_vector(void) {
   Vector *vec = malloc(sizeof(Vector));
-  vec->data = malloc(sizeof(void *) * 16);
-  vec->capacity = 16;
+  vec->data = NULL;
+  vec->capacity = 0;
   vec->len = 0;
   return vec;
 }
@@ -514,9 +662,12 @@ void vec_clear(Vector *vec) {
 }
 
 void vec_push(Vector *vec, const void *elem) {
-  if (vec->capacity == vec->len) {
-    vec->capacity *= 2;
-    vec->data = realloc(vec->data, sizeof(void *) * vec->capacity);
+  if (vec->capacity <= vec->len) {
+    if (vec->capacity <= 0)
+      vec->capacity = 16;
+    else
+      vec->capacity <<= 1;
+    vec->data = realloc(vec->data, sizeof(*vec->data) * vec->capacity);
   }
   vec->data[vec->len++] = (void*)elem;
 }
@@ -548,76 +699,12 @@ void vec_remove_at(Vector *vec, int index) {
   --vec->len;
 }
 
-bool vec_contains(Vector *vec, void* elem) {
+bool vec_contains(Vector *vec, void *elem) {
   for (int i = 0, len = vec->len; i < len; ++i) {
     if (vec->data[i] == elem)
       return true;
   }
   return false;
-}
-
-//
-
-Map *new_map(void) {
-  Map *map = malloc(sizeof(Map));
-  map->keys = new_vector();
-  map->vals = new_vector();
-  return map;
-}
-
-void map_clear(Map *map) {
-  vec_clear(map->keys);
-  vec_clear(map->vals);
-}
-
-int map_count(Map *map) {
-  return map->keys->len;
-}
-
-static int map_find(Map *map, const char *key) {
-  for (int i = map->keys->len - 1; i >= 0; --i)
-    if (strcmp(map->keys->data[i], key) == 0)
-      return i;
-  return -1;
-}
-
-void map_put(Map *map, const char *key, const void *val) {
-  int i = map_find(map, key);
-  if (i >= 0) {
-    map->vals->data[i] = (void*)val;
-  } else {
-    vec_push(map->keys, key);
-    vec_push(map->vals, val);
-  }
-}
-
-bool map_remove(Map *map, const char *key) {
-  int i = map_find(map, key);
-  if (i < 0)
-    return false;
-
-  // Compaction
-  int d = map->keys->len - (i + 1);
-  if (d > 0) {
-    memmove(&map->keys->data[i], &map->keys->data[i + 1], d * sizeof(*map->keys->data));
-    memmove(&map->vals->data[i], &map->vals->data[i + 1], d * sizeof(*map->vals->data));
-  }
-  --map->keys->len;
-  --map->vals->len;
-  return true;
-}
-
-void *map_get(Map *map, const char *key) {
-  int i = map_find(map, key);
-  return i >= 0 ? map->vals->data[i] : NULL;
-}
-
-bool map_try_get(Map *map, const char *key, void **output) {
-  int i = map_find(map, key);
-  if (i < 0)
-    return false;
-  *output = map->vals->data[i];
-  return true;
 }
 
 // StringBuffer
@@ -642,7 +729,7 @@ bool sb_empty(StringBuffer *sb) {
 void sb_append(StringBuffer *sb, const char *start, const char *end) {
   StringElement *elem = malloc(sizeof(*elem));
   elem->start = start;
-  elem->len = end != NULL ? (size_t)(end - start) : (size_t)strlen(start);
+  elem->len = end != NULL ? (size_t)(end - start) : strlen(start);
   vec_push(sb->elems, elem);
 }
 
@@ -663,4 +750,226 @@ char *sb_to_string(StringBuffer *sb) {
   }
   *p = '\0';
   return str;
+}
+
+static const char *escape(int c) {
+  switch (c) {
+  case '\0': return "\\0";
+  case '\n': return "\\n";
+  case '\r': return "\\r";
+  case '\t': return "\\t";
+  case '"': return "\\\"";
+  case '\\': return "\\\\";
+  default:
+    if (c < 0x20 || c >= 0x7f) {
+      char *s = malloc(5);
+      snprintf(s, 5, "\\x%02x", c & 0xff);
+      return s;
+    }
+    return NULL;
+  }
+}
+
+void escape_string(const char *str, size_t size, StringBuffer *sb) {
+  const char *s, *p;
+  const char *end = str + size;
+  for (s = p = str; p < end; ++p) {
+    const char *e = escape(*p);
+    if (e == NULL)
+      continue;
+
+    if (p > s)
+      sb_append(sb, s, p);
+    sb_append(sb, e, NULL);
+    s = p + 1;
+  }
+  if (p > s)
+    sb_append(sb, s, p);
+}
+#include "table.h"
+
+#include <stdlib.h>  // malloc
+#include <string.h>
+
+// Hash
+
+static uint32_t hash_string(const char *key, int length) {
+  const unsigned char *u = (const unsigned char*)key;
+  // FNV1a
+  uint32_t hash = 2166136261u;
+  for (int i = 0; i < length; ++i)
+    hash = (hash ^ u[i]) * 16777619u;
+  return hash;
+}
+
+// Name
+
+static Table name_table;
+
+static const Name *find_name_table(const char *chars, int bytes, uint32_t hash) {
+  const Table *table = &name_table;
+  if (table->count == 0)
+    return NULL;
+
+  for (uint32_t index = hash % table->capacity; ; index = (index + 1) % table->capacity) {
+    TableEntry *entry = &table->entries[index];
+    const Name *key = entry->key;
+    if (key == NULL) {
+      if (entry->value == NULL)
+        return NULL;
+    } else if (key->bytes == bytes &&
+               key->hash == hash &&
+               memcmp(key->chars, chars, bytes) == 0) {
+      return key;
+    }
+  }
+}
+
+const Name *alloc_name(const char *begin, const char *end, bool make_copy) {
+  int bytes = end != NULL ? (int)(end - begin) : (int)strlen(begin);
+  uint32_t hash = hash_string(begin, bytes);
+  const Name *name = find_name_table(begin, bytes, hash);
+  if (name == NULL) {
+    if (make_copy) {
+      char *new_str = malloc(bytes);
+      memcpy(new_str, begin, bytes);
+      begin = new_str;
+    }
+    Name *new_name = malloc(sizeof(*new_name));
+    new_name->chars = begin;
+    new_name->bytes = bytes;
+    new_name->hash = hash;
+    table_put(&name_table, new_name, new_name);
+    name = new_name;
+  }
+  return name;
+}
+
+bool equal_name(const Name *name1, const Name *name2) {
+  return name1 == name2;  // All names are interned, so they can compare by pointers.
+}
+
+// Table
+
+static TableEntry *find_entry(TableEntry *entries, int capacity, const Name *key) {
+  TableEntry *tombstone = NULL;
+  for (uint32_t index = key->hash % capacity; ; index = (index + 1) % capacity) {
+    TableEntry *entry = &entries[index];
+    if (entry->key == NULL) {
+      if (entry->value == NULL) {
+        return tombstone != NULL ? tombstone : entry;
+      } else {  // Tombstone.
+        if (tombstone == NULL)
+          tombstone = entry;
+      }
+    } else if (entry->key == key) {
+      return entry;
+    }
+  }
+}
+
+static void adjust_capacity(Table *table, int new_capacity) {
+  TableEntry *new_entries = malloc(sizeof(TableEntry) * new_capacity);
+  for (int i = 0; i < new_capacity; ++i) {
+    TableEntry *entry = &new_entries[i];
+    entry->key = NULL;
+    entry->value = NULL;
+  }
+
+  TableEntry *old_entries = table->entries;
+  int old_capacity = table->capacity;
+  int new_count = 0;
+  for (int i = 0; i < old_capacity; ++i) {
+    TableEntry *entry = &old_entries[i];
+    if (entry->key == NULL)
+      continue;
+
+    TableEntry *dest = find_entry(new_entries, new_capacity, entry->key);
+    dest->key = entry->key;
+    dest->value = entry->value;
+    ++new_count;
+  }
+
+  free(old_entries);
+  table->entries = new_entries;
+  table->capacity = new_capacity;
+  table->count = new_count;
+}
+
+void table_init(Table *table) {
+  table->entries = NULL;
+  table->count = table->capacity = 0;
+}
+
+void *table_get(Table *table, const Name *key) {
+  if (table->count == 0)
+    return NULL;
+
+  TableEntry *entry = find_entry(table->entries, table->capacity, key);
+  if (entry->key == NULL)
+    return NULL;
+
+  return entry->value;
+}
+
+bool table_try_get(Table *table, const Name *key, void **output) {
+  if (table->count == 0)
+    return false;
+
+  TableEntry *entry = find_entry(table->entries, table->capacity, key);
+  if (entry->key == NULL)
+    return false;
+
+  *output = entry->value;
+  return true;
+}
+
+bool table_put(Table *table, const Name *key, void *value) {
+  const int MIN_CAPACITY = 15;
+  if (table->count >= table->capacity / 2) {
+    int capacity = table->capacity * 2 - 1;  // Keep odd.
+    if (capacity < MIN_CAPACITY)
+      capacity = MIN_CAPACITY;
+    adjust_capacity(table, capacity);
+  }
+
+  TableEntry *entry = find_entry(table->entries, table->capacity, key);
+  bool is_new_key = entry->key == NULL;
+  if (is_new_key && entry->value == NULL)
+    ++table->count;
+
+  entry->key = key;
+  entry->value = value;
+  return is_new_key;
+}
+
+bool table_delete(Table *table, const Name *key) {
+  if (table->count == 0)
+    return false;
+
+  TableEntry *entry = find_entry(table->entries, table->capacity, key);
+  if (entry->key == NULL)
+    return false;
+
+  // Put tombstone.
+  entry->key = NULL;
+  entry->value = entry;
+
+  return true;
+}
+
+int table_iterate(Table *table, int iterator, const Name **pkey, void **pvalue) {
+  int capacity = table->capacity;
+  for (; iterator < capacity; ++iterator) {
+    const TableEntry *entry = &table->entries[iterator];
+    const Name *key = entry->key;
+    if (key != NULL) {
+      if (pkey != NULL)
+        *pkey = key;
+      if (pvalue != NULL)
+        *pvalue = entry->value;
+      return iterator + 1;
+    }
+  }
+  return -1;
 }

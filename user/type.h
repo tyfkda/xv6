@@ -3,33 +3,50 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>  // size_t
 #include <stdint.h>  // intptr_t
-#include <stdio.h>  // FILE
+#include <stdio.h>
 #include <sys/types.h>  // ssize_t
 
-typedef struct Map Map;
-typedef struct Token Token;
+typedef struct Name Name;
 typedef struct Vector Vector;
 
-// Num
+// Fixnum
 
-enum NumKind {
-  NUM_CHAR,  // Small number kind should be earlier.
-  NUM_SHORT,
-  NUM_INT,
-  NUM_LONG,
-  NUM_ENUM,
+enum FixnumKind {
+  FX_CHAR,  // Small number kind should be earlier.
+  FX_SHORT,
+  FX_INT,
+  FX_LONG,
+  FX_LLONG,
+  FX_ENUM,
+};
+
+// Flonum
+
+enum FlonumKind {
+  FL_FLOAT,
+  FL_DOUBLE,
 };
 
 // Type
 
 enum TypeKind {
   TY_VOID,
-  TY_NUM,
+  TY_FIXNUM,
+#ifndef __NO_FLONUM
+  TY_FLONUM,
+#endif
   TY_PTR,
   TY_ARRAY,
   TY_FUNC,
   TY_STRUCT,  // include union
+};
+
+// Qualifier
+enum {
+  TQ_CONST = 1 << 0,
+  TQ_VOLATILE = 1 << 1,
 };
 
 typedef struct StructInfo {
@@ -39,73 +56,83 @@ typedef struct StructInfo {
   bool is_union;
 } StructInfo;
 
-typedef struct {
-  const Token *ident;
-  int value;
-} EnumMember;
-
 typedef struct Type {
   enum TypeKind kind;
+  int qualifier;
   union {
     struct {
-      enum NumKind kind;
+      enum FixnumKind kind;
+      bool is_unsigned;
       struct {
-        const Token *ident;
-        Vector *members;  // <EnumMember*>
+        const Name *ident;
       } enum_;
-    } num;
+    } fixnum;
+#ifndef __NO_FLONUM
+    struct {
+      enum FlonumKind kind;
+    } flonum;
+#endif
     struct {  // Pointer or array.
       const struct Type *ptrof;
       size_t length;  // of array. -1 represents length is not specified (= []).
     } pa;
     struct {
       const struct Type *ret;
-      Vector *param_types;  // <Type*>
+      const Vector *params;  // <VarInfo*>
+      const Vector *param_types;  // <Type*>
       bool vaargs;
     } func;
     struct {
-      const char *name;
+      const Name *name;
       StructInfo *info;
     } struct_;  // and union.
   };
 } Type;
 
 extern const Type tyChar;
-extern const Type tyShort;
 extern const Type tyInt;
-extern const Type tyLong;
+extern const Type tyUnsignedChar;
+extern const Type tyUnsignedInt;
 extern const Type tyEnum;
 extern const Type tyVoid;
 extern const Type tyVoidPtr;
-#define tyBool  tyInt
-#define tySize  tyLong
+extern const Type tyBool;
+extern const Type tySize;
+extern const Type tySSize;
+#ifndef __NO_FLONUM
+extern const Type tyFloat;
+extern const Type tyDouble;
+#endif
 
-bool is_number(enum TypeKind kind);
+void set_fixnum_size(enum FixnumKind kind, size_t size, int align);
+size_t type_size(const Type *type);
+int align_size(const Type *type);
+
+bool is_fixnum(enum TypeKind kind);
+bool is_number(const Type *type);
+#ifndef __NO_FLONUM
+bool is_flonum(const Type *type);
+#endif
 bool is_char_type(const Type *type);
 bool is_void_ptr(const Type *type);
-bool same_type(const Type *type1, const Type *type2);
-Type* ptrof(const Type *type);
+bool ptr_or_array(const Type *type);
+const Type *get_fixnum_type(enum FixnumKind kind, bool is_unsigned, int qualifier);
+Type *ptrof(const Type *type);
 const Type *array_to_ptr(const Type *type);
-Type* arrayof(const Type *type, size_t length);
-Type* new_func_type(const Type *ret, Vector *param_types, bool vaargs);
+Type *arrayof(const Type *type, size_t length);
+Type *new_func_type(const Type *ret, const Vector *params, const Vector *param_types, bool vaargs);
+const Type *qualified_type(const Type *type, int additional);
 
 // Struct
 
-extern Map *struct_map;  // <char*, StructInfo*>
-extern Map *enum_map;  // <char*, EnumInfo*>
-extern Map *enum_value_map;  // <char*, intptr_t>
+StructInfo *create_struct_info(Vector *members, bool is_union);  // members: <VarInfo*>
+Type *create_struct_type(StructInfo *sinfo, const Name *name, int qualifier);
 
-StructInfo *find_struct(const char *name);
-void define_struct(const char *name, StructInfo *sinfo);
+Type *create_enum_type(const Name *name);
 
-Type *find_enum(const char *name);
-Type *define_enum(const Token *ident);
-void add_enum_member(Type *type, const Token *ident, int value);
-bool find_enum_value(const char *name, intptr_t *output);
+bool same_type(const Type *type1, const Type *type2);
+bool can_cast(const Type *dst, const Type *src, bool zero, bool is_explicit);
 
-// Typedef
+//
 
-extern Map *typedef_map;  // <char*, Type*>
-
-const Type *find_typedef(const char *ident);
-bool add_typedef(const char *ident, const Type *type);
+void print_type(FILE *fp, const Type *type);

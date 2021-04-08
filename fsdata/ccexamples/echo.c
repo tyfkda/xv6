@@ -5,9 +5,9 @@ int main(int argc, char **argv) {
   int i;
   for (i = 1; i < argc; ++i) {
     if (i > 1)
-      puts(" ");
-    puts(argv[i]);
+      putstr(" ");
+    putstr(argv[i]);
   }
-  puts("\n");
+  putstr("\n");
   return 0;
 }

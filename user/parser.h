@@ -1,137 +1,56 @@
-// Parser for statement
+// Parser
 
 #pragma once
 
 #include <stdbool.h>
-#include <stdint.h>  // intptr_t
 
-typedef struct Function Function;
 typedef struct Expr Expr;
-typedef struct Map Map;
+typedef struct Function Function;
+typedef struct Initializer Initializer;
+typedef struct Name Name;
 typedef struct Scope Scope;
+typedef struct Stmt Stmt;
 typedef struct Token Token;
 typedef struct Type Type;
+typedef struct VarInfo VarInfo;
 typedef struct Vector Vector;
 
-// Defun
+extern Function *curfunc;
+extern Scope *curscope;
+extern Stmt *curswitch;
+extern Vector *toplevel;  // <Declaration*>
 
-typedef struct Defun {
-  Function *func;
+void parse(Vector *toplevel);  // <Declaraion*>
 
-  Vector *stmts;  // NULL => Prototype definition.
+//
 
-  Map *label_map;  // <const char*, BB*>
-  Vector *gotos;
+void add_builtin_expr_ident(const char *str, Expr *(*proc)(const Token*));
 
-  int flag;
-} Defun;
+const Type *parse_raw_type(int *pstorage);
+const Type *parse_type_modifier(const Type *type);
+const Type *parse_type_suffix(const Type *type);
+const Type *parse_full_type(int *pstorage, Token **pident);
 
-// Initializer
+Vector *parse_args(Token **ptoken);
+Vector *parse_funparams(bool *pvaargs);  // Vector<VarInfo*>, NULL=>old style.
+bool parse_var_def(const Type **prawType, const Type **ptype, int *pstorage, Token **pident);
+Vector *extract_varinfo_types(const Vector *params);  // <VarInfo*> => <Type*>
+Expr *parse_const(void);
+Expr *parse_assign(void);
+Expr *parse_expr(void);
 
-typedef struct Initializer {
-  enum { vSingle, vMulti, vDot, vArr } kind;  // vSingle: 123, vMulti: {...}, vDot: .x=123, vArr: [n]=123
-  union {
-    Expr *single;
-    Vector *multi;  // <Initializer*>
-    struct {
-      const char *name;
-      struct Initializer *value;
-    } dot;
-    struct {
-      Expr *index;
-      struct Initializer *value;
-    } arr;
-  };
-} Initializer;
+void not_void(const Type *type, const Token *token);
+void not_const(const Type *type, const Token *token);
+bool check_cast(const Type *dst, const Type *src, bool zero, bool is_explicit, const Token *token);
+Expr *make_cast(const Type *type, const Token *token, Expr *sub, bool is_explicit);
+Expr *make_cond(Expr *expr);
+VarInfo *str_to_char_array(const Type *type, Initializer *init);
+Expr *str_to_char_array_var(Expr *str);
 
-// Node
+Initializer *parse_initializer(void);
+void fix_array_size(Type *type, Initializer *init);
+Vector *assign_initial_value(Expr *expr, Initializer *init, Vector *inits);
+Expr *make_refer(const Token *tok, Expr *expr);
 
-enum NodeKind {
-  ND_EXPR,
-  ND_DEFUN,
-  ND_BLOCK,
-  ND_IF,
-  ND_SWITCH,
-  ND_WHILE,
-  ND_DO_WHILE,
-  ND_FOR,
-  ND_BREAK,
-  ND_CONTINUE,
-  ND_RETURN,
-  ND_CASE,
-  ND_DEFAULT,
-  ND_GOTO,
-  ND_LABEL,
-  ND_VARDECL,
-  ND_ASM,
-  ND_TOPLEVEL,
-};
-
-typedef struct VarDecl {
-  const Type *type;
-  const Token *ident;
-  Initializer *init;
-  int flag;
-} VarDecl;
-
-typedef struct Node {
-  enum NodeKind kind;
-  union {
-    Expr *expr;
-    Defun *defun;
-    struct {
-      Scope *scope;
-      Vector *nodes;
-    } block;
-    struct {
-      Expr *cond;
-      struct Node *tblock;
-      struct Node *fblock;
-    } if_;
-    struct {
-      Expr *value;
-      struct Node *body;
-      Vector *case_values;  // <intptr_t>
-      bool has_default;
-    } switch_;
-    struct {
-      Expr *value;
-    } case_;
-    struct {
-      Expr *cond;
-      struct Node *body;
-    } while_;
-    struct {
-      Expr *pre;
-      Expr *cond;
-      Expr *post;
-      struct Node *body;
-    } for_;
-    struct {
-      const Token *tok;
-      const char *ident;
-    } goto_;
-    struct {
-      const char *name;
-      struct Node *stmt;
-    } label;
-    struct {
-      Expr *val;
-    } return_;
-    struct {
-      Vector *decls;  // <VarDecl*>
-      Vector *inits;  // <Node*>
-    } vardecl;
-    struct {
-      Expr *str;
-    } asm_;
-    struct {
-      Vector *nodes;
-    } toplevel;
-  };
-} Node;
-
-Node *new_node_expr(Expr *e);
-Node *new_top_node(Vector *nodes);
-
-Vector *parse_program(Vector *nodes);
+const Type *get_callee_type(Expr *func);
+void check_funcall_args(Expr *func, Vector *args);

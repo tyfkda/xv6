@@ -24,6 +24,9 @@ char *getenv(const char *);
 int setenv(const char *, const char *, int );
 int unsetenv(const char *);
 
+long strtol(const char *p, char **pp, int base);
+unsigned long strtoul(const char *p, char **pp, int base);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

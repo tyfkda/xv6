@@ -23,8 +23,6 @@ void* memset(void*, int, size_t);
 void *memcpy(void*, const void*, size_t);
 int memcmp(const void*, const void*, size_t);
 
-long strtol(const char *p, char **pp, int base);
-
 const char *strerror(int errnum);
 
 #ifdef __cplusplus

@@ -4,6 +4,10 @@ int isdigit(int c) {
   return '0' <= c && c <= '9';
 }
 
+int isxdigit(int c) {
+  return ('0' <= c && c <= '9') || ('A' <= c && c <= 'F') || ('a' <= c && c <= 'f');
+}
+
 int isalpha(int c) {
   return ('A' <= c && c <= 'Z') || ('a' <= c && c <= 'z');
 }
@@ -19,4 +23,8 @@ int isprint(int c) {
 int isspace(int c) {
   return (c == ' ' || c == '\t' || c == '\n' || c == '\r' ||
           c == '\f' || c == '\v');
+}
+
+int tolower(int c) {
+  return ('A' <= c && c <= 'Z') ? c + ('a' - 'A') : c;
 }
